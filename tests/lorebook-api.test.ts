@@ -230,7 +230,7 @@ describe("lorebook API routes", () => {
     const res = await fetch(`${BASE}/api/lorebooks`);
     expect(res.status).toBe(200);
     const body = await res.text();
-    expect(body).toContain("lorebook-selector");
+    expect(body).toContain("lorebook-list");
     expect(body).toContain("Default Lorebook");
     expect(body).toContain("btn-new-lorebook");
     expect(body).toContain("+ Template");
@@ -350,21 +350,21 @@ describe("lorebook API routes", () => {
     expect(body).not.toContain("btn-use-template");
   });
 
-  test("GET /api/lorebooks shows both templates and adventures in grouped dropdown", async () => {
+  test("GET /api/lorebooks shows both templates and adventures in section list", async () => {
     await createLorebook("default", "Default Lorebook", true);
     await createLorebook("my-adventure", "My Adventure"); // non-template
     await seedTemplates();
     const res = await fetch(`${BASE}/api/lorebooks`);
     const body = await res.text();
-    const mainSelect = body.match(/<select[^>]*id="lorebook-select"[^>]*>([\s\S]*?)<\/select>/);
-    expect(mainSelect).not.toBeNull();
-    // Templates in dropdown under Templates optgroup
-    expect(mainSelect![1]).toContain("template-key-quest");
-    expect(mainSelect![1]).toContain("Default Lorebook");
-    expect(mainSelect![1]).toContain("Templates");
-    // Adventures in dropdown under Adventures optgroup
-    expect(mainSelect![1]).toContain("My Adventure");
-    expect(mainSelect![1]).toContain("Adventures");
+    // Templates section
+    expect(body).toContain("lorebook-section-heading");
+    expect(body).toContain("Templates");
+    expect(body).toContain('data-slug="template-key-quest"');
+    expect(body).toContain("Default Lorebook");
+    // Adventures section
+    expect(body).toContain("Your Adventures");
+    expect(body).toContain('data-slug="my-adventure"');
+    expect(body).toContain("My Adventure");
   });
 
   // --- Chat API tests ---

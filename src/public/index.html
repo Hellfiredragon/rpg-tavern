@@ -416,28 +416,30 @@
       refreshTree();
     });
 
-    // After lorebook selector loads, bind change handler and do initial tree load
+    // After lorebook selector loads, activate the right item and load tree
     var pendingLorebookSlug = '';
 
     document.body.addEventListener('htmx:afterSettle', function(evt) {
       if (evt.detail.target && evt.detail.target.id === 'lorebook-selector') {
-        var sel = document.getElementById('lorebook-select');
-        if (sel) {
-          sel.addEventListener('change', function() {
-            currentLorebook = sel.value;
-            refreshTree();
-            document.getElementById('lorebook-editor').innerHTML =
-              '<p class="editor-placeholder">Select an entry from the tree, or create a new one.</p>';
-            history.replaceState(null, '', '#lorebook/' + encodeURIComponent(sel.value));
+        if (pendingLorebookSlug) {
+          // Activate the pending slug from URL or new-template creation
+          document.querySelectorAll('.lorebook-list-item').forEach(function(item) {
+            if (item.getAttribute('data-slug') === pendingLorebookSlug) {
+              item.classList.add('active');
+            } else {
+              item.classList.remove('active');
+            }
           });
-          // Apply pending slug from URL if set
-          if (pendingLorebookSlug) {
-            sel.value = pendingLorebookSlug;
-            currentLorebook = pendingLorebookSlug;
-            pendingLorebookSlug = '';
-          } else {
-            currentLorebook = sel.value || '';
+          currentLorebook = pendingLorebookSlug;
+          pendingLorebookSlug = '';
+        } else {
+          // Use server-side active item, or fall back to first item
+          var active = document.querySelector('.lorebook-list-item.active');
+          if (!active) {
+            active = document.querySelector('.lorebook-list-item');
+            if (active) active.classList.add('active');
           }
+          currentLorebook = active ? active.getAttribute('data-slug') || '' : '';
         }
         refreshTree();
       }
@@ -445,6 +447,23 @@
 
     // Event delegation for dynamic buttons
     document.addEventListener('click', function(e) {
+      // Lorebook list item click
+      var lbItem = e.target.closest('.lorebook-list-item');
+      if (lbItem) {
+        var slug = lbItem.getAttribute('data-slug');
+        if (slug === currentLorebook) return;
+        document.querySelectorAll('.lorebook-list-item').forEach(function(item) {
+          item.classList.remove('active');
+        });
+        lbItem.classList.add('active');
+        currentLorebook = slug;
+        refreshTree();
+        document.getElementById('lorebook-editor').innerHTML =
+          '<p class="editor-placeholder">Select an entry from the tree, or create a new one.</p>';
+        history.replaceState(null, '', '#lorebook/' + encodeURIComponent(slug));
+        return;
+      }
+
       // "+ New" entry/folder buttons in tree
       var btn = e.target.closest('.btn-new-entry');
       if (btn) {
@@ -534,15 +553,8 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ slug: slug, name: name })
       }).then(function() {
+        pendingLorebookSlug = slug;
         htmx.trigger(document.body, 'refreshLorebooks');
-        setTimeout(function() {
-          var sel = document.getElementById('lorebook-select');
-          if (sel) {
-            sel.value = slug;
-            currentLorebook = slug;
-            refreshTree();
-          }
-        }, 300);
       });
     });
 
@@ -630,9 +642,15 @@
         if (slug) {
           pendingLorebookSlug = slug;
           // If selector is already loaded, apply immediately
-          var sel = document.getElementById('lorebook-select');
-          if (sel) {
-            sel.value = slug;
+          var items = document.querySelectorAll('.lorebook-list-item');
+          if (items.length > 0) {
+            items.forEach(function(item) {
+              if (item.getAttribute('data-slug') === slug) {
+                item.classList.add('active');
+              } else {
+                item.classList.remove('active');
+              }
+            });
             currentLorebook = slug;
             pendingLorebookSlug = '';
             refreshTree();

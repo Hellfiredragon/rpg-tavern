@@ -592,28 +592,28 @@ function renderLorebookSelector(lorebooks: { slug: string; meta: LorebookMeta }[
   const templates = lorebooks.filter((lb) => lb.meta.template);
   const adventures = lorebooks.filter((lb) => !lb.meta.template);
 
-  let options = "";
-  if (templates.length > 0) {
-    options += `<optgroup label="Templates">`;
-    for (const lb of templates) {
-      const selected = lb.slug === active ? " selected" : "";
-      options += `<option value="${escapeHtml(lb.slug)}"${selected}>${escapeHtml(lb.meta.name)}</option>`;
-    }
-    options += `</optgroup>`;
-  }
+  let out = `<div class="lorebook-list">`;
+
+  out += `<h3 class="lorebook-section-heading">Your Adventures</h3>`;
   if (adventures.length > 0) {
-    options += `<optgroup label="Adventures">`;
     for (const lb of adventures) {
-      const selected = lb.slug === active ? " selected" : "";
-      options += `<option value="${escapeHtml(lb.slug)}"${selected}>${escapeHtml(lb.meta.name)}</option>`;
+      const activeCls = lb.slug === active ? " active" : "";
+      out += `<div class="lorebook-list-item${activeCls}" data-slug="${escapeHtml(lb.slug)}">${escapeHtml(lb.meta.name)}</div>`;
     }
-    options += `</optgroup>`;
+  } else {
+    out += `<p class="lorebook-list-empty">No adventures yet.</p>`;
   }
 
-  return `<div class="lorebook-selector-container">
-  <select class="lorebook-selector" id="lorebook-select">${options}</select>
-  <button type="button" id="btn-new-lorebook" class="btn-sm">+ Template</button>
-</div>`;
+  out += `<h3 class="lorebook-section-heading">Templates</h3>`;
+  for (const lb of templates) {
+    const activeCls = lb.slug === active ? " active" : "";
+    out += `<div class="lorebook-list-item${activeCls}" data-slug="${escapeHtml(lb.slug)}">${escapeHtml(lb.meta.name)}</div>`;
+  }
+
+  out += `</div>`;
+  out += `<button type="button" id="btn-new-lorebook" class="btn-sm">+ Template</button>`;
+
+  return out;
 }
 
 function entryFormHtml(path: string, entry: LorebookEntry, isNew: boolean, lorebook: string): string {

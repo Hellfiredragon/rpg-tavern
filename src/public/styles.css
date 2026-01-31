@@ -535,15 +535,52 @@ dialog h3 {
 
 /* Lorebook selector */
 
-.lorebook-selector-container {
+.lorebook-list {
+  overflow-y: auto;
+  max-height: 40vh;
   display: flex;
-  gap: 0.5rem;
-  align-items: center;
+  flex-direction: column;
+  gap: 0.125rem;
   margin-bottom: 0.5rem;
 }
 
-.lorebook-selector {
-  flex: 1;
+.lorebook-section-heading {
+  color: #e2b04a;
+  font-size: 0.85rem;
+  padding: 0.25rem 0;
+  margin-top: 0.5rem;
+}
+
+.lorebook-section-heading:first-child {
+  margin-top: 0;
+}
+
+.lorebook-list-item {
+  padding: 0.4rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #e0e0e0;
+  border: 1px solid transparent;
+}
+
+.lorebook-list-item:hover {
+  background: #1a1a2e;
+  color: #e2b04a;
+  border-color: #444;
+}
+
+.lorebook-list-item.active {
+  background: #2a3a5e;
+  color: #e2b04a;
+  border-color: #e2b04a;
+}
+
+.lorebook-list-empty {
+  color: #666;
+  font-size: 0.8rem;
+  font-style: italic;
+  padding: 0.25rem 0.5rem;
 }
 
 .btn-new-entry {
