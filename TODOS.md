@@ -16,10 +16,10 @@ fantasy theme with HTMX, template lorebooks, path traversal protection.
 - [ ] Abort/cancel in-flight generation (stop button)
 
 ### 1.2 Chat History Persistence
-- [ ] Save chat messages to disk (JSONL format, one file per conversation)
-- [ ] Load chat history on page load
-- [ ] Multiple conversations per character (create new / switch / delete)
-- [ ] Chat list sidebar or selector
+- [x] Save chat messages to disk (JSONL format, one file per conversation)
+- [x] Load chat history on page load
+- [x] Multiple conversations per character (create new / switch / delete)
+- [x] Chat list sidebar or selector
 
 ### 1.3 Character Cards
 - [ ] Character data model (name, description, personality, scenario, first_message, example_messages, avatar)

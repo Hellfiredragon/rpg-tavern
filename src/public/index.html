@@ -13,22 +13,36 @@
     <header class="app-header">
       <h1 class="app-title">RPG Tavern</h1>
       <nav class="tab-bar">
-        <button class="tab active" data-tab="chat">Chat</button>
+        <button class="tab active" data-tab="adventure">Adventure</button>
         <button class="tab" data-tab="lorebook">Lorebook</button>
         <button class="tab" data-tab="settings">Settings</button>
       </nav>
     </header>
 
-    <!-- Chat tab -->
-    <div class="tab-panel active" id="panel-chat">
-      <div class="chat-container">
-        <div class="chat-messages" id="chat-messages">
-          <p class="editor-placeholder">Send a message to begin.</p>
+    <!-- Adventure tab -->
+    <div class="tab-panel active" id="panel-adventure">
+      <div id="adventure-picker"
+           hx-get="/api/adventures"
+           hx-trigger="load, refreshAdventures from:body"
+           hx-swap="innerHTML">
+      </div>
+      <div id="adventure-play" style="display:none">
+        <div class="adventure-location-bar">
+          <button class="btn-sm" id="adventure-back-btn">&larr;</button>
+          <span class="adventure-name" id="adventure-name"></span>
+          <select id="adventure-location-select">
+            <option value="">-- Choose a location --</option>
+          </select>
         </div>
-        <form class="chat-input-area" id="chat-form">
-          <input type="text" id="chat-input" placeholder="Type a message..." autocomplete="off" required />
-          <button type="submit">Send</button>
-        </form>
+        <div class="chat-container">
+          <div class="chat-messages" id="chat-messages">
+            <p class="editor-placeholder">Your adventure begins...</p>
+          </div>
+          <form class="chat-input-area" id="chat-form">
+            <input type="text" id="chat-input" placeholder="What do you do?" autocomplete="off" required />
+            <button type="submit">Send</button>
+          </form>
+        </div>
       </div>
     </div>
 
@@ -101,6 +115,37 @@
     </form>
   </dialog>
 
+  <!-- Dialog: delete adventure -->
+  <dialog id="adventure-delete-dialog">
+    <form id="adventure-delete-form">
+      <h3>Delete Adventure</h3>
+      <p>This will permanently delete the adventure and all its save data.</p>
+      <p>Type <strong id="adv-del-expected"></strong> to confirm:</p>
+      <input id="adv-del-confirm" type="text" placeholder="Type adventure name..." autocomplete="off" required />
+      <input type="hidden" id="adv-del-slug" />
+      <input type="hidden" id="adv-del-name" />
+      <div class="editor-actions">
+        <button type="submit" class="btn-danger" id="adv-del-submit" disabled>Delete</button>
+        <button type="button" class="btn-cancel" id="btn-adv-del-cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Dialog: start adventure from template -->
+  <dialog id="adventure-template-dialog">
+    <form id="adventure-template-form">
+      <h3>Start Adventure</h3>
+      <p class="hint" id="adv-tpl-source-label"></p>
+      <label for="adv-tpl-name">Adventure Name</label>
+      <input id="adv-tpl-name" type="text" placeholder="e.g. My Key Quest" required />
+      <input type="hidden" id="adv-tpl-source" />
+      <div class="editor-actions">
+        <button type="submit">Start</button>
+        <button type="button" class="btn-cancel" id="btn-adv-tpl-cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
   <script>
   (function() {
     // -----------------------------------------------------------------------
@@ -119,12 +164,87 @@
     });
 
     // -----------------------------------------------------------------------
-    // Chat
+    // Adventure state
     // -----------------------------------------------------------------------
+    var currentAdventure = '';   // lorebook slug
+    var currentChatId = '';
+    var currentLocation = '';
+    var adventureName = '';
+
     var chatForm = document.getElementById('chat-form');
     var chatInput = document.getElementById('chat-input');
     var chatMessages = document.getElementById('chat-messages');
+    var adventurePicker = document.getElementById('adventure-picker');
+    var adventurePlay = document.getElementById('adventure-play');
+    var adventureNameEl = document.getElementById('adventure-name');
+    var locationSelect = document.getElementById('adventure-location-select');
 
+    function showAdventurePicker() {
+      adventurePicker.style.display = '';
+      adventurePlay.style.display = 'none';
+      currentAdventure = '';
+      currentChatId = '';
+      currentLocation = '';
+      adventureName = '';
+      htmx.trigger(document.body, 'refreshAdventures');
+    }
+
+    function startAdventure(lorebook, chatId, name, location) {
+      currentAdventure = lorebook;
+      currentChatId = chatId;
+      currentLocation = location || '';
+      adventureName = name;
+
+      adventurePicker.style.display = 'none';
+      adventurePlay.style.display = '';
+      adventureNameEl.textContent = name;
+
+      // Load locations into dropdown
+      fetch('/api/adventures/locations?lorebook=' + encodeURIComponent(lorebook))
+        .then(function(res) { return res.text(); })
+        .then(function(html) {
+          locationSelect.innerHTML = html;
+          if (currentLocation) locationSelect.value = currentLocation;
+        });
+
+      // Load chat messages
+      htmx.ajax('GET', '/api/chats/messages?id=' + encodeURIComponent(chatId), {
+        target: '#chat-messages', swap: 'innerHTML'
+      }).then(function() {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      });
+    }
+
+    // Back button
+    document.getElementById('adventure-back-btn').addEventListener('click', showAdventurePicker);
+
+    // Location change
+    locationSelect.addEventListener('change', function() {
+      var loc = locationSelect.value;
+      if (!loc || !currentChatId) return;
+
+      fetch('/api/adventures/location', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId: currentChatId, location: loc })
+      })
+      .then(function(res) {
+        var newLoc = res.headers.get('X-Location');
+        if (newLoc) currentLocation = newLoc;
+        return res.text();
+      })
+      .then(function(html) {
+        // Clear placeholder if present
+        var ph = chatMessages.querySelector('.editor-placeholder');
+        if (ph) ph.remove();
+        var tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        while (tmp.firstChild) chatMessages.appendChild(tmp.firstChild);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      });
+    });
+
+    // Send message
     chatForm.addEventListener('submit', function(e) {
       e.preventDefault();
       var msg = chatInput.value.trim();
@@ -146,15 +266,117 @@
       fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: msg })
+        body: JSON.stringify({ message: msg, chatId: currentChatId, lorebook: currentAdventure })
       })
-      .then(function(res) { return res.text(); })
+      .then(function(res) {
+        var newId = res.headers.get('X-Chat-Id');
+        if (newId) currentChatId = newId;
+        return res.text();
+      })
       .then(function(html) {
         var tmp = document.createElement('div');
         tmp.innerHTML = html;
         while (tmp.firstChild) chatMessages.appendChild(tmp.firstChild);
         chatMessages.scrollTop = chatMessages.scrollHeight;
       });
+    });
+
+    // -----------------------------------------------------------------------
+    // Adventure picker event delegation
+    // -----------------------------------------------------------------------
+    document.addEventListener('click', function(e) {
+      // Continue button
+      var contBtn = e.target.closest('.adventure-continue-btn');
+      if (contBtn) {
+        startAdventure(
+          contBtn.getAttribute('data-lorebook'),
+          contBtn.getAttribute('data-chat-id'),
+          contBtn.getAttribute('data-name'),
+          contBtn.getAttribute('data-location')
+        );
+        return;
+      }
+
+      // Delete button
+      var delBtn = e.target.closest('.adventure-delete-btn');
+      if (delBtn) {
+        var slug = delBtn.getAttribute('data-lorebook');
+        var name = delBtn.getAttribute('data-name');
+        document.getElementById('adv-del-slug').value = slug;
+        document.getElementById('adv-del-name').value = name;
+        document.getElementById('adv-del-expected').textContent = name;
+        document.getElementById('adv-del-confirm').value = '';
+        document.getElementById('adv-del-submit').disabled = true;
+        document.getElementById('adventure-delete-dialog').showModal();
+        document.getElementById('adv-del-confirm').focus();
+        return;
+      }
+
+      // Start from template button
+      var startBtn = e.target.closest('.adventure-start-btn');
+      if (startBtn) {
+        var source = startBtn.getAttribute('data-template');
+        var label = startBtn.getAttribute('data-name');
+        document.getElementById('adv-tpl-source').value = source;
+        document.getElementById('adv-tpl-source-label').textContent = 'Template: ' + label;
+        document.getElementById('adv-tpl-name').value = '';
+        document.getElementById('adventure-template-dialog').showModal();
+        document.getElementById('adv-tpl-name').focus();
+        return;
+      }
+    });
+
+    // Adventure template dialog
+    document.getElementById('btn-adv-tpl-cancel').addEventListener('click', function() {
+      document.getElementById('adventure-template-dialog').close();
+    });
+
+    document.getElementById('adventure-template-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      var nameInput = document.getElementById('adv-tpl-name');
+      var name = nameInput.value.trim();
+      if (!name) { nameInput.focus(); return; }
+      var slug = name.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+      if (!slug) { nameInput.focus(); return; }
+      var source = document.getElementById('adv-tpl-source').value;
+      document.getElementById('adventure-template-dialog').close();
+
+      fetch('/api/lorebooks/copy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source: source, slug: slug, name: name })
+      }).then(function() {
+        return fetch('/api/chats', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lorebook: slug })
+        });
+      }).then(function(res) {
+        var chatId = res.headers.get('X-Chat-Id');
+        if (chatId) startAdventure(slug, chatId, name, '');
+      });
+    });
+
+    // Adventure delete dialog
+    document.getElementById('btn-adv-del-cancel').addEventListener('click', function() {
+      document.getElementById('adventure-delete-dialog').close();
+    });
+
+    document.getElementById('adv-del-confirm').addEventListener('input', function() {
+      var expected = document.getElementById('adv-del-name').value;
+      document.getElementById('adv-del-submit').disabled = (this.value !== expected);
+    });
+
+    document.getElementById('adventure-delete-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      var slug = document.getElementById('adv-del-slug').value;
+      var expected = document.getElementById('adv-del-name').value;
+      if (document.getElementById('adv-del-confirm').value !== expected) return;
+      document.getElementById('adventure-delete-dialog').close();
+      fetch('/api/adventures?lorebook=' + encodeURIComponent(slug), { method: 'DELETE' })
+        .then(function() {
+          htmx.trigger(document.body, 'refreshAdventures');
+        });
     });
 
     // -----------------------------------------------------------------------

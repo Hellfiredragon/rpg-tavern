@@ -13,6 +13,7 @@ import {
   scanTree,
   loadAllEntries,
   findMatchingEntries,
+  listLocationEntries,
   createLorebook,
   listLorebooks,
   deleteLorebook,
@@ -777,5 +778,80 @@ describe("seedTemplates", () => {
     const def = list.find((l) => l.slug === "default");
     expect(def).toBeDefined();
     expect(def!.meta.template).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// listLocationEntries
+// ---------------------------------------------------------------------------
+
+describe("listLocationEntries", () => {
+  beforeEach(cleanLorebooks);
+  afterEach(cleanLorebooks);
+
+  test("returns only entries under locations/", async () => {
+    await saveEntry("default", "locations/tavern", { ...DEFAULT_ENTRY, name: "Tavern", enabled: true });
+    await saveEntry("default", "locations/forest", { ...DEFAULT_ENTRY, name: "Forest", enabled: true });
+    await saveEntry("default", "people/gabrielle", { ...DEFAULT_ENTRY, name: "Gabrielle", enabled: true });
+    await saveEntry("default", "items/sword", { ...DEFAULT_ENTRY, name: "Sword", enabled: true });
+
+    const locations = await listLocationEntries("default");
+    expect(locations).toHaveLength(2);
+    const names = locations.map((e) => e.name);
+    expect(names).toContain("Tavern");
+    expect(names).toContain("Forest");
+    expect(names).not.toContain("Gabrielle");
+    expect(names).not.toContain("Sword");
+  });
+
+  test("returns entries sorted by name", async () => {
+    await saveEntry("default", "locations/zoo", { ...DEFAULT_ENTRY, name: "Zoo", enabled: true });
+    await saveEntry("default", "locations/alley", { ...DEFAULT_ENTRY, name: "Alley", enabled: true });
+    await saveEntry("default", "locations/market", { ...DEFAULT_ENTRY, name: "Market", enabled: true });
+
+    const locations = await listLocationEntries("default");
+    expect(locations.map((e) => e.name)).toEqual(["Alley", "Market", "Zoo"]);
+  });
+
+  test("returns empty array when no locations/ entries exist", async () => {
+    await saveEntry("default", "people/hero", { ...DEFAULT_ENTRY, name: "Hero", enabled: true });
+    const locations = await listLocationEntries("default");
+    expect(locations).toEqual([]);
+  });
+
+  test("returns empty array for empty lorebook", async () => {
+    const locations = await listLocationEntries("default");
+    expect(locations).toEqual([]);
+  });
+
+  test("is scoped to the given lorebook", async () => {
+    await createLorebook("world-a", "World A");
+    await createLorebook("world-b", "World B");
+    await saveEntry("world-a", "locations/castle", { ...DEFAULT_ENTRY, name: "Castle", enabled: true });
+    await saveEntry("world-b", "locations/dungeon", { ...DEFAULT_ENTRY, name: "Dungeon", enabled: true });
+
+    const locsA = await listLocationEntries("world-a");
+    expect(locsA).toHaveLength(1);
+    expect(locsA[0].name).toBe("Castle");
+
+    const locsB = await listLocationEntries("world-b");
+    expect(locsB).toHaveLength(1);
+    expect(locsB[0].name).toBe("Dungeon");
+  });
+
+  test("includes path in returned entries", async () => {
+    await saveEntry("default", "locations/tavern", { ...DEFAULT_ENTRY, name: "Tavern", enabled: true });
+    const locations = await listLocationEntries("default");
+    expect(locations[0].path).toBe("locations/tavern");
+  });
+
+  test("includes nested locations", async () => {
+    await saveEntry("default", "locations/town/market", { ...DEFAULT_ENTRY, name: "Market", enabled: true });
+    await saveEntry("default", "locations/town/inn", { ...DEFAULT_ENTRY, name: "Inn", enabled: true });
+    const locations = await listLocationEntries("default");
+    expect(locations).toHaveLength(2);
+    const paths = locations.map((e) => e.path);
+    expect(paths).toContain("locations/town/market");
+    expect(paths).toContain("locations/town/inn");
   });
 });

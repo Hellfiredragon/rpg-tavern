@@ -253,6 +253,18 @@ async function collectEntries(absDir: string, relativePrefix: string): Promise<M
 }
 
 // ---------------------------------------------------------------------------
+// Location entries
+// ---------------------------------------------------------------------------
+
+/** Return all entries whose path starts with "locations/", sorted by name. */
+export async function listLocationEntries(lorebook: string): Promise<MatchedEntry[]> {
+  const all = await loadAllEntries(lorebook);
+  return all
+    .filter((e) => e.path.startsWith("locations/"))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// ---------------------------------------------------------------------------
 // Matching engine
 // ---------------------------------------------------------------------------
 
