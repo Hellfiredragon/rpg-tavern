@@ -45,26 +45,12 @@
 
   <dialog id="lorebook-dialog">
     <form id="lorebook-form">
-      <h3>New Lorebook</h3>
+      <h3>New Template</h3>
       <label for="lb-new-name">Name</label>
-      <input id="lb-new-name" type="text" placeholder="e.g. Homebrew Setting" required />
+      <input id="lb-new-name" type="text" placeholder="e.g. Fantasy Setting" required />
       <div class="editor-actions">
         <button type="submit">Create</button>
         <button type="button" class="btn-cancel" id="btn-lb-cancel">Cancel</button>
-      </div>
-    </form>
-  </dialog>
-
-  <dialog id="template-dialog">
-    <form id="template-form">
-      <h3>Create from Template</h3>
-      <p class="hint" id="template-source-label"></p>
-      <label for="tpl-name">Lorebook Name</label>
-      <input id="tpl-name" type="text" placeholder="e.g. My Adventure" required />
-      <input type="hidden" id="tpl-source" />
-      <div class="editor-actions">
-        <button type="submit">Create</button>
-        <button type="button" class="btn-cancel" id="btn-tpl-cancel">Cancel</button>
       </div>
     </form>
   </dialog>
@@ -80,7 +66,7 @@
     var lbForm = document.getElementById('lorebook-form');
     var lbNameInput = document.getElementById('lb-new-name');
 
-    var currentLorebook = 'default';
+    var currentLorebook = '';
     var currentPrefix = '';
 
     function refreshTree() {
@@ -103,7 +89,7 @@
             document.getElementById('lorebook-editor').innerHTML =
               '<p class="editor-placeholder">Select an entry from the tree, or create a new one.</p>';
           });
-          currentLorebook = sel.value || 'default';
+          currentLorebook = sel.value || '';
         }
         refreshTree();
       }
@@ -207,55 +193,6 @@
       });
     });
 
-    // --- Template dialog ---
-    var tplDialog = document.getElementById('template-dialog');
-    var tplForm = document.getElementById('template-form');
-    var tplNameInput = document.getElementById('tpl-name');
-    var tplSource = document.getElementById('tpl-source');
-    var tplSourceLabel = document.getElementById('template-source-label');
-
-    document.addEventListener('click', function(e) {
-      if (e.target.id === 'btn-use-template' || e.target.closest('#btn-use-template')) {
-        var sel = document.getElementById('template-select');
-        if (!sel) return;
-        var source = sel.value;
-        var label = sel.options[sel.selectedIndex].text;
-        tplSource.value = source;
-        tplSourceLabel.textContent = 'Template: ' + label;
-        tplNameInput.value = '';
-        tplDialog.showModal();
-        tplNameInput.focus();
-      }
-    });
-
-    document.getElementById('btn-tpl-cancel').addEventListener('click', function() {
-      tplDialog.close();
-    });
-
-    tplForm.addEventListener('submit', function(e) {
-      e.preventDefault();
-      var name = tplNameInput.value.trim();
-      if (!name) { tplNameInput.focus(); return; }
-      var slug = name.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-      if (!slug) { tplNameInput.focus(); return; }
-      var source = tplSource.value;
-      tplDialog.close();
-      fetch('/api/lorebooks/copy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source: source, slug: slug, name: name })
-      }).then(function() {
-        htmx.trigger(document.body, 'refreshLorebooks');
-        setTimeout(function() {
-          var sel = document.getElementById('lorebook-select');
-          if (sel) {
-            sel.value = slug;
-            currentLorebook = slug;
-            refreshTree();
-          }
-        }, 300);
-      });
-    });
   })();
   </script>
 </body>

@@ -6,6 +6,7 @@ import {
   createFolder, deleteFolder, validateEntry, DEFAULT_ENTRY,
   listLorebooks, createLorebook, deleteLorebook, ensureDefaultLorebook,
   copyLorebook, seedTemplates, listLocationEntries, loadLorebookMeta,
+  saveLorebookMeta,
   type LorebookEntry, type LorebookMeta, type TreeNode,
 } from "./lorebook";
 import {
@@ -19,9 +20,27 @@ const DEV = process.env.DEV === "1";
 
 const LIVERELOAD_SCRIPT = `<script>(function(){if(!DEV)return;var u="ws://"+location.host+"/dev/ws";function c(){var w=new WebSocket(u);w.onclose=function(){setTimeout(function r(){var t=new WebSocket(u);t.onerror=function(){setTimeout(r,250)};t.onopen=function(){location.reload()}},250)}}c()}).call({DEV:true})</script>`;
 
+/**
+ * Migrate non-template lorebooks with zero conversations to templates.
+ * Handles the existing "default" lorebook and any other orphans.
+ */
+async function migrateOrphanLorebooks(): Promise<void> {
+  const lorebooks = await listLorebooks();
+  const allConvos = await listConversations();
+
+  for (const lb of lorebooks) {
+    if (lb.meta.template) continue;
+    const hasConvos = allConvos.some((c) => c.lorebook === lb.slug);
+    if (!hasConvos) {
+      await saveLorebookMeta(lb.slug, { ...lb.meta, template: true });
+    }
+  }
+}
+
 export async function startServer(port: number) {
   await ensureDefaultLorebook();
   await seedTemplates();
+  await migrateOrphanLorebooks();
 
   const server = serve({
     port,
@@ -83,7 +102,7 @@ if (import.meta.main) {
 // ---------------------------------------------------------------------------
 
 function getLorebookSlug(url: URL): string {
-  return url.searchParams.get("lorebook") || "default";
+  return url.searchParams.get("lorebook") || "";
 }
 
 // ---------------------------------------------------------------------------
@@ -179,7 +198,6 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
   if (url.pathname === "/api/adventures" && req.method === "DELETE") {
     const slug = url.searchParams.get("lorebook");
     if (!slug) return html(`<div class="feedback error">Missing lorebook</div>`, 400);
-    if (slug === "default") return html(`<div class="feedback error">Cannot delete the default lorebook</div>`, 400);
     // Delete all conversations for this adventure
     const convos = await listConversations(slug);
     for (const c of convos) {
@@ -192,6 +210,25 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
     const allConvos = await listConversations();
     return html(renderAdventurePicker(lorebooks, allConvos), 200, {
       "HX-Trigger": "refreshAdventures",
+    });
+  }
+
+  if (url.pathname === "/api/adventures/resume" && req.method === "GET") {
+    const slug = url.searchParams.get("lorebook") || "";
+    if (!slug) return Response.json({ error: "Missing lorebook" }, { status: 400 });
+    const convos = await listConversations(slug);
+    if (convos.length === 0) return Response.json({ error: "No conversations found" }, { status: 404 });
+    const latest = convos[0]; // already sorted by updatedAt desc
+    let name = slug;
+    try {
+      const meta = await loadLorebookMeta(slug);
+      if (meta) name = meta.name;
+    } catch { /* use slug as fallback */ }
+    return Response.json({
+      lorebook: slug,
+      chatId: latest.id,
+      name,
+      location: latest.currentLocation || "",
     });
   }
 
@@ -275,7 +312,7 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
       const slug = typeof body.slug === "string" ? body.slug.trim() : "";
       const name = typeof body.name === "string" ? body.name.trim() : "";
       if (!slug || !name) return html(`<div class="feedback error">Slug and name are required</div>`, 400);
-      await createLorebook(slug, name);
+      await createLorebook(slug, name, true);
       return html(
         `<div class="feedback success">Lorebook created.</div>`,
         200,
@@ -290,7 +327,6 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
   if (url.pathname === "/api/lorebooks" && req.method === "DELETE") {
     const slug = url.searchParams.get("slug");
     if (!slug) return html(`<div class="feedback error">Missing slug</div>`, 400);
-    if (slug === "default") return html(`<div class="feedback error">Cannot delete the default lorebook</div>`, 400);
     await deleteLorebook(slug);
     return html(
       `<div class="feedback success">Lorebook deleted.</div>`,
@@ -314,6 +350,27 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
       );
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to copy lorebook";
+      return html(`<div class="feedback error">${escapeHtml(msg)}</div>`, 400);
+    }
+  }
+
+  if (url.pathname === "/api/lorebooks/make-template" && req.method === "POST") {
+    try {
+      const body = await req.json();
+      const source = typeof body.source === "string" ? body.source.trim() : "";
+      const slug = typeof body.slug === "string" ? body.slug.trim() : "";
+      const name = typeof body.name === "string" ? body.name.trim() : "";
+      if (!source || !slug || !name) return html(`<div class="feedback error">Source, slug, and name are required</div>`, 400);
+      await copyLorebook(source, slug, name);
+      // Mark the copy as a template
+      await saveLorebookMeta(slug, { name, template: true });
+      return html(
+        `<div class="feedback success">Template created.</div>`,
+        200,
+        { "HX-Trigger": "refreshLorebooks" },
+      );
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to create template";
       return html(`<div class="feedback error">${escapeHtml(msg)}</div>`, 400);
     }
   }
@@ -532,27 +589,31 @@ function renderNewButton(prefix: string, lorebook: string): string {
 }
 
 function renderLorebookSelector(lorebooks: { slug: string; meta: LorebookMeta }[], active: string): string {
-  const userBooks = lorebooks.filter((lb) => !lb.meta.template);
   const templates = lorebooks.filter((lb) => lb.meta.template);
+  const adventures = lorebooks.filter((lb) => !lb.meta.template);
 
   let options = "";
-  for (const lb of userBooks) {
-    const selected = lb.slug === active ? " selected" : "";
-    options += `<option value="${escapeHtml(lb.slug)}"${selected}>${escapeHtml(lb.meta.name)}</option>`;
+  if (templates.length > 0) {
+    options += `<optgroup label="Templates">`;
+    for (const lb of templates) {
+      const selected = lb.slug === active ? " selected" : "";
+      options += `<option value="${escapeHtml(lb.slug)}"${selected}>${escapeHtml(lb.meta.name)}</option>`;
+    }
+    options += `</optgroup>`;
   }
-
-  let templateOptions = "";
-  for (const lb of templates) {
-    templateOptions += `<option value="${escapeHtml(lb.slug)}">${escapeHtml(lb.meta.name)}</option>`;
+  if (adventures.length > 0) {
+    options += `<optgroup label="Adventures">`;
+    for (const lb of adventures) {
+      const selected = lb.slug === active ? " selected" : "";
+      options += `<option value="${escapeHtml(lb.slug)}"${selected}>${escapeHtml(lb.meta.name)}</option>`;
+    }
+    options += `</optgroup>`;
   }
 
   return `<div class="lorebook-selector-container">
   <select class="lorebook-selector" id="lorebook-select">${options}</select>
-  <button type="button" id="btn-new-lorebook" class="btn-sm">+ Lorebook</button>
-</div>${templates.length > 0 ? `<div class="lorebook-selector-container">
-  <select class="lorebook-selector" id="template-select">${templateOptions}</select>
-  <button type="button" id="btn-use-template" class="btn-sm">Use Template</button>
-</div>` : ""}`;
+  <button type="button" id="btn-new-lorebook" class="btn-sm">+ Template</button>
+</div>`;
 }
 
 function entryFormHtml(path: string, entry: LorebookEntry, isNew: boolean, lorebook: string): string {
@@ -661,6 +722,9 @@ function renderAdventurePicker(lorebooks: { slug: string; meta: LorebookMeta }[]
                   data-chat-id="${escapeHtml(adv.latest.id)}"
                   data-name="${escapeHtml(adv.meta.name)}"
                   data-location="${escapeHtml(adv.latest.currentLocation)}">Continue</button>
+          <button class="btn-sm adventure-save-tpl-btn"
+                  data-lorebook="${escapeHtml(adv.slug)}"
+                  data-name="${escapeHtml(adv.meta.name)}">Save as Template</button>
           <button class="btn-sm btn-danger adventure-delete-btn"
                   data-lorebook="${escapeHtml(adv.slug)}"
                   data-name="${escapeHtml(adv.meta.name)}">Delete</button>

@@ -338,10 +338,11 @@ export async function listLorebooks(): Promise<{ slug: string; meta: LorebookMet
 }
 
 /** Create a new lorebook with the given slug and display name. */
-export async function createLorebook(slug: string, name: string): Promise<void> {
+export async function createLorebook(slug: string, name: string, template?: boolean): Promise<void> {
   const root = lorebookRoot(slug);
   await mkdir(root, { recursive: true });
   const meta: LorebookMeta = { name };
+  if (template) meta.template = true;
   await Bun.write(join(root, LOREBOOK_META_FILE), JSON.stringify(meta, null, 2) + "\n");
 }
 
@@ -362,6 +363,12 @@ export async function loadLorebookMeta(slug: string): Promise<LorebookMeta | nul
   } catch {
     return null;
   }
+}
+
+/** Write updated metadata for an existing lorebook. */
+export async function saveLorebookMeta(slug: string, meta: LorebookMeta): Promise<void> {
+  const root = lorebookRoot(slug);
+  await Bun.write(join(root, LOREBOOK_META_FILE), JSON.stringify(meta, null, 2) + "\n");
 }
 
 /**
@@ -405,7 +412,7 @@ export async function ensureDefaultLorebook(): Promise<void> {
   }
 
   // Write metadata
-  const meta: LorebookMeta = { name: "Default Lorebook" };
+  const meta: LorebookMeta = { name: "Default Lorebook", template: true };
   await Bun.write(join(defaultRoot, LOREBOOK_META_FILE), JSON.stringify(meta, null, 2) + "\n");
 }
 

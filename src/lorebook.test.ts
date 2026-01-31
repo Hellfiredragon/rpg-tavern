@@ -615,7 +615,7 @@ describe("ensureDefaultLorebook", () => {
   test("creates default lorebook when directory is empty", async () => {
     await ensureDefaultLorebook();
     const meta = await loadLorebookMeta("default");
-    expect(meta).toEqual({ name: "Default Lorebook" });
+    expect(meta).toEqual({ name: "Default Lorebook", template: true });
   });
 
   test("migrates legacy flat files into default lorebook", async () => {
@@ -643,7 +643,7 @@ describe("ensureDefaultLorebook", () => {
 
     // Files should be migrated
     const meta = await loadLorebookMeta("default");
-    expect(meta).toEqual({ name: "Default Lorebook" });
+    expect(meta).toEqual({ name: "Default Lorebook", template: true });
 
     const tavern = await loadEntry("default", "tavern");
     expect(tavern).not.toBeNull();

@@ -87,12 +87,12 @@
     </form>
   </dialog>
 
-  <!-- Dialog: new lorebook -->
+  <!-- Dialog: new template -->
   <dialog id="lorebook-dialog">
     <form id="lorebook-form">
-      <h3>New Lorebook</h3>
+      <h3>New Template</h3>
       <label for="lb-new-name">Name</label>
-      <input id="lb-new-name" type="text" placeholder="e.g. Homebrew Setting" required />
+      <input id="lb-new-name" type="text" placeholder="e.g. Fantasy Setting" required />
       <div class="editor-actions">
         <button type="submit">Create</button>
         <button type="button" class="btn-cancel" id="btn-lb-cancel">Cancel</button>
@@ -100,17 +100,17 @@
     </form>
   </dialog>
 
-  <!-- Dialog: use template -->
-  <dialog id="template-dialog">
-    <form id="template-form">
-      <h3>Create from Template</h3>
-      <p class="hint" id="template-source-label"></p>
-      <label for="tpl-name">Lorebook Name</label>
-      <input id="tpl-name" type="text" placeholder="e.g. My Adventure" required />
-      <input type="hidden" id="tpl-source" />
+  <!-- Dialog: save adventure as template -->
+  <dialog id="adventure-save-tpl-dialog">
+    <form id="adventure-save-tpl-form">
+      <h3>Save as Template</h3>
+      <p class="hint" id="save-tpl-source-label"></p>
+      <label for="save-tpl-name">Template Name</label>
+      <input id="save-tpl-name" type="text" placeholder="e.g. My Template" required />
+      <input type="hidden" id="save-tpl-source" />
       <div class="editor-actions">
-        <button type="submit">Create</button>
-        <button type="button" class="btn-cancel" id="btn-tpl-cancel">Cancel</button>
+        <button type="submit">Save</button>
+        <button type="button" class="btn-cancel" id="btn-save-tpl-cancel">Cancel</button>
       </div>
     </form>
   </dialog>
@@ -154,12 +154,19 @@
     var tabs = document.querySelectorAll('.tab');
     var panels = document.querySelectorAll('.tab-panel');
 
+    function switchTab(tabName) {
+      tabs.forEach(function(t) { t.classList.remove('active'); });
+      panels.forEach(function(p) { p.classList.remove('active'); });
+      var tabBtn = document.querySelector('.tab[data-tab="' + tabName + '"]');
+      if (tabBtn) tabBtn.classList.add('active');
+      var panel = document.getElementById('panel-' + tabName);
+      if (panel) panel.classList.add('active');
+    }
+
     tabs.forEach(function(tab) {
       tab.addEventListener('click', function() {
-        tabs.forEach(function(t) { t.classList.remove('active'); });
-        panels.forEach(function(p) { p.classList.remove('active'); });
-        tab.classList.add('active');
-        document.getElementById('panel-' + tab.getAttribute('data-tab')).classList.add('active');
+        var tabName = tab.getAttribute('data-tab');
+        navigateTo('#' + tabName, false);
       });
     });
 
@@ -179,7 +186,7 @@
     var adventureNameEl = document.getElementById('adventure-name');
     var locationSelect = document.getElementById('adventure-location-select');
 
-    function showAdventurePicker() {
+    function showAdventurePicker(skipPush) {
       adventurePicker.style.display = '';
       adventurePlay.style.display = 'none';
       currentAdventure = '';
@@ -187,9 +194,10 @@
       currentLocation = '';
       adventureName = '';
       htmx.trigger(document.body, 'refreshAdventures');
+      if (!skipPush) history.pushState(null, '', '#adventure');
     }
 
-    function startAdventure(lorebook, chatId, name, location) {
+    function startAdventure(lorebook, chatId, name, location, skipPush) {
       currentAdventure = lorebook;
       currentChatId = chatId;
       currentLocation = location || '';
@@ -213,10 +221,14 @@
       }).then(function() {
         chatMessages.scrollTop = chatMessages.scrollHeight;
       });
+
+      if (!skipPush) history.pushState(null, '', '#adventure/' + encodeURIComponent(lorebook));
     }
 
     // Back button
-    document.getElementById('adventure-back-btn').addEventListener('click', showAdventurePicker);
+    document.getElementById('adventure-back-btn').addEventListener('click', function() {
+      showAdventurePicker(false);
+    });
 
     // Location change
     locationSelect.addEventListener('change', function() {
@@ -391,7 +403,7 @@
     var lbForm = document.getElementById('lorebook-form');
     var lbNameInput = document.getElementById('lb-new-name');
 
-    var currentLorebook = 'default';
+    var currentLorebook = '';
     var currentPrefix = '';
 
     function refreshTree() {
@@ -405,6 +417,8 @@
     });
 
     // After lorebook selector loads, bind change handler and do initial tree load
+    var pendingLorebookSlug = '';
+
     document.body.addEventListener('htmx:afterSettle', function(evt) {
       if (evt.detail.target && evt.detail.target.id === 'lorebook-selector') {
         var sel = document.getElementById('lorebook-select');
@@ -414,8 +428,16 @@
             refreshTree();
             document.getElementById('lorebook-editor').innerHTML =
               '<p class="editor-placeholder">Select an entry from the tree, or create a new one.</p>';
+            history.replaceState(null, '', '#lorebook/' + encodeURIComponent(sel.value));
           });
-          currentLorebook = sel.value || 'default';
+          // Apply pending slug from URL if set
+          if (pendingLorebookSlug) {
+            sel.value = pendingLorebookSlug;
+            currentLorebook = pendingLorebookSlug;
+            pendingLorebookSlug = '';
+          } else {
+            currentLorebook = sel.value || '';
+          }
         }
         refreshTree();
       }
@@ -524,55 +546,113 @@
       });
     });
 
-    // --- Template dialog ---
-    var tplDialog = document.getElementById('template-dialog');
-    var tplForm = document.getElementById('template-form');
-    var tplNameInput = document.getElementById('tpl-name');
-    var tplSource = document.getElementById('tpl-source');
-    var tplSourceLabel = document.getElementById('template-source-label');
+    // --- Save as Template dialog (adventure → template) ---
+    var saveTplDialog = document.getElementById('adventure-save-tpl-dialog');
+    var saveTplForm = document.getElementById('adventure-save-tpl-form');
+    var saveTplNameInput = document.getElementById('save-tpl-name');
+    var saveTplSource = document.getElementById('save-tpl-source');
+    var saveTplSourceLabel = document.getElementById('save-tpl-source-label');
 
     document.addEventListener('click', function(e) {
-      if (e.target.id === 'btn-use-template' || e.target.closest('#btn-use-template')) {
-        var sel = document.getElementById('template-select');
-        if (!sel) return;
-        var source = sel.value;
-        var label = sel.options[sel.selectedIndex].text;
-        tplSource.value = source;
-        tplSourceLabel.textContent = 'Template: ' + label;
-        tplNameInput.value = '';
-        tplDialog.showModal();
-        tplNameInput.focus();
+      var saveTplBtn = e.target.closest('.adventure-save-tpl-btn');
+      if (saveTplBtn) {
+        var source = saveTplBtn.getAttribute('data-lorebook');
+        var label = saveTplBtn.getAttribute('data-name');
+        saveTplSource.value = source;
+        saveTplSourceLabel.textContent = 'Adventure: ' + label;
+        saveTplNameInput.value = '';
+        saveTplDialog.showModal();
+        saveTplNameInput.focus();
+        return;
       }
     });
 
-    document.getElementById('btn-tpl-cancel').addEventListener('click', function() {
-      tplDialog.close();
+    document.getElementById('btn-save-tpl-cancel').addEventListener('click', function() {
+      saveTplDialog.close();
     });
 
-    tplForm.addEventListener('submit', function(e) {
+    saveTplForm.addEventListener('submit', function(e) {
       e.preventDefault();
-      var name = tplNameInput.value.trim();
-      if (!name) { tplNameInput.focus(); return; }
+      var name = saveTplNameInput.value.trim();
+      if (!name) { saveTplNameInput.focus(); return; }
       var slug = name.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-      if (!slug) { tplNameInput.focus(); return; }
-      var source = tplSource.value;
-      tplDialog.close();
-      fetch('/api/lorebooks/copy', {
+      if (!slug) { saveTplNameInput.focus(); return; }
+      var source = saveTplSource.value;
+      saveTplDialog.close();
+      fetch('/api/lorebooks/make-template', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ source: source, slug: slug, name: name })
       }).then(function() {
         htmx.trigger(document.body, 'refreshLorebooks');
-        setTimeout(function() {
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // Hash-based routing
+    // -----------------------------------------------------------------------
+    function navigateTo(hash, skipPush) {
+      // Parse hash: #tab or #tab/slug
+      var raw = (hash || '').replace(/^#/, '');
+      var parts = raw.split('/');
+      var tab = parts[0] || 'adventure';
+      var slug = decodeURIComponent(parts.slice(1).join('/'));
+
+      // Validate tab name
+      if (tab !== 'adventure' && tab !== 'lorebook' && tab !== 'settings') {
+        tab = 'adventure';
+        slug = '';
+      }
+
+      switchTab(tab);
+
+      if (tab === 'adventure') {
+        if (slug) {
+          // Resume an adventure by lorebook slug
+          fetch('/api/adventures/resume?lorebook=' + encodeURIComponent(slug))
+            .then(function(res) {
+              if (!res.ok) {
+                // Adventure not found, fall back to picker
+                showAdventurePicker(true);
+                if (!skipPush) history.pushState(null, '', '#adventure');
+                return;
+              }
+              return res.json();
+            })
+            .then(function(data) {
+              if (data) startAdventure(data.lorebook, data.chatId, data.name, data.location, skipPush);
+            });
+        } else {
+          showAdventurePicker(true);
+          if (!skipPush) history.pushState(null, '', '#adventure');
+        }
+      } else if (tab === 'lorebook') {
+        if (slug) {
+          pendingLorebookSlug = slug;
+          // If selector is already loaded, apply immediately
           var sel = document.getElementById('lorebook-select');
           if (sel) {
             sel.value = slug;
             currentLorebook = slug;
+            pendingLorebookSlug = '';
             refreshTree();
+            document.getElementById('lorebook-editor').innerHTML =
+              '<p class="editor-placeholder">Select an entry from the tree, or create a new one.</p>';
           }
-        }, 300);
-      });
+        }
+        if (!skipPush) history.pushState(null, '', hash || '#lorebook');
+      } else if (tab === 'settings') {
+        if (!skipPush) history.pushState(null, '', '#settings');
+      }
+    }
+
+    // Browser back/forward
+    window.addEventListener('popstate', function() {
+      navigateTo(location.hash, true);
     });
+
+    // Initial load — navigate based on current hash
+    navigateTo(location.hash, true);
   })();
   </script>
 </body>
