@@ -432,6 +432,10 @@ export async function findActiveEntries(
     for (const [path, entry] of entryMap) {
       if (activeSet.has(path)) continue;
 
+      // Location entries are exclusive — only the current location can be active.
+      // You can't be in two places at once, so locations never activate via keywords.
+      if (path.startsWith("locations/")) continue;
+
       // Check context gates
       const contextsOk = entry.contexts.length === 0 || entry.contexts.every((ctx) => {
         if (ctx.startsWith("trait:")) {
@@ -454,12 +458,6 @@ export async function findActiveEntries(
         } catch {
           // invalid regex — skip
         }
-      }
-
-      // Location entries matching the current location are already seeded above;
-      // for other entries we require keyword match unless they ARE the location
-      if (path === context.currentLocation) {
-        matched = true;
       }
 
       if (matched) {

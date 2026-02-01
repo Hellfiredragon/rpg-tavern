@@ -501,13 +501,27 @@ describe("findActiveEntries", () => {
     expect(paths).toContain("locations/village-square");
   });
 
-  test("entry with empty contexts activates on keyword match", async () => {
-    await seedContextEntries();
+  test("non-location entry with empty contexts activates on keyword match", async () => {
+    await saveEntry("default", "items/torch", {
+      ...DEFAULT_ENTRY, name: "Torch", keywords: ["torch", "light"],
+      priority: 5, enabled: true, contexts: [],
+    });
     const result = await findActiveEntries("default", {
-      text: "I see the village square", currentLocation: "", traits: [],
+      text: "I pick up the torch", currentLocation: "", traits: [],
     });
     const paths = result.map((e) => e.path);
-    expect(paths).toContain("locations/village-square");
+    expect(paths).toContain("items/torch");
+  });
+
+  test("location entries do NOT activate via keyword — only current location is active", async () => {
+    await seedContextEntries();
+    // Mentioning "village square" should NOT make it active if it's not the current location
+    const result = await findActiveEntries("default", {
+      text: "I remember the village square", currentLocation: "locations/treasure-room", traits: [],
+    });
+    const paths = result.map((e) => e.path);
+    expect(paths).toContain("locations/treasure-room");
+    expect(paths).not.toContain("locations/village-square");
   });
 
   test("entry with unsatisfied context does NOT activate even with keyword match", async () => {
@@ -520,9 +534,10 @@ describe("findActiveEntries", () => {
     expect(paths).not.toContain("characters/sage");
   });
 
-  test("chained activation (A activates B which activates C)", async () => {
+  test("chained activation (location → character → item)", async () => {
     await seedContextEntries();
-    // village-square is current location → sage matches "sage" → iron-key matches "key" → treasure matches "treasure"
+    // village-square is current location → sage matches "sage" → iron-key matches "key"
+    // treasure-room does NOT activate (locations are exclusive — only current location)
     const result = await findActiveEntries("default", {
       text: "I ask the sage about the key and the treasure",
       currentLocation: "locations/village-square",
@@ -532,7 +547,7 @@ describe("findActiveEntries", () => {
     expect(paths).toContain("locations/village-square");
     expect(paths).toContain("characters/sage");
     expect(paths).toContain("items/iron-key");
-    expect(paths).toContain("locations/treasure-room");
+    expect(paths).not.toContain("locations/treasure-room");
   });
 
   test("trait-based context activation", async () => {
@@ -586,11 +601,14 @@ describe("findActiveEntries", () => {
   test("returns entries with correct category", async () => {
     await seedContextEntries();
     const result = await findActiveEntries("default", {
-      text: "village", currentLocation: "", traits: [],
+      text: "I talk to the sage", currentLocation: "locations/village-square", traits: [],
     });
     const square = result.find((e) => e.path === "locations/village-square");
     expect(square).toBeDefined();
     expect(square!.category).toBe("locations");
+    const sage = result.find((e) => e.path === "characters/sage");
+    expect(sage).toBeDefined();
+    expect(sage!.category).toBe("characters");
   });
 
   test("returns empty array for empty lorebook", async () => {
