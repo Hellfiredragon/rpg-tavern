@@ -78,7 +78,13 @@ The Chat tab has been redesigned into an **Adventure** tab. Users pick an advent
 - `POST /api/chats` — JSON `{ lorebook?, location? }` → create conversation bound to lorebook → `X-Chat-Id` header
 - `GET /api/chats/messages?id=` — load conversation messages as HTML (supports system messages)
 - `POST /api/chat` — JSON `{ message, chatId?, lorebook? }` → auto-creates conversation with lorebook if no chatId
-- **Current behavior:** Assistant always responds with "Hello World" (placeholder for future LLM integration)
+- **Location detection (dummy LLM):** `POST /api/chat` parses movement intent from user messages (e.g. "go to X", "enter X", "walk to X"). If a destination is detected and a lorebook is attached:
+  - Matches against existing location entries (case-insensitive, partial matching)
+  - If no match, creates a new lorebook entry under `locations/<slugified-name>.json` with a generated description
+  - Calls `changeLocation()` to update the conversation and append system narration
+  - Returns system narration HTML + assistant HTML + `X-Location` header
+  - Client reads `X-Location` from the response and refreshes the location dropdown
+- **Current behavior:** When no location change is detected, assistant responds with "Hello World" (placeholder for future LLM integration). When a location change is detected, assistant responds with "You arrive at \<location\>."
 
 ## Routing
 

@@ -305,6 +305,17 @@
       .then(function(res) {
         var newId = res.headers.get('X-Chat-Id');
         if (newId) currentChatId = newId;
+        var newLoc = res.headers.get('X-Location');
+        if (newLoc) {
+          currentLocation = newLoc;
+          // Refresh location dropdown to include new/selected location
+          fetch('/api/adventures/locations?lorebook=' + encodeURIComponent(currentAdventure))
+            .then(function(r) { return r.text(); })
+            .then(function(opts) {
+              locationSelect.innerHTML = opts;
+              locationSelect.value = currentLocation;
+            });
+        }
         return res.text();
       })
       .then(function(html) {

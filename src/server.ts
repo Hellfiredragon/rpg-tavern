@@ -103,6 +103,60 @@ function getLorebookSlug(url: URL): string {
   return url.searchParams.get("lorebook") || "";
 }
 
+/** Dummy LLM: detect movement intent from a user message. Returns destination name or null. */
+function detectDestination(message: string): string | null {
+  const patterns = [
+    /\b(?:go|walk|travel|head|move|run|ride|sneak|crawl|fly|sail)\s+(?:to|towards?|into)\s+(?:the\s+)?(.+)/i,
+    /\b(?:enter|visit|explore)\s+(?:the\s+)?(.+)/i,
+    /\blet(?:'s| us)\s+(?:go|head|travel|move)\s+(?:to|towards?|into)\s+(?:the\s+)?(.+)/i,
+  ];
+  for (const re of patterns) {
+    const m = message.match(re);
+    if (m && m[1]) {
+      return m[1].replace(/[.!?,;]+$/, "").trim();
+    }
+  }
+  return null;
+}
+
+/** Match destination against existing location entries, or create a new one. */
+async function resolveOrCreateLocation(
+  lorebook: string,
+  destination: string,
+): Promise<{ path: string; name: string; content: string; isNew: boolean }> {
+  const locations = await listLocationEntries(lorebook);
+  const lower = destination.toLowerCase();
+
+  // Exact name match
+  for (const loc of locations) {
+    if (loc.name.toLowerCase() === lower) {
+      return { path: loc.path, name: loc.name, content: loc.content, isNew: false };
+    }
+  }
+
+  // Partial match: destination is substring of name or vice versa
+  for (const loc of locations) {
+    const locLower = loc.name.toLowerCase();
+    if (locLower.includes(lower) || lower.includes(locLower)) {
+      return { path: loc.path, name: loc.name, content: loc.content, isNew: false };
+    }
+  }
+
+  // No match — create new location entry
+  const slug = destination.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const path = `locations/${slug}`;
+  const entry: LorebookEntry = {
+    name: destination,
+    content: `A ${destination} stretches out before you.`,
+    keywords: [destination.toLowerCase()],
+    regex: "",
+    priority: 50,
+    enabled: true,
+  };
+  await saveEntry(lorebook, path, entry);
+  return { path, name: destination, content: entry.content, isNew: true };
+}
+
 // ---------------------------------------------------------------------------
 // API
 // ---------------------------------------------------------------------------
@@ -167,18 +221,31 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
       const userMsg: ChatMessage = { role: "user", content: message, timestamp: new Date().toISOString() };
       await appendMessage(chatId, userMsg);
 
-      // Placeholder response (future: LLM integration)
-      const assistantMsg: ChatMessage = { role: "assistant", content: "Hello World", timestamp: new Date().toISOString() };
-      await appendMessage(chatId, assistantMsg);
-
       const headers: Record<string, string> = { "HX-Trigger": "refreshChatList" };
       if (isNew) headers["X-Chat-Id"] = chatId;
 
-      return html(
-        `<div class="chat-msg chat-msg-assistant">${escapeHtml(assistantMsg.content)}</div>`,
-        200,
-        headers,
-      );
+      let responseHtml = "";
+
+      // Detect location change from message (dummy LLM)
+      const destination = lorebook ? detectDestination(message) : null;
+      if (destination && lorebook) {
+        const loc = await resolveOrCreateLocation(lorebook, destination);
+        const narration = `You move to ${loc.name}. ${loc.content}`;
+        await changeLocation(chatId, loc.path, narration);
+        headers["X-Location"] = loc.path;
+        responseHtml += `<div class="chat-msg chat-msg-system">${escapeHtml(narration)}</div>`;
+
+        const assistantMsg: ChatMessage = { role: "assistant", content: `You arrive at ${loc.name}.`, timestamp: new Date().toISOString() };
+        await appendMessage(chatId, assistantMsg);
+        responseHtml += `<div class="chat-msg chat-msg-assistant">${escapeHtml(assistantMsg.content)}</div>`;
+      } else {
+        // Placeholder response (future: LLM integration)
+        const assistantMsg: ChatMessage = { role: "assistant", content: "Hello World", timestamp: new Date().toISOString() };
+        await appendMessage(chatId, assistantMsg);
+        responseHtml += `<div class="chat-msg chat-msg-assistant">${escapeHtml(assistantMsg.content)}</div>`;
+      }
+
+      return html(responseHtml, 200, headers);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Chat error";
       return html(`<div class="feedback error">${escapeHtml(msg)}</div>`, 400);

@@ -212,6 +212,63 @@ describe("POST /api/chat", () => {
     const html = await res.text();
     expect(html).toContain("chat-msg-assistant");
   });
+
+  test("detects movement to existing location and changes location", async () => {
+    // Copy key-quest so we have a writable adventure with locations
+    await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "chat-loc", name: "Chat Loc" });
+    const chatRes = await jsonPost("/api/chats", { lorebook: "chat-loc" });
+    const chatId = chatRes.headers.get("X-Chat-Id")!;
+
+    const res = await jsonPost("/api/chat", {
+      message: "I want to go to the village square",
+      chatId,
+      lorebook: "chat-loc",
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("chat-msg-system");
+    expect(html).toContain("Village Square");
+    expect(html).toContain("chat-msg-assistant");
+    expect(res.headers.get("X-Location")).toBe("locations/village-square");
+  });
+
+  test("creates new location entry for unknown destination", async () => {
+    await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "chat-new-loc", name: "Chat New Loc" });
+    const chatRes = await jsonPost("/api/chats", { lorebook: "chat-new-loc" });
+    const chatId = chatRes.headers.get("X-Chat-Id")!;
+
+    const res = await jsonPost("/api/chat", {
+      message: "Let's go to the flower garden",
+      chatId,
+      lorebook: "chat-new-loc",
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("chat-msg-system");
+    expect(html).toContain("flower garden");
+    expect(html).toContain("chat-msg-assistant");
+    expect(res.headers.get("X-Location")).toBe("locations/flower-garden");
+
+    // Verify the new location appears in the dropdown
+    const locRes = await api("/api/adventures/locations?lorebook=chat-new-loc");
+    const locHtml = await locRes.text();
+    expect(locHtml).toContain("flower garden");
+  });
+
+  test("no location change for non-movement messages", async () => {
+    const res = await jsonPost("/api/chat", { message: "What is your name?", lorebook: "test" });
+    const html = await res.text();
+    expect(html).not.toContain("chat-msg-system");
+    expect(html).toContain("chat-msg-assistant");
+    expect(res.headers.get("X-Location")).toBeNull();
+  });
+
+  test("no location detection without a lorebook", async () => {
+    const res = await jsonPost("/api/chat", { message: "go to the tavern" });
+    const html = await res.text();
+    expect(html).not.toContain("chat-msg-system");
+    expect(res.headers.get("X-Location")).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
