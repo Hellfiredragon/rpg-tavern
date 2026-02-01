@@ -1,13 +1,13 @@
 {
   "compilerOptions": {
-    "target": "ESNext",
+    "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "types": ["bun"],
+    "jsx": "react-jsx",
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["src", "tests"],
-  "exclude": ["src/client"]
+  "include": ["src/client"]
 }

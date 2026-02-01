@@ -42,3 +42,31 @@ export async function saveSettings(settings: Settings): Promise<void> {
   await mkdir(DATA_DIR, { recursive: true });
   await Bun.write(SETTINGS_PATH, JSON.stringify(settings, null, 2) + "\n");
 }
+
+export function validateSettings(body: unknown): Settings {
+  if (!body || typeof body !== "object") throw new Error("Body must be a JSON object");
+  const obj = body as Record<string, unknown>;
+
+  const general = obj.general as Record<string, unknown> | undefined;
+  const llm = obj.llm as Record<string, unknown> | undefined;
+  if (!general || typeof general !== "object") throw new Error("Missing general section");
+  if (!llm || typeof llm !== "object") throw new Error("Missing llm section");
+
+  const provider = llm.provider;
+  if (provider !== "anthropic" && provider !== "openai") throw new Error("Invalid provider");
+
+  const temperature = Number(llm.temperature);
+  if (isNaN(temperature) || temperature < 0 || temperature > 2) throw new Error("Temperature must be 0–2");
+
+  return {
+    general: {
+      appName: typeof general.appName === "string" ? general.appName.trim() || DEFAULT_SETTINGS.general.appName : DEFAULT_SETTINGS.general.appName,
+    },
+    llm: {
+      provider,
+      apiKey: typeof llm.apiKey === "string" ? llm.apiKey : "",
+      model: typeof llm.model === "string" ? llm.model.trim() || DEFAULT_SETTINGS.llm.model : DEFAULT_SETTINGS.llm.model,
+      temperature,
+    },
+  };
+}

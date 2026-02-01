@@ -61,13 +61,13 @@ describe("POST /api/lorebooks/make-template", () => {
       name: "My Template",
     });
     expect(res.status).toBe(200);
-    const html = await res.text();
-    expect(html).toContain("Template created");
+    const data = await res.json();
+    expect(data.ok).toBe(true);
 
-    // Verify the new lorebook is a template (appears in lorebook selector)
+    // Verify the new lorebook is a template (appears in templates list)
     const lbRes = await api("/api/lorebooks");
-    const lbHtml = await lbRes.text();
-    expect(lbHtml).toContain("My Template");
+    const lbData = await lbRes.json();
+    expect(lbData.templates.some((t: { name: string }) => t.name === "My Template")).toBe(true);
   });
 
   test("returns 400 for missing fields", async () => {
@@ -77,36 +77,33 @@ describe("POST /api/lorebooks/make-template", () => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /api/lorebooks — template-only selector
+// GET /api/lorebooks — unified model
 // ---------------------------------------------------------------------------
 
 describe("GET /api/lorebooks — unified model", () => {
-  test("returns both templates and adventures as cards", async () => {
+  test("returns both templates and adventures as JSON", async () => {
     // Create an adventure (non-template) by copying
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "non-tpl-adv", name: "Non-Tpl Adventure" });
     await jsonPost("/api/chats", { lorebook: "non-tpl-adv" });
 
     const res = await api("/api/lorebooks");
-    const html = await res.text();
+    const data = await res.json();
 
-    // Templates section with cards
-    expect(html).toContain("Key Quest");
-    expect(html).toContain("Default Lorebook");
-    expect(html).toContain("Templates");
-    expect(html).toContain("adventure-card");
-    expect(html).toContain("lorebook-edit-btn");
+    // Templates section
+    expect(data.templates.some((t: { name: string }) => t.name === "Key Quest")).toBe(true);
+    expect(data.templates.some((t: { name: string }) => t.name === "Default Lorebook")).toBe(true);
+
     // Adventures section
-    expect(html).toContain("Non-Tpl Adventure");
-    expect(html).toContain("Your Adventures");
+    expect(data.adventures.some((a: { name: string }) => a.name === "Non-Tpl Adventure")).toBe(true);
   });
 
-  test("shows + Template button instead of + Lorebook", async () => {
+  test("returns templates and adventures arrays", async () => {
     const res = await api("/api/lorebooks");
-    const html = await res.text();
-    expect(html).toContain("+ Template");
-    expect(html).not.toContain("+ Lorebook");
-    expect(html).not.toContain("btn-use-template");
-    expect(html).not.toContain("template-select");
+    const data = await res.json();
+    expect(data.templates).toBeDefined();
+    expect(data.adventures).toBeDefined();
+    expect(Array.isArray(data.templates)).toBe(true);
+    expect(Array.isArray(data.adventures)).toBe(true);
   });
 });
 
@@ -145,10 +142,10 @@ describe("POST /api/lorebooks — creates templates", () => {
     const res = await jsonPost("/api/lorebooks", { slug: "new-tpl-test", name: "New Tpl Test" });
     expect(res.status).toBe(200);
 
-    // Should appear in the lorebook selector (which only shows templates)
+    // Should appear in the templates list
     const lbRes = await api("/api/lorebooks");
-    const lbHtml = await lbRes.text();
-    expect(lbHtml).toContain("New Tpl Test");
+    const lbData = await lbRes.json();
+    expect(lbData.templates.some((t: { name: string }) => t.name === "New Tpl Test")).toBe(true);
   });
 });
 
@@ -164,8 +161,8 @@ describe("DELETE /api/lorebooks — preset guard", () => {
     expect(res.status).toBe(200);
 
     const lbRes = await api("/api/lorebooks");
-    const lbHtml = await lbRes.text();
-    expect(lbHtml).not.toContain("Del Tpl Test");
+    const lbData = await lbRes.json();
+    expect(lbData.templates.some((t: { name: string }) => t.name === "Del Tpl Test")).toBe(false);
   });
 
   test("returns 403 when deleting a preset lorebook", async () => {
@@ -178,18 +175,19 @@ describe("DELETE /api/lorebooks — preset guard", () => {
 // Adventure picker — Save as Template button
 // ---------------------------------------------------------------------------
 
-describe("adventure picker — Save as Template button", () => {
+describe("adventure picker — adventures have metadata", () => {
   beforeEach(cleanChats);
 
-  test("adventure cards have Save as Template button", async () => {
+  test("adventure entries include lorebook slug", async () => {
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "tpl-btn-test", name: "Tpl Btn Test" });
     await jsonPost("/api/chats", { lorebook: "tpl-btn-test" });
 
     const res = await api("/api/adventures");
-    const html = await res.text();
-    expect(html).toContain("adventure-save-tpl-btn");
-    expect(html).toContain("Save as Template");
-    expect(html).toContain('data-lorebook="tpl-btn-test"');
+    const data = await res.json();
+    const adventure = data.adventures.find((a: { slug: string }) => a.slug === "tpl-btn-test");
+    expect(adventure).toBeTruthy();
+    expect(adventure.name).toBe("Tpl Btn Test");
+    expect(adventure.latestChatId).toBeTruthy();
   });
 });
 
@@ -200,8 +198,8 @@ describe("adventure picker — Save as Template button", () => {
 describe("preset lorebooks visible at startup", () => {
   test("default lorebook is available as a preset template", async () => {
     const lbRes = await api("/api/lorebooks");
-    const lbHtml = await lbRes.text();
-    // "default" should appear as a template in the selector (from presets)
-    expect(lbHtml).toContain("Default Lorebook");
+    const lbData = await lbRes.json();
+    // "default" should appear as a template (from presets)
+    expect(lbData.templates.some((t: { name: string }) => t.name === "Default Lorebook")).toBe(true);
   });
 });

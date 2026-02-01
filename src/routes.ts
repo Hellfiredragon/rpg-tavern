@@ -1,4 +1,4 @@
-import { loadSettings, saveSettings, type Settings } from "./settings";
+import { loadSettings, saveSettings, validateSettings, type Settings } from "./settings";
 import {
   scanTree, loadEntry, saveEntry, deleteEntry, moveEntry,
   createFolder, deleteFolder, validateEntry, DEFAULT_ENTRY,
@@ -12,16 +12,18 @@ import {
   appendMessage, deleteConversation, changeLocation, updateTraits,
   type ChatMessage,
 } from "./chat";
-import {
-  html, escapeHtml,
-  renderTree, renderLorebookPicker, entryFormHtml,
-  renderChatList, renderChatMessages, renderAdventurePicker,
-  renderActiveEntries, settingsFormHtml, validateSettings,
-} from "./renderers";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+function json(data: unknown, status = 200): Response {
+  return Response.json(data, { status });
+}
+
+function err(message: string, status = 400): Response {
+  return Response.json({ error: message }, { status });
+}
 
 function getLorebookSlug(url: URL): string {
   return url.searchParams.get("lorebook") || "";
@@ -76,6 +78,7 @@ async function resolveOrCreateLocation(
     regex: "",
     priority: 50,
     enabled: true,
+    contexts: [],
   };
   await saveEntry(lorebook, path, entry);
   return { path, name: destination, content: entry.content, isNew: true };
@@ -86,17 +89,12 @@ async function resolveOrCreateLocation(
 // ---------------------------------------------------------------------------
 
 export async function handleApi(req: Request, url: URL): Promise<Response> {
-  if (url.pathname === "/api/greeting") {
-    const name = url.searchParams.get("name") || "adventurer";
-    return html(`<p>Welcome to the tavern, <strong>${escapeHtml(name)}</strong>! Pull up a chair.</p>`);
-  }
-
   // --- Chat routes ---
 
   if (url.pathname === "/api/chats" && req.method === "GET") {
     const lorebook = url.searchParams.get("lorebook") || undefined;
     const convos = await listConversations(lorebook);
-    return html(renderChatList(convos));
+    return json(convos);
   }
 
   if (url.pathname === "/api/chats" && req.method === "POST") {
@@ -105,32 +103,26 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
       const lorebook = typeof body.lorebook === "string" ? body.lorebook : "";
       const location = typeof body.location === "string" ? body.location : "";
       const meta = await createConversation({ lorebook, currentLocation: location });
-      return html("", 200, {
-        "HX-Trigger": "refreshChatList",
-        "X-Chat-Id": meta.id,
-      });
+      return json({ chatId: meta.id });
     } catch {
       const meta = await createConversation();
-      return html("", 200, {
-        "HX-Trigger": "refreshChatList",
-        "X-Chat-Id": meta.id,
-      });
+      return json({ chatId: meta.id });
     }
   }
 
   if (url.pathname === "/api/chats/messages" && req.method === "GET") {
     const id = url.searchParams.get("id");
-    if (!id) return html(`<p class="editor-placeholder">No conversation selected.</p>`, 400);
+    if (!id) return err("No conversation selected.", 400);
     const conv = await loadConversation(id);
-    if (!conv) return html(`<p class="editor-placeholder">Conversation not found.</p>`, 404);
-    return html(renderChatMessages(conv.messages));
+    if (!conv) return err("Conversation not found.", 404);
+    return json({ meta: conv.meta, messages: conv.messages });
   }
 
   if (url.pathname === "/api/chat" && req.method === "POST") {
     try {
       const body = await req.json();
       const message = typeof body.message === "string" ? body.message.trim() : "";
-      if (!message) return html(`<div class="feedback error">Empty message</div>`, 400);
+      if (!message) return err("Empty message");
 
       let chatId = typeof body.chatId === "string" ? body.chatId : "";
       const lorebook = typeof body.lorebook === "string" ? body.lorebook : "";
@@ -145,10 +137,8 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
       const userMsg: ChatMessage = { role: "user", content: message, timestamp: new Date().toISOString() };
       await appendMessage(chatId, userMsg);
 
-      const headers: Record<string, string> = { "HX-Trigger": "refreshChatList,refreshActiveEntries" };
-      if (isNew) headers["X-Chat-Id"] = chatId;
-
-      let responseHtml = "";
+      const newMessages: ChatMessage[] = [userMsg];
+      let location: string | null = null;
 
       // Detect location change from message (dummy LLM)
       const destination = lorebook ? detectDestination(message) : null;
@@ -156,23 +146,25 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
         const loc = await resolveOrCreateLocation(lorebook, destination);
         const narration = `You move to ${loc.name}. ${loc.content}`;
         await changeLocation(chatId, loc.path, narration);
-        headers["X-Location"] = loc.path;
-        responseHtml += `<div class="chat-msg chat-msg-system">${escapeHtml(narration)}</div>`;
+        location = loc.path;
+
+        const systemMsg: ChatMessage = { role: "system", content: narration, timestamp: new Date().toISOString() };
+        newMessages.push(systemMsg);
 
         const assistantMsg: ChatMessage = { role: "assistant", content: `You arrive at ${loc.name}.`, timestamp: new Date().toISOString() };
         await appendMessage(chatId, assistantMsg);
-        responseHtml += `<div class="chat-msg chat-msg-assistant">${escapeHtml(assistantMsg.content)}</div>`;
+        newMessages.push(assistantMsg);
       } else {
         // Placeholder response (future: LLM integration)
         const assistantMsg: ChatMessage = { role: "assistant", content: "Hello World", timestamp: new Date().toISOString() };
         await appendMessage(chatId, assistantMsg);
-        responseHtml += `<div class="chat-msg chat-msg-assistant">${escapeHtml(assistantMsg.content)}</div>`;
+        newMessages.push(assistantMsg);
       }
 
-      return html(responseHtml, 200, headers);
+      return json({ chatId, messages: newMessages, location, isNew });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Chat error";
-      return html(`<div class="feedback error">${escapeHtml(msg)}</div>`, 400);
+      return err(msg);
     }
   }
 
@@ -181,12 +173,43 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
   if (url.pathname === "/api/adventures" && req.method === "GET") {
     const lorebooks = await listLorebooks();
     const allConvos = await listConversations();
-    return html(await renderAdventurePicker(lorebooks, allConvos));
+    const templates = lorebooks.filter((lb) => lb.meta.template);
+
+    // Only show user lorebooks that have been started (have at least one conversation)
+    const startedAdventures: { slug: string; name: string; latestChatId: string; currentLocation: string; locationName: string; updatedAt: string }[] = [];
+    for (const lb of lorebooks) {
+      if (lb.meta.template) continue;
+      const latest = allConvos.find((c) => c.lorebook === lb.slug);
+      if (!latest) continue;
+
+      let locationName = "";
+      if (latest.currentLocation) {
+        const entry = await loadEntry(lb.slug, latest.currentLocation);
+        locationName = entry?.name ?? latest.currentLocation.split("/").pop() ?? "";
+      }
+
+      startedAdventures.push({
+        slug: lb.slug,
+        name: lb.meta.name,
+        latestChatId: latest.id,
+        currentLocation: latest.currentLocation,
+        locationName,
+        updatedAt: latest.updatedAt,
+      });
+    }
+
+    // Sort by last played (most recent first)
+    startedAdventures.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+
+    return json({
+      adventures: startedAdventures,
+      templates: templates.map((lb) => ({ slug: lb.slug, name: lb.meta.name, preset: lb.preset })),
+    });
   }
 
   if (url.pathname === "/api/adventures" && req.method === "DELETE") {
     const slug = url.searchParams.get("lorebook");
-    if (!slug) return html(`<div class="feedback error">Missing lorebook</div>`, 400);
+    if (!slug) return err("Missing lorebook");
     // Delete all conversations for this adventure
     const convos = await listConversations(slug);
     for (const c of convos) {
@@ -194,26 +217,21 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
     }
     // Delete the lorebook itself
     await deleteLorebook(slug);
-    // Return updated picker
-    const lorebooks = await listLorebooks();
-    const allConvos = await listConversations();
-    return html(await renderAdventurePicker(lorebooks, allConvos), 200, {
-      "HX-Trigger": "refreshAdventures",
-    });
+    return json({ ok: true });
   }
 
   if (url.pathname === "/api/adventures/resume" && req.method === "GET") {
     const slug = url.searchParams.get("lorebook") || "";
-    if (!slug) return Response.json({ error: "Missing lorebook" }, { status: 400 });
+    if (!slug) return err("Missing lorebook");
     const convos = await listConversations(slug);
-    if (convos.length === 0) return Response.json({ error: "No conversations found" }, { status: 404 });
+    if (convos.length === 0) return err("No conversations found", 404);
     const latest = convos[0]; // already sorted by updatedAt desc
     let name = slug;
     try {
       const meta = await loadLorebookMeta(slug);
       if (meta) name = meta.name;
     } catch { /* use slug as fallback */ }
-    return Response.json({
+    return json({
       lorebook: slug,
       chatId: latest.id,
       name,
@@ -224,11 +242,7 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
   if (url.pathname === "/api/adventures/locations" && req.method === "GET") {
     const lb = url.searchParams.get("lorebook") || "default";
     const locations = await listLocationEntries(lb);
-    let options = `<option value="">-- Choose a location --</option>`;
-    for (const loc of locations) {
-      options += `<option value="${escapeHtml(loc.path)}">${escapeHtml(loc.name)}</option>`;
-    }
-    return html(options);
+    return json(locations.map((loc) => ({ path: loc.path, name: loc.name })));
   }
 
   if (url.pathname === "/api/adventures/location" && req.method === "PUT") {
@@ -236,10 +250,10 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
       const body = await req.json();
       const chatId = typeof body.chatId === "string" ? body.chatId : "";
       const location = typeof body.location === "string" ? body.location : "";
-      if (!chatId || !location) return html(`<div class="feedback error">Missing chatId or location</div>`, 400);
+      if (!chatId || !location) return err("Missing chatId or location");
 
       const conv = await loadConversation(chatId);
-      if (!conv) return html(`<div class="feedback error">Conversation not found</div>`, 404);
+      if (!conv) return err("Conversation not found", 404);
 
       // Load the location entry from the lorebook for its name/content
       const entry = await loadEntry(conv.meta.lorebook, location);
@@ -248,23 +262,19 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
 
       await changeLocation(chatId, location, narration);
 
-      return html(
-        `<div class="chat-msg chat-msg-system">${escapeHtml(narration)}</div>`,
-        200,
-        { "X-Location": location, "HX-Trigger": "refreshActiveEntries" },
-      );
+      return json({ location, narration });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Location change error";
-      return html(`<div class="feedback error">${escapeHtml(msg)}</div>`, 400);
+      return err(msg);
     }
   }
 
   if (url.pathname === "/api/adventures/active-entries" && req.method === "GET") {
     const chatId = url.searchParams.get("chatId") || "";
-    if (!chatId) return html(`<p class="active-entries-empty">No active entries.</p>`, 400);
+    if (!chatId) return err("Missing chatId");
     const conv = await loadConversation(chatId);
-    if (!conv) return html(`<p class="active-entries-empty">Conversation not found.</p>`, 404);
-    if (!conv.meta.lorebook) return html(`<p class="active-entries-empty">No lorebook attached.</p>`);
+    if (!conv) return err("Conversation not found", 404);
+    if (!conv.meta.lorebook) return json({ traits: conv.meta.traits, entries: [] });
 
     // Collect text from last 20 messages
     const recentMessages = conv.messages.slice(-20);
@@ -275,7 +285,7 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
       currentLocation: conv.meta.currentLocation,
       traits: conv.meta.traits,
     });
-    return html(renderActiveEntries(entries, conv.meta.traits, chatId));
+    return json({ traits: conv.meta.traits, entries });
   }
 
   if (url.pathname === "/api/adventures/traits" && req.method === "PUT") {
@@ -283,13 +293,13 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
       const body = await req.json();
       const chatId = typeof body.chatId === "string" ? body.chatId : "";
       const traits = Array.isArray(body.traits) ? body.traits.filter((t: unknown) => typeof t === "string" && t.trim()).map((t: string) => t.trim()) : [];
-      if (!chatId) return html(`<div class="feedback error">Missing chatId</div>`, 400);
+      if (!chatId) return err("Missing chatId");
 
-      const meta = await updateTraits(chatId, traits);
+      await updateTraits(chatId, traits);
 
       // Return updated active entries
       const conv = await loadConversation(chatId);
-      if (!conv) return html(`<div class="feedback error">Conversation not found</div>`, 404);
+      if (!conv) return err("Conversation not found", 404);
 
       const recentMessages = conv.messages.slice(-20);
       const text = recentMessages.map((m) => m.content).join(" ");
@@ -299,10 +309,10 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
         currentLocation: conv.meta.currentLocation,
         traits: conv.meta.traits,
       });
-      return html(renderActiveEntries(entries, conv.meta.traits, chatId));
+      return json({ traits: conv.meta.traits, entries });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Traits update error";
-      return html(`<div class="feedback error">${escapeHtml(msg)}</div>`, 400);
+      return err(msg);
     }
   }
 
@@ -314,12 +324,7 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
       ...settings,
       llm: { ...settings.llm, apiKey: settings.llm.apiKey ? "••••••••" : "" },
     };
-    return Response.json(masked);
-  }
-
-  if (url.pathname === "/api/settings/form" && req.method === "GET") {
-    const s = await loadSettings();
-    return html(settingsFormHtml(s));
+    return json(masked);
   }
 
   if (url.pathname === "/api/settings" && req.method === "PUT") {
@@ -327,10 +332,10 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
       const body = await req.json();
       const settings = validateSettings(body);
       await saveSettings(settings);
-      return html(`<div class="feedback success">Settings saved.</div>` + settingsFormHtml(settings));
+      return json({ ok: true, settings });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Invalid settings";
-      return html(`<div class="feedback error">${escapeHtml(msg)}</div>` + settingsFormHtml(await loadSettings()), 400);
+      return err(msg);
     }
   }
 
@@ -338,19 +343,24 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
 
   if (url.pathname === "/api/lorebooks" && req.method === "GET") {
     const lorebooks = await listLorebooks();
-    return html(renderLorebookPicker(lorebooks));
+    const templates = lorebooks.filter((lb) => lb.meta.template);
+    const adventures = lorebooks.filter((lb) => !lb.meta.template);
+    return json({
+      adventures: adventures.map((lb) => ({ slug: lb.slug, name: lb.meta.name, preset: lb.preset })),
+      templates: templates.map((lb) => ({ slug: lb.slug, name: lb.meta.name, preset: lb.preset })),
+    });
   }
 
   if (url.pathname === "/api/lorebooks/meta" && req.method === "GET") {
     const slug = url.searchParams.get("slug") || "";
-    if (!slug) return Response.json({ error: "Missing slug" }, { status: 400 });
+    if (!slug) return err("Missing slug");
     try {
       const meta = await loadLorebookMeta(slug);
-      if (!meta) return Response.json({ error: "Not found" }, { status: 404 });
+      if (!meta) return err("Not found", 404);
       const preset = await isReadOnlyPreset(slug);
-      return Response.json({ slug, name: meta.name, template: !!meta.template, preset });
+      return json({ slug, name: meta.name, template: !!meta.template, preset });
     } catch {
-      return Response.json({ error: "Not found" }, { status: 404 });
+      return err("Not found", 404);
     }
   }
 
@@ -359,31 +369,23 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
       const body = await req.json();
       const slug = typeof body.slug === "string" ? body.slug.trim() : "";
       const name = typeof body.name === "string" ? body.name.trim() : "";
-      if (!slug || !name) return html(`<div class="feedback error">Slug and name are required</div>`, 400);
+      if (!slug || !name) return err("Slug and name are required");
       await createLorebook(slug, name, true);
-      return html(
-        `<div class="feedback success">Lorebook created.</div>`,
-        200,
-        { "HX-Trigger": "refreshLorebooks" },
-      );
+      return json({ ok: true });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to create lorebook";
-      return html(`<div class="feedback error">${escapeHtml(msg)}</div>`, 400);
+      return err(msg);
     }
   }
 
   if (url.pathname === "/api/lorebooks" && req.method === "DELETE") {
     const slug = url.searchParams.get("slug");
-    if (!slug) return html(`<div class="feedback error">Missing slug</div>`, 400);
+    if (!slug) return err("Missing slug");
     if (await isReadOnlyPreset(slug)) {
-      return html(`<div class="feedback error">Cannot delete a preset lorebook</div>`, 403);
+      return err("Cannot delete a preset lorebook", 403);
     }
     await deleteLorebook(slug);
-    return html(
-      `<div class="feedback success">Lorebook deleted.</div>`,
-      200,
-      { "HX-Trigger": "refreshLorebooks" },
-    );
+    return json({ ok: true });
   }
 
   if (url.pathname === "/api/lorebooks/copy" && req.method === "POST") {
@@ -392,16 +394,12 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
       const source = typeof body.source === "string" ? body.source.trim() : "";
       const slug = typeof body.slug === "string" ? body.slug.trim() : "";
       const name = typeof body.name === "string" ? body.name.trim() : "";
-      if (!source || !slug || !name) return html(`<div class="feedback error">Source, slug, and name are required</div>`, 400);
+      if (!source || !slug || !name) return err("Source, slug, and name are required");
       await copyLorebook(source, slug, name);
-      return html(
-        `<div class="feedback success">Lorebook created from template.</div>`,
-        200,
-        { "HX-Trigger": "refreshLorebooks" },
-      );
+      return json({ ok: true });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to copy lorebook";
-      return html(`<div class="feedback error">${escapeHtml(msg)}</div>`, 400);
+      return err(msg);
     }
   }
 
@@ -411,18 +409,14 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
       const source = typeof body.source === "string" ? body.source.trim() : "";
       const slug = typeof body.slug === "string" ? body.slug.trim() : "";
       const name = typeof body.name === "string" ? body.name.trim() : "";
-      if (!source || !slug || !name) return html(`<div class="feedback error">Source, slug, and name are required</div>`, 400);
+      if (!source || !slug || !name) return err("Source, slug, and name are required");
       await copyLorebook(source, slug, name);
       // Mark the copy as a template
       await saveLorebookMeta(slug, { name, template: true });
-      return html(
-        `<div class="feedback success">Template created.</div>`,
-        200,
-        { "HX-Trigger": "refreshLorebooks" },
-      );
+      return json({ ok: true });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to create template";
-      return html(`<div class="feedback error">${escapeHtml(msg)}</div>`, 400);
+      return err(msg);
     }
   }
 
@@ -432,116 +426,96 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
     const lb = getLorebookSlug(url);
     const tree = await scanTree(lb);
     const readonly = await isReadOnlyPreset(lb);
-    return html(renderTree(tree, lb, readonly));
+    return json({ nodes: tree, readonly });
   }
 
   if (url.pathname === "/api/lorebook/entry" && req.method === "GET") {
     const lb = getLorebookSlug(url);
     const path = url.searchParams.get("path");
-    if (!path) return html(`<div class="feedback error">Missing path parameter</div>`, 400);
+    if (!path) return err("Missing path parameter");
     const entry = await loadEntry(lb, path);
     const readonly = await isReadOnlyPreset(lb);
-    return html(entryFormHtml(path, entry ?? DEFAULT_ENTRY, !entry, lb, readonly));
+    return json({ path, entry: entry ?? DEFAULT_ENTRY, isNew: !entry, readonly });
   }
 
   if (url.pathname === "/api/lorebook/entry" && req.method === "POST") {
     const lb = getLorebookSlug(url);
-    if (await isReadOnlyPreset(lb)) return html(`<div class="feedback error">Cannot modify a preset lorebook</div>`, 403);
+    if (await isReadOnlyPreset(lb)) return err("Cannot modify a preset lorebook", 403);
     const path = url.searchParams.get("path");
-    if (!path) return html(`<div class="feedback error">Missing path</div>`, 400);
+    if (!path) return err("Missing path");
     try {
       const body = await req.json();
       const entry = validateEntry(body);
       await saveEntry(lb, path, entry);
-      return html(
-        `<div class="feedback success">Entry created.</div>` + entryFormHtml(path, entry, false, lb),
-        200,
-        { "HX-Trigger": "refreshTree" },
-      );
+      return json({ ok: true, entry });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Invalid entry";
-      return html(`<div class="feedback error">${escapeHtml(msg)}</div>`, 400);
+      return err(msg);
     }
   }
 
   if (url.pathname === "/api/lorebook/entry" && req.method === "PUT") {
     const lb = getLorebookSlug(url);
-    if (await isReadOnlyPreset(lb)) return html(`<div class="feedback error">Cannot modify a preset lorebook</div>`, 403);
+    if (await isReadOnlyPreset(lb)) return err("Cannot modify a preset lorebook", 403);
     const path = url.searchParams.get("path");
-    if (!path) return html(`<div class="feedback error">Missing path</div>`, 400);
+    if (!path) return err("Missing path");
     try {
       const body = await req.json();
       const entry = validateEntry(body);
       await saveEntry(lb, path, entry);
-      return html(
-        `<div class="feedback success">Entry saved.</div>` + entryFormHtml(path, entry, false, lb),
-        200,
-        { "HX-Trigger": "refreshTree" },
-      );
+      return json({ ok: true, entry });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Invalid entry";
-      return html(`<div class="feedback error">${escapeHtml(msg)}</div>`, 400);
+      return err(msg);
     }
   }
 
   if (url.pathname === "/api/lorebook/entry" && req.method === "DELETE") {
     const lb = getLorebookSlug(url);
-    if (await isReadOnlyPreset(lb)) return html(`<div class="feedback error">Cannot modify a preset lorebook</div>`, 403);
+    if (await isReadOnlyPreset(lb)) return err("Cannot modify a preset lorebook", 403);
     const path = url.searchParams.get("path");
-    if (!path) return html(`<div class="feedback error">Missing path</div>`, 400);
+    if (!path) return err("Missing path");
     await deleteEntry(lb, path);
-    return html(
-      `<p class="editor-placeholder">Entry deleted.</p>`,
-      200,
-      { "HX-Trigger": "refreshTree" },
-    );
+    return json({ ok: true });
   }
 
   if (url.pathname === "/api/lorebook/folder" && req.method === "POST") {
     const lb = getLorebookSlug(url);
-    if (await isReadOnlyPreset(lb)) return html(`<div class="feedback error">Cannot modify a preset lorebook</div>`, 403);
-    const formData = await req.formData();
-    const path = formData.get("path") as string | null;
-    if (!path) return html(`<div class="feedback error">Missing path</div>`, 400);
-    await createFolder(lb, path);
-    return html(
-      `<p class="editor-placeholder">Folder created.</p>`,
-      200,
-      { "HX-Trigger": "refreshTree" },
-    );
+    if (await isReadOnlyPreset(lb)) return err("Cannot modify a preset lorebook", 403);
+    try {
+      const body = await req.json();
+      const path = typeof body.path === "string" ? body.path.trim() : "";
+      if (!path) return err("Missing path");
+      await createFolder(lb, path);
+      return json({ ok: true });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to create folder";
+      return err(msg);
+    }
   }
 
   if (url.pathname === "/api/lorebook/folder" && req.method === "DELETE") {
     const lb = getLorebookSlug(url);
-    if (await isReadOnlyPreset(lb)) return html(`<div class="feedback error">Cannot modify a preset lorebook</div>`, 403);
+    if (await isReadOnlyPreset(lb)) return err("Cannot modify a preset lorebook", 403);
     const path = url.searchParams.get("path");
-    if (!path) return html(`<div class="feedback error">Missing path</div>`, 400);
+    if (!path) return err("Missing path");
     await deleteFolder(lb, path);
-    return html(
-      `<p class="editor-placeholder">Folder deleted.</p>`,
-      200,
-      { "HX-Trigger": "refreshTree" },
-    );
+    return json({ ok: true });
   }
 
   if (url.pathname === "/api/lorebook/entry/move" && req.method === "PUT") {
     const lb = getLorebookSlug(url);
-    if (await isReadOnlyPreset(lb)) return html(`<div class="feedback error">Cannot modify a preset lorebook</div>`, 403);
+    if (await isReadOnlyPreset(lb)) return err("Cannot modify a preset lorebook", 403);
     try {
       const body = await req.json();
       const path = typeof body.path === "string" ? body.path.trim() : "";
       const destination = typeof body.destination === "string" ? body.destination : "";
-      if (!path) return html(`<div class="feedback error">Missing path</div>`, 400);
+      if (!path) return err("Missing path");
       const newPath = await moveEntry(lb, path, destination);
-      const tree = await scanTree(lb);
-      const readonly = await isReadOnlyPreset(lb);
-      return html(renderTree(tree, lb, readonly), 200, {
-        "HX-Trigger": "refreshTree",
-        "X-New-Path": newPath,
-      });
+      return json({ ok: true, newPath });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Move failed";
-      return html(`<div class="feedback error">${escapeHtml(msg)}</div>`, 400);
+      return err(msg);
     }
   }
 

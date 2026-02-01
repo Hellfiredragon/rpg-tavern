@@ -61,81 +61,73 @@ describe("GET /api/adventures", () => {
   test("returns template cards on a fresh state", async () => {
     const res = await api("/api/adventures");
     expect(res.status).toBe(200);
-    const html = await res.text();
-    // Template section with Key Quest
-    expect(html).toContain("Start New Adventure");
-    expect(html).toContain("Key Quest");
-    expect(html).toContain("adventure-start-btn");
-    expect(html).toContain('data-template="template-key-quest"');
+    const data = await res.json();
+    expect(data.templates.length).toBeGreaterThan(0);
+    expect(data.templates).toContainEqual(expect.objectContaining({ name: "Key Quest" }));
   });
 
-  test("shows empty-state message when no adventures have been started", async () => {
+  test("shows empty adventures when none have been started", async () => {
     const res = await api("/api/adventures");
-    const html = await res.text();
-    expect(html).toContain("No adventures yet");
+    const data = await res.json();
+    expect(data.adventures).toEqual([]);
   });
 
   test("does not show templates as adventures", async () => {
-    // "default" lorebook is a template (migrated at startup) and should not appear as an adventure
     const res = await api("/api/adventures");
-    const html = await res.text();
-    expect(html).not.toContain("adventure-continue-btn");
-    expect(html).not.toContain('data-lorebook="default"');
+    const data = await res.json();
+    const slugs = data.adventures.map((a: { slug: string }) => a.slug);
+    expect(slugs).not.toContain("default");
   });
 
-  test("shows Continue button for adventures with conversations", async () => {
-    // Copy template and create a conversation for it
+  test("shows Continue data for adventures with conversations", async () => {
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "my-quest", name: "My Quest" });
     const chatRes = await jsonPost("/api/chats", { lorebook: "my-quest" });
-    const chatId = chatRes.headers.get("X-Chat-Id");
-    expect(chatId).toBeTruthy();
+    const chatData = await chatRes.json();
+    expect(chatData.chatId).toBeTruthy();
 
     const res = await api("/api/adventures");
-    const html = await res.text();
-    expect(html).toContain("Your Adventures");
-    expect(html).toContain("My Quest");
-    expect(html).toContain("adventure-continue-btn");
-    expect(html).toContain(`data-chat-id="${chatId}"`);
-    expect(html).toContain('data-lorebook="my-quest"');
+    const data = await res.json();
+    const adv = data.adventures.find((a: { slug: string }) => a.slug === "my-quest");
+    expect(adv).toBeTruthy();
+    expect(adv.name).toBe("My Quest");
+    expect(adv.latestChatId).toBe(chatData.chatId);
   });
 
-  test("every adventure card has both Continue and Delete buttons", async () => {
+  test("every adventure has slug, name, latestChatId fields", async () => {
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "quest-btns", name: "Quest Buttons" });
     await jsonPost("/api/chats", { lorebook: "quest-btns" });
 
     const res = await api("/api/adventures");
-    const html = await res.text();
-    // Find the adventure card
-    expect(html).toContain("adventure-continue-btn");
-    expect(html).toContain("adventure-delete-btn");
+    const data = await res.json();
+    const adv = data.adventures.find((a: { slug: string }) => a.slug === "quest-btns");
+    expect(adv).toBeTruthy();
+    expect(adv.latestChatId).toBeTruthy();
+    expect(adv.name).toBe("Quest Buttons");
   });
 
   test("orders adventures by last played (most recent first)", async () => {
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "quest-old", name: "Old Quest" });
-    const oldRes = await jsonPost("/api/chats", { lorebook: "quest-old" });
-    const oldChatId = oldRes.headers.get("X-Chat-Id");
+    await jsonPost("/api/chats", { lorebook: "quest-old" });
 
-    // Small delay to ensure different timestamps
     await new Promise((r) => setTimeout(r, 15));
 
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "quest-new", name: "New Quest" });
     await jsonPost("/api/chats", { lorebook: "quest-new" });
 
     const res = await api("/api/adventures");
-    const html = await res.text();
-
-    // "New Quest" should appear before "Old Quest"
-    const newIdx = html.indexOf("New Quest");
-    const oldIdx = html.indexOf("Old Quest");
-    expect(newIdx).toBeGreaterThan(-1);
-    expect(oldIdx).toBeGreaterThan(-1);
+    const data = await res.json();
+    const names = data.adventures.map((a: { name: string }) => a.name);
+    const newIdx = names.indexOf("New Quest");
+    const oldIdx = names.indexOf("Old Quest");
+    expect(newIdx).toBeGreaterThanOrEqual(0);
+    expect(oldIdx).toBeGreaterThanOrEqual(0);
     expect(newIdx).toBeLessThan(oldIdx);
   });
 
   test("re-orders after a message updates an older adventure", async () => {
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "quest-a", name: "Quest A" });
     const aRes = await jsonPost("/api/chats", { lorebook: "quest-a" });
-    const aChatId = aRes.headers.get("X-Chat-Id");
+    const aData = await aRes.json();
 
     await new Promise((r) => setTimeout(r, 15));
 
@@ -144,13 +136,12 @@ describe("GET /api/adventures", () => {
 
     // Quest B is now more recent. Now send a message to Quest A to make it most recent.
     await new Promise((r) => setTimeout(r, 15));
-    await jsonPost("/api/chat", { message: "hello", chatId: aChatId, lorebook: "quest-a" });
+    await jsonPost("/api/chat", { message: "hello", chatId: aData.chatId, lorebook: "quest-a" });
 
     const res = await api("/api/adventures");
-    const html = await res.text();
-    const aIdx = html.indexOf("Quest A");
-    const bIdx = html.indexOf("Quest B");
-    expect(aIdx).toBeLessThan(bIdx);
+    const data = await res.json();
+    const names = data.adventures.map((a: { name: string }) => a.name);
+    expect(names.indexOf("Quest A")).toBeLessThan(names.indexOf("Quest B"));
   });
 });
 
@@ -161,30 +152,30 @@ describe("GET /api/adventures", () => {
 describe("POST /api/chats", () => {
   beforeEach(cleanChats);
 
-  test("returns X-Chat-Id header", async () => {
+  test("returns chatId in JSON", async () => {
     const res = await jsonPost("/api/chats", { lorebook: "default" });
     expect(res.status).toBe(200);
-    const chatId = res.headers.get("X-Chat-Id");
-    expect(chatId).toBeTruthy();
-    expect(chatId).toMatch(/^\d+-[0-9a-f]{3}$/);
+    const data = await res.json();
+    expect(data.chatId).toBeTruthy();
+    expect(data.chatId).toMatch(/^\d+-[0-9a-f]{3}$/);
   });
 
   test("binds conversation to lorebook", async () => {
     const res = await jsonPost("/api/chats", { lorebook: "my-adventure" });
-    const chatId = res.headers.get("X-Chat-Id")!;
+    const data = await res.json();
 
-    // Verify by loading messages and checking via the chats list
     const listRes = await api("/api/chats?lorebook=my-adventure");
-    const listHtml = await listRes.text();
-    expect(listHtml).toContain(chatId);
+    const convos = await listRes.json();
+    const ids = convos.map((c: { id: string }) => c.id);
+    expect(ids).toContain(data.chatId);
   });
 
   test("conversation does not appear in other lorebook filters", async () => {
     await jsonPost("/api/chats", { lorebook: "adventure-x" });
 
     const listRes = await api("/api/chats?lorebook=adventure-y");
-    const listHtml = await listRes.text();
-    expect(listHtml).not.toContain("chat-list-item");
+    const convos = await listRes.json();
+    expect(convos).toEqual([]);
   });
 });
 
@@ -198,76 +189,80 @@ describe("POST /api/chat", () => {
   test("creates conversation bound to lorebook when no chatId given", async () => {
     const res = await jsonPost("/api/chat", { message: "hello", lorebook: "some-adventure" });
     expect(res.status).toBe(200);
-    const chatId = res.headers.get("X-Chat-Id");
-    expect(chatId).toBeTruthy();
+    const data = await res.json();
+    expect(data.chatId).toBeTruthy();
+    expect(data.isNew).toBe(true);
 
-    // Verify it appears under the correct lorebook filter
     const listRes = await api("/api/chats?lorebook=some-adventure");
-    const listHtml = await listRes.text();
-    expect(listHtml).toContain(chatId!);
+    const convos = await listRes.json();
+    const ids = convos.map((c: { id: string }) => c.id);
+    expect(ids).toContain(data.chatId);
   });
 
-  test("returns assistant message HTML", async () => {
+  test("returns assistant message in messages array", async () => {
     const res = await jsonPost("/api/chat", { message: "hello", lorebook: "test" });
-    const html = await res.text();
-    expect(html).toContain("chat-msg-assistant");
+    const data = await res.json();
+    const roles = data.messages.map((m: { role: string }) => m.role);
+    expect(roles).toContain("assistant");
   });
 
   test("detects movement to existing location and changes location", async () => {
-    // Copy key-quest so we have a writable adventure with locations
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "chat-loc", name: "Chat Loc" });
     const chatRes = await jsonPost("/api/chats", { lorebook: "chat-loc" });
-    const chatId = chatRes.headers.get("X-Chat-Id")!;
+    const chatData = await chatRes.json();
 
     const res = await jsonPost("/api/chat", {
       message: "I want to go to the village square",
-      chatId,
+      chatId: chatData.chatId,
       lorebook: "chat-loc",
     });
     expect(res.status).toBe(200);
-    const html = await res.text();
-    expect(html).toContain("chat-msg-system");
-    expect(html).toContain("Village Square");
-    expect(html).toContain("chat-msg-assistant");
-    expect(res.headers.get("X-Location")).toBe("locations/village-square");
+    const data = await res.json();
+    const roles = data.messages.map((m: { role: string }) => m.role);
+    expect(roles).toContain("system");
+    expect(roles).toContain("assistant");
+    const sysMsg = data.messages.find((m: { role: string }) => m.role === "system");
+    expect(sysMsg.content).toContain("Village Square");
+    expect(data.location).toBe("locations/village-square");
   });
 
   test("creates new location entry for unknown destination", async () => {
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "chat-new-loc", name: "Chat New Loc" });
     const chatRes = await jsonPost("/api/chats", { lorebook: "chat-new-loc" });
-    const chatId = chatRes.headers.get("X-Chat-Id")!;
+    const chatData = await chatRes.json();
 
     const res = await jsonPost("/api/chat", {
       message: "Let's go to the flower garden",
-      chatId,
+      chatId: chatData.chatId,
       lorebook: "chat-new-loc",
     });
     expect(res.status).toBe(200);
-    const html = await res.text();
-    expect(html).toContain("chat-msg-system");
-    expect(html).toContain("flower garden");
-    expect(html).toContain("chat-msg-assistant");
-    expect(res.headers.get("X-Location")).toBe("locations/flower-garden");
+    const data = await res.json();
+    const sysMsg = data.messages.find((m: { role: string }) => m.role === "system");
+    expect(sysMsg.content).toContain("flower garden");
+    expect(data.location).toBe("locations/flower-garden");
 
-    // Verify the new location appears in the dropdown
+    // Verify the new location appears in the locations list
     const locRes = await api("/api/adventures/locations?lorebook=chat-new-loc");
-    const locHtml = await locRes.text();
-    expect(locHtml).toContain("flower garden");
+    const locs = await locRes.json();
+    expect(locs.some((l: { name: string }) => l.name === "flower garden")).toBe(true);
   });
 
   test("no location change for non-movement messages", async () => {
     const res = await jsonPost("/api/chat", { message: "What is your name?", lorebook: "test" });
-    const html = await res.text();
-    expect(html).not.toContain("chat-msg-system");
-    expect(html).toContain("chat-msg-assistant");
-    expect(res.headers.get("X-Location")).toBeNull();
+    const data = await res.json();
+    const roles = data.messages.map((m: { role: string }) => m.role);
+    expect(roles).not.toContain("system");
+    expect(roles).toContain("assistant");
+    expect(data.location).toBeNull();
   });
 
   test("no location detection without a lorebook", async () => {
     const res = await jsonPost("/api/chat", { message: "go to the tavern" });
-    const html = await res.text();
-    expect(html).not.toContain("chat-msg-system");
-    expect(res.headers.get("X-Location")).toBeNull();
+    const data = await res.json();
+    const roles = data.messages.map((m: { role: string }) => m.role);
+    expect(roles).not.toContain("system");
+    expect(data.location).toBeNull();
   });
 });
 
@@ -278,38 +273,40 @@ describe("POST /api/chat", () => {
 describe("GET /api/chats/messages", () => {
   beforeEach(cleanChats);
 
-  test("returns placeholder for empty conversation", async () => {
+  test("returns empty messages for new conversation", async () => {
     const chatRes = await jsonPost("/api/chats", { lorebook: "test" });
-    const chatId = chatRes.headers.get("X-Chat-Id")!;
+    const chatData = await chatRes.json();
 
-    const res = await api(`/api/chats/messages?id=${chatId}`);
-    const html = await res.text();
-    expect(html).toContain("Your adventure begins");
+    const res = await api(`/api/chats/messages?id=${chatData.chatId}`);
+    const data = await res.json();
+    expect(data.messages).toEqual([]);
   });
 
-  test("renders user and assistant messages", async () => {
+  test("returns user and assistant messages", async () => {
     const chatRes = await jsonPost("/api/chat", { message: "I enter the tavern", lorebook: "test" });
-    const chatId = chatRes.headers.get("X-Chat-Id")!;
+    const chatData = await chatRes.json();
 
-    const res = await api(`/api/chats/messages?id=${chatId}`);
-    const html = await res.text();
-    expect(html).toContain("chat-msg-user");
-    expect(html).toContain("I enter the tavern");
-    expect(html).toContain("chat-msg-assistant");
+    const res = await api(`/api/chats/messages?id=${chatData.chatId}`);
+    const data = await res.json();
+    const roles = data.messages.map((m: { role: string }) => m.role);
+    expect(roles).toContain("user");
+    expect(roles).toContain("assistant");
+    const userMsg = data.messages.find((m: { role: string }) => m.role === "user");
+    expect(userMsg.content).toContain("I enter the tavern");
   });
 
-  test("renders system messages with system styling", async () => {
-    // Create a conversation and change location to generate a system message
+  test("returns system messages for location changes", async () => {
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "msg-test", name: "Msg Test" });
     const chatRes = await jsonPost("/api/chats", { lorebook: "msg-test" });
-    const chatId = chatRes.headers.get("X-Chat-Id")!;
+    const chatData = await chatRes.json();
 
-    await jsonPut("/api/adventures/location", { chatId, location: "locations/village-square" });
+    await jsonPut("/api/adventures/location", { chatId: chatData.chatId, location: "locations/village-square" });
 
-    const res = await api(`/api/chats/messages?id=${chatId}`);
-    const html = await res.text();
-    expect(html).toContain("chat-msg-system");
-    expect(html).toContain("Village Square");
+    const res = await api(`/api/chats/messages?id=${chatData.chatId}`);
+    const data = await res.json();
+    const sysMsg = data.messages.find((m: { role: string }) => m.role === "system");
+    expect(sysMsg).toBeTruthy();
+    expect(sysMsg.content).toContain("Village Square");
   });
 
   test("returns 400 for missing id", async () => {
@@ -328,30 +325,20 @@ describe("GET /api/chats/messages", () => {
 // ---------------------------------------------------------------------------
 
 describe("GET /api/adventures/locations", () => {
-  test("returns location options for a lorebook with locations", async () => {
+  test("returns location entries for a lorebook with locations", async () => {
     const res = await api("/api/adventures/locations?lorebook=template-key-quest");
     expect(res.status).toBe(200);
-    const html = await res.text();
-    expect(html).toContain("<option");
-    expect(html).toContain("The Village Square");
-    expect(html).toContain("The Inn Cellar");
-    expect(html).toContain("The Treasure Room");
-    expect(html).toContain('value="locations/village-square"');
+    const data = await res.json();
+    expect(data.length).toBeGreaterThanOrEqual(3);
+    expect(data).toContainEqual(expect.objectContaining({ name: "The Village Square", path: "locations/village-square" }));
+    expect(data).toContainEqual(expect.objectContaining({ name: "The Inn Cellar" }));
+    expect(data).toContainEqual(expect.objectContaining({ name: "The Treasure Room" }));
   });
 
-  test("includes a blank placeholder option", async () => {
-    const res = await api("/api/adventures/locations?lorebook=template-key-quest");
-    const html = await res.text();
-    expect(html).toContain("-- Choose a location --");
-  });
-
-  test("returns only placeholder for lorebook with no locations", async () => {
+  test("returns empty array for lorebook with no locations", async () => {
     const res = await api("/api/adventures/locations?lorebook=default");
-    const html = await res.text();
-    // Only the placeholder option
-    const optionCount = (html.match(/<option/g) || []).length;
-    expect(optionCount).toBe(1);
-    expect(html).toContain("-- Choose a location --");
+    const data = await res.json();
+    expect(data).toEqual([]);
   });
 });
 
@@ -362,52 +349,48 @@ describe("GET /api/adventures/locations", () => {
 describe("PUT /api/adventures/location", () => {
   beforeEach(cleanChats);
 
-  test("appends system narration message and returns it", async () => {
+  test("appends system narration and returns location + narration", async () => {
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "loc-test", name: "Loc Test" });
     const chatRes = await jsonPost("/api/chats", { lorebook: "loc-test" });
-    const chatId = chatRes.headers.get("X-Chat-Id")!;
+    const chatData = await chatRes.json();
 
     const res = await jsonPut("/api/adventures/location", {
-      chatId,
+      chatId: chatData.chatId,
       location: "locations/village-square",
     });
     expect(res.status).toBe(200);
 
-    const html = await res.text();
-    expect(html).toContain("chat-msg-system");
-    expect(html).toContain("Village Square");
-
-    // Verify X-Location header
-    expect(res.headers.get("X-Location")).toBe("locations/village-square");
+    const data = await res.json();
+    expect(data.location).toBe("locations/village-square");
+    expect(data.narration).toContain("Village Square");
   });
 
   test("narration includes location entry content", async () => {
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "loc-content", name: "Loc Content" });
     const chatRes = await jsonPost("/api/chats", { lorebook: "loc-content" });
-    const chatId = chatRes.headers.get("X-Chat-Id")!;
+    const chatData = await chatRes.json();
 
     const res = await jsonPut("/api/adventures/location", {
-      chatId,
+      chatId: chatData.chatId,
       location: "locations/cellar",
     });
-    const html = await res.text();
-    // The Inn Cellar entry content mentions barrels of ale
-    expect(html).toContain("Inn Cellar");
+    const data = await res.json();
+    expect(data.narration).toContain("Inn Cellar");
   });
 
   test("updates currentLocation in conversation meta", async () => {
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "loc-meta", name: "Loc Meta" });
     const chatRes = await jsonPost("/api/chats", { lorebook: "loc-meta" });
-    const chatId = chatRes.headers.get("X-Chat-Id")!;
+    const chatData = await chatRes.json();
 
-    await jsonPut("/api/adventures/location", { chatId, location: "locations/village-square" });
+    await jsonPut("/api/adventures/location", { chatId: chatData.chatId, location: "locations/village-square" });
 
-    // The adventure picker should show the updated location
     const pickRes = await api("/api/adventures");
-    const pickHtml = await pickRes.text();
-    expect(pickHtml).toContain('data-location="locations/village-square"');
-    // Location display name should appear on the card
-    expect(pickHtml).toContain("Location: The Village Square");
+    const pickData = await pickRes.json();
+    const adv = pickData.adventures.find((a: { slug: string }) => a.slug === "loc-meta");
+    expect(adv).toBeTruthy();
+    expect(adv.currentLocation).toBe("locations/village-square");
+    expect(adv.locationName).toBe("The Village Square");
   });
 
   test("returns 400 for missing chatId", async () => {
@@ -425,7 +408,6 @@ describe("PUT /api/adventures/location", () => {
       chatId: "9999999999999-aaa",
       location: "locations/foo",
     });
-    // The loadConversation returns null, which becomes a 404
     expect(res.status).toBe(404);
   });
 });
@@ -440,19 +422,21 @@ describe("DELETE /api/adventures", () => {
   test("deletes lorebook and its conversations", async () => {
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "to-delete", name: "To Delete" });
     const chatRes = await jsonPost("/api/chats", { lorebook: "to-delete" });
-    const chatId = chatRes.headers.get("X-Chat-Id")!;
+    const chatData = await chatRes.json();
 
     const delRes = await api("/api/adventures?lorebook=to-delete", { method: "DELETE" });
     expect(delRes.status).toBe(200);
+    const delData = await delRes.json();
+    expect(delData.ok).toBe(true);
 
     // Adventure should no longer appear in picker
     const pickRes = await api("/api/adventures");
-    const pickHtml = await pickRes.text();
-    expect(pickHtml).not.toContain("To Delete");
-    expect(pickHtml).not.toContain('data-lorebook="to-delete"');
+    const pickData = await pickRes.json();
+    const slugs = pickData.adventures.map((a: { slug: string }) => a.slug);
+    expect(slugs).not.toContain("to-delete");
 
     // Conversation should be gone
-    const msgRes = await api(`/api/chats/messages?id=${chatId}`);
+    const msgRes = await api(`/api/chats/messages?id=${chatData.chatId}`);
     expect(msgRes.status).toBe(404);
   });
 
@@ -461,8 +445,7 @@ describe("DELETE /api/adventures", () => {
     expect(res.status).toBe(400);
   });
 
-  test("can delete any adventure including former default", async () => {
-    // Create a non-template copy to act as adventure
+  test("can delete any adventure", async () => {
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "deletable-adv", name: "Deletable Adventure" });
     await jsonPost("/api/chats", { lorebook: "deletable-adv" });
 
@@ -470,22 +453,27 @@ describe("DELETE /api/adventures", () => {
     expect(res.status).toBe(200);
 
     const pickRes = await api("/api/adventures");
-    const pickHtml = await pickRes.text();
-    expect(pickHtml).not.toContain("Deletable Adventure");
+    const pickData = await pickRes.json();
+    const slugs = pickData.adventures.map((a: { slug: string }) => a.slug);
+    expect(slugs).not.toContain("deletable-adv");
   });
 
-  test("returns updated picker after deletion", async () => {
+  test("returns ok after deletion", async () => {
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "del-a", name: "Del A" });
     await jsonPost("/api/chats", { lorebook: "del-a" });
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "del-b", name: "Del B" });
     await jsonPost("/api/chats", { lorebook: "del-b" });
 
     const delRes = await api("/api/adventures?lorebook=del-a", { method: "DELETE" });
-    const html = await delRes.text();
+    const delData = await delRes.json();
+    expect(delData.ok).toBe(true);
 
     // Del A gone, Del B still there
-    expect(html).not.toContain("Del A");
-    expect(html).toContain("Del B");
+    const pickRes = await api("/api/adventures");
+    const pickData = await pickRes.json();
+    const names = pickData.adventures.map((a: { name: string }) => a.name);
+    expect(names).not.toContain("Del A");
+    expect(names).toContain("Del B");
   });
 });
 
@@ -499,16 +487,15 @@ describe("GET /api/adventures/resume", () => {
   test("returns JSON with chatId, lorebook, name, location", async () => {
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "resume-test", name: "Resume Test" });
     const chatRes = await jsonPost("/api/chats", { lorebook: "resume-test" });
-    const chatId = chatRes.headers.get("X-Chat-Id")!;
+    const chatData = await chatRes.json();
 
-    // Change location so we can verify it's returned
-    await jsonPut("/api/adventures/location", { chatId, location: "locations/village-square" });
+    await jsonPut("/api/adventures/location", { chatId: chatData.chatId, location: "locations/village-square" });
 
     const res = await api("/api/adventures/resume?lorebook=resume-test");
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.lorebook).toBe("resume-test");
-    expect(data.chatId).toBe(chatId);
+    expect(data.chatId).toBe(chatData.chatId);
     expect(data.name).toBe("Resume Test");
     expect(data.location).toBe("locations/village-square");
   });
@@ -526,18 +513,17 @@ describe("GET /api/adventures/resume", () => {
   test("returns the most recent conversation when multiple exist", async () => {
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "resume-multi", name: "Resume Multi" });
     const chat1Res = await jsonPost("/api/chats", { lorebook: "resume-multi" });
-    const chatId1 = chat1Res.headers.get("X-Chat-Id")!;
+    const chat1Data = await chat1Res.json();
 
     await new Promise((r) => setTimeout(r, 15));
 
     const chat2Res = await jsonPost("/api/chats", { lorebook: "resume-multi" });
-    const chatId2 = chat2Res.headers.get("X-Chat-Id")!;
+    const chat2Data = await chat2Res.json();
 
     const res = await api("/api/adventures/resume?lorebook=resume-multi");
     expect(res.status).toBe(200);
     const data = await res.json();
-    // Should return the most recent conversation (chat2)
-    expect(data.chatId).toBe(chatId2);
+    expect(data.chatId).toBe(chat2Data.chatId);
   });
 });
 
@@ -548,24 +534,21 @@ describe("GET /api/adventures/resume", () => {
 describe("GET /api/adventures/active-entries", () => {
   beforeEach(cleanChats);
 
-  test("returns active entries HTML for a conversation", async () => {
+  test("returns active entries for a conversation", async () => {
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "active-test", name: "Active Test" });
     const chatRes = await jsonPost("/api/chats", { lorebook: "active-test" });
-    const chatId = chatRes.headers.get("X-Chat-Id")!;
+    const chatData = await chatRes.json();
 
-    // Change location to village-square so NPCs can activate
-    await jsonPut("/api/adventures/location", { chatId, location: "locations/village-square" });
+    await jsonPut("/api/adventures/location", { chatId: chatData.chatId, location: "locations/village-square" });
+    await jsonPost("/api/chat", { message: "I talk to the sage", chatId: chatData.chatId, lorebook: "active-test" });
 
-    // Send a message mentioning the sage
-    await jsonPost("/api/chat", { message: "I talk to the sage", chatId, lorebook: "active-test" });
-
-    const res = await api("/api/adventures/active-entries?chatId=" + chatId);
+    const res = await api("/api/adventures/active-entries?chatId=" + chatData.chatId);
     expect(res.status).toBe(200);
-    const html = await res.text();
+    const data = await res.json();
     // Village Square should be active (current location)
-    expect(html).toContain("Village Square");
-    // The sage should be active (context: village-square is active + keyword match)
-    expect(html).toContain("Old Sage");
+    expect(data.entries.some((e: { name: string }) => e.name.includes("Village Square"))).toBe(true);
+    // The sage should be active
+    expect(data.entries.some((e: { name: string }) => e.name.includes("Old Sage"))).toBe(true);
   });
 
   test("returns 400 for missing chatId", async () => {
@@ -578,15 +561,15 @@ describe("GET /api/adventures/active-entries", () => {
     expect(res.status).toBe(404);
   });
 
-  test("includes traits section in HTML", async () => {
+  test("includes traits in response", async () => {
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "trait-html-test", name: "Trait HTML" });
     const chatRes = await jsonPost("/api/chats", { lorebook: "trait-html-test" });
-    const chatId = chatRes.headers.get("X-Chat-Id")!;
+    const chatData = await chatRes.json();
 
-    const res = await api("/api/adventures/active-entries?chatId=" + chatId);
-    const html = await res.text();
-    expect(html).toContain("trait-add-form");
-    expect(html).toContain("Traits");
+    const res = await api("/api/adventures/active-entries?chatId=" + chatData.chatId);
+    const data = await res.json();
+    expect(data.traits).toBeDefined();
+    expect(Array.isArray(data.traits)).toBe(true);
   });
 });
 
@@ -597,17 +580,17 @@ describe("GET /api/adventures/active-entries", () => {
 describe("PUT /api/adventures/traits", () => {
   beforeEach(cleanChats);
 
-  test("updates traits and returns active entries HTML", async () => {
+  test("updates traits and returns active entries", async () => {
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "traits-test", name: "Traits Test" });
     const chatRes = await jsonPost("/api/chats", { lorebook: "traits-test" });
-    const chatId = chatRes.headers.get("X-Chat-Id")!;
+    const chatData = await chatRes.json();
 
-    const res = await jsonPut("/api/adventures/traits", { chatId, traits: ["warrior", "stealthy"] });
+    const res = await jsonPut("/api/adventures/traits", { chatId: chatData.chatId, traits: ["warrior", "stealthy"] });
     expect(res.status).toBe(200);
-    const html = await res.text();
-    expect(html).toContain("warrior");
-    expect(html).toContain("stealthy");
-    expect(html).toContain("trait-tag");
+    const data = await res.json();
+    expect(data.traits).toContain("warrior");
+    expect(data.traits).toContain("stealthy");
+    expect(Array.isArray(data.entries)).toBe(true);
   });
 
   test("returns 400 for missing chatId", async () => {
@@ -617,26 +600,29 @@ describe("PUT /api/adventures/traits", () => {
 });
 
 // ---------------------------------------------------------------------------
-// HX-Trigger: refreshActiveEntries
+// JSON response format (replaces HX-Trigger tests)
 // ---------------------------------------------------------------------------
 
-describe("refreshActiveEntries trigger", () => {
+describe("JSON response format", () => {
   beforeEach(cleanChats);
 
-  test("POST /api/chat includes refreshActiveEntries in HX-Trigger", async () => {
+  test("POST /api/chat returns JSON with messages array", async () => {
     const res = await jsonPost("/api/chat", { message: "hello", lorebook: "test" });
-    const trigger = res.headers.get("HX-Trigger");
-    expect(trigger).toContain("refreshActiveEntries");
+    const data = await res.json();
+    expect(data.messages).toBeDefined();
+    expect(Array.isArray(data.messages)).toBe(true);
+    expect(data.chatId).toBeTruthy();
   });
 
-  test("PUT /api/adventures/location includes refreshActiveEntries in HX-Trigger", async () => {
+  test("PUT /api/adventures/location returns JSON with location and narration", async () => {
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "trigger-test", name: "Trigger Test" });
     const chatRes = await jsonPost("/api/chats", { lorebook: "trigger-test" });
-    const chatId = chatRes.headers.get("X-Chat-Id")!;
+    const chatData = await chatRes.json();
 
-    const res = await jsonPut("/api/adventures/location", { chatId, location: "locations/village-square" });
-    const trigger = res.headers.get("HX-Trigger");
-    expect(trigger).toContain("refreshActiveEntries");
+    const res = await jsonPut("/api/adventures/location", { chatId: chatData.chatId, location: "locations/village-square" });
+    const data = await res.json();
+    expect(data.location).toBe("locations/village-square");
+    expect(data.narration).toBeTruthy();
   });
 });
 
@@ -659,57 +645,61 @@ describe("full adventure flow", () => {
     // 2. Create conversation
     const chatRes = await jsonPost("/api/chats", { lorebook: "flow-test" });
     expect(chatRes.status).toBe(200);
-    const chatId = chatRes.headers.get("X-Chat-Id")!;
-    expect(chatId).toBeTruthy();
+    const chatData = await chatRes.json();
+    expect(chatData.chatId).toBeTruthy();
 
     // 3. Load locations
     const locRes = await api("/api/adventures/locations?lorebook=flow-test");
-    const locHtml = await locRes.text();
-    expect(locHtml).toContain("The Village Square");
+    const locs = await locRes.json();
+    expect(locs.some((l: { name: string }) => l.name.includes("Village Square"))).toBe(true);
 
     // 4. Change location
     const moveRes = await jsonPut("/api/adventures/location", {
-      chatId,
+      chatId: chatData.chatId,
       location: "locations/village-square",
     });
     expect(moveRes.status).toBe(200);
-    const moveHtml = await moveRes.text();
-    expect(moveHtml).toContain("chat-msg-system");
+    const moveData = await moveRes.json();
+    expect(moveData.narration).toBeTruthy();
 
     // 5. Send a message
     const msgRes = await jsonPost("/api/chat", {
       message: "I look around",
-      chatId,
+      chatId: chatData.chatId,
       lorebook: "flow-test",
     });
     expect(msgRes.status).toBe(200);
 
     // 6. Load all messages — should have system + user + assistant
-    const allMsgRes = await api(`/api/chats/messages?id=${chatId}`);
-    const allMsgHtml = await allMsgRes.text();
-    expect(allMsgHtml).toContain("chat-msg-system");
-    expect(allMsgHtml).toContain("chat-msg-user");
-    expect(allMsgHtml).toContain("I look around");
-    expect(allMsgHtml).toContain("chat-msg-assistant");
+    const allMsgRes = await api(`/api/chats/messages?id=${chatData.chatId}`);
+    const allMsgData = await allMsgRes.json();
+    const roles = allMsgData.messages.map((m: { role: string }) => m.role);
+    expect(roles).toContain("system");
+    expect(roles).toContain("user");
+    expect(roles).toContain("assistant");
+    const userMsg = allMsgData.messages.find((m: { content: string }) => m.content === "I look around");
+    expect(userMsg).toBeTruthy();
 
-    // 7. Check picker shows the adventure with Continue
+    // 7. Check picker shows the adventure
     const pickRes = await api("/api/adventures");
-    const pickHtml = await pickRes.text();
-    expect(pickHtml).toContain("Flow Test");
-    expect(pickHtml).toContain("adventure-continue-btn");
-    expect(pickHtml).toContain(`data-chat-id="${chatId}"`);
-    expect(pickHtml).toContain('data-location="locations/village-square"');
+    const pickData = await pickRes.json();
+    const adv = pickData.adventures.find((a: { slug: string }) => a.slug === "flow-test");
+    expect(adv).toBeTruthy();
+    expect(adv.name).toBe("Flow Test");
+    expect(adv.latestChatId).toBe(chatData.chatId);
+    expect(adv.currentLocation).toBe("locations/village-square");
 
     // 8. Change location again
     const move2Res = await jsonPut("/api/adventures/location", {
-      chatId,
+      chatId: chatData.chatId,
       location: "locations/cellar",
     });
     expect(move2Res.status).toBe(200);
 
     // 9. Picker should now show updated location
     const pick2Res = await api("/api/adventures");
-    const pick2Html = await pick2Res.text();
-    expect(pick2Html).toContain('data-location="locations/cellar"');
+    const pick2Data = await pick2Res.json();
+    const adv2 = pick2Data.adventures.find((a: { slug: string }) => a.slug === "flow-test");
+    expect(adv2.currentLocation).toBe("locations/cellar");
   });
 });

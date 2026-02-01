@@ -4,35 +4,64 @@
 
 - **Runtime:** Bun (not Node) — use Bun APIs (`Bun.serve`, `Bun.file`, etc.) instead of Node equivalents
 - **Language:** TypeScript (strict mode)
-- **Frontend:** HTMX — no JS framework; the server returns HTML fragments, not JSON
+- **Frontend:** React 18 + Vite + react-router-dom 7 — path-based SPA routing, JSON API
 - **Styling:** Plain CSS (no preprocessor, no Tailwind)
 
 ## Commands
 
-- `bun run dev` — start server with file watching (auto-reload on changes)
-- `bun run start` — start server (production)
+- `bun run dev` — start API server with file watching (port 3001)
+- `bun run dev:client` — start Vite dev server (port 5173, proxies `/api` to 3001)
+- `bun run build` — Vite production build to `dist/`
+- `bun run start` — start production server (serves `dist/` + API on port 3001)
 - `bun install` — install dependencies
+- `bun test` — run all tests
+
+**Dev workflow:** Two terminals — `bun run dev` + `bun run dev:client` — open `http://localhost:5173`.
+
+**Production workflow:** `bun run build` then `bun run start` — open `http://localhost:3001`.
 
 ## Project layout
 
 ```
 src/
-  server.ts        # Entry point — Bun.serve(), static files, startup
-  routes.ts        # API route handlers
-  renderers.ts     # HTML rendering functions
-  chat.ts          # Chat persistence — types, JSONL read/write, CRUD
-  settings.ts      # Settings persistence
-  lorebook.ts      # Lorebook system
-  public/          # Static assets served by the backend
-    index.html     # HTML structure + dialogs
-    app.js         # Client-side JavaScript (tabs, routing, event handlers)
-    drag-tree.js   # Lorebook tree drag-and-drop (hold-to-drag entry moving)
-    styles.css     # Base layout + utility CSS
-    components.css # Feature component CSS (adventure, lorebook, chat)
-    lorebook.html  # Standalone lorebook page
-    settings.html  # Standalone settings page
+  server.ts          # Entry point — Bun.serve(), static file serving, startup
+  routes.ts          # API route handlers (all return JSON)
+  chat.ts            # Chat persistence — types, JSONL read/write, CRUD
+  settings.ts        # Settings persistence + validation
+  lorebook.ts        # Lorebook system
+  client/            # React frontend (built by Vite)
+    index.html       # Vite entry point
+    main.tsx         # React root — createRoot + BrowserRouter + App
+    App.tsx          # Route definitions + Layout wrapper
+    api.ts           # Typed fetch wrappers for all API endpoints
+    types.ts         # TypeScript interfaces for API responses
+    styles.css       # Base layout + utility CSS
+    components.css   # Feature component CSS (adventure, lorebook, chat)
+    components/
+      Layout.tsx       # App shell — header, TabNav, Outlet
+      TabNav.tsx       # Navigation tabs (Adventure, Lorebook, Settings)
+      shared/
+        Dialog.tsx     # Reusable <dialog> wrapper with showModal/close
+      adventure/
+        AdventurePicker.tsx    # Adventure/template card list
+        AdventurePlay.tsx      # Chat + location bar + active entries
+        ActiveEntriesPanel.tsx # Right sidebar — active lore entries + traits
+      lorebook/
+        LorebookPicker.tsx  # Lorebook card list (templates + adventures)
+        LorebookEditor.tsx  # Two-column editor — tree + entry form
+        TreeBrowser.tsx     # Recursive tree rendering with folder expand
+        EntryForm.tsx       # Entry create/edit form
+        useDragTree.ts      # Hold-to-drag hook for tree entry moving
+    pages/
+      AdventurePage.tsx  # Adventure route — picker or play based on :slug
+      LorebookPage.tsx   # Lorebook route — picker or editor based on :slug
+      SettingsPage.tsx   # Settings form
+vite.config.ts       # Vite config — React plugin, proxy, build output
+tsconfig.json        # Server TypeScript config (excludes src/client)
+tsconfig.client.json # Client TypeScript config (React JSX, DOM libs)
+dist/                # Vite build output (gitignored)
 presets/
-  lorebooks/       # Built-in read-only template lorebooks (checked into git)
+  lorebooks/         # Built-in read-only template lorebooks (checked into git)
     default/
     template-key-quest/
 ```
@@ -40,9 +69,32 @@ presets/
 ## UI
 
 - **Layout:** Single-page app using 90% of the page width (max 1400px), with a tab bar at the top
-- **Tabs:** Adventure | Lorebook | Settings — switching tabs shows/hides panels client-side
-- **Dialogs:** "+ New" (entry/folder), "+ Template", "Save as Template", and adventure start/delete use `<dialog>` elements with consistent styling
-- Standalone pages (`/lorebook.html`, `/settings.html`) also exist and share the same CSS
+- **Tabs:** Adventure | Lorebook | Settings — `<NavLink>` components with active class
+- **Dialogs:** "+ New" (entry/folder), "+ Template", "Save as Template", and adventure start/delete use `<Dialog>` component wrapping `<dialog>` with `showModal()`/`close()` via ref + useEffect
+- **Components:** Functional components with hooks (`useState`, `useEffect`, `useParams`, `useNavigate`)
+
+## Routing
+
+Path-based client-side routing via react-router-dom. Browser back/forward buttons work, and URLs are shareable/bookmarkable.
+
+### URL scheme
+
+| Path | View |
+|------|------|
+| `/` | Redirects to `/adventure` |
+| `/adventure` | Adventure tab, picker |
+| `/adventure/:slug` | Adventure tab, playing that adventure (resumed via `/api/adventures/resume`) |
+| `/lorebook` | Lorebook tab, picker |
+| `/lorebook/:slug` | Lorebook tab, editing that lorebook (restored via `/api/lorebooks/meta`) |
+| `/settings` | Settings tab |
+
+### Implementation
+
+- `App.tsx` defines all `<Route>` elements inside a `<Layout>` wrapper
+- `Layout.tsx` renders header + `<TabNav>` + `<Outlet>`
+- Page components read `useParams().slug` to determine picker vs detail view
+- Navigation uses `useNavigate()` for programmatic routing
+- Server returns `index.html` for all non-API, non-asset paths (SPA fallback)
 
 ## Adventure System
 
@@ -68,65 +120,42 @@ The Chat tab has been redesigned into an **Adventure** tab. Users pick an advent
 
 ### Adventure UI
 
-- **Picker state** (`#adventure-picker`): Shows adventure cards with Continue/Save as Template/Delete buttons + template cards with Start button
-- **Play state** (`#adventure-play`): Location bar (back button, adventure name, location dropdown) + chat messages + input + active entries panel (right sidebar)
-- **Template start flow:** Dialog to name the copy → `POST /api/lorebooks/copy` → `POST /api/chats` → enter play view
-- **Save as Template flow:** Dialog to name the template → `POST /api/lorebooks/make-template` → refreshes lorebook selector
+- **Picker** (`AdventurePicker`): Shows adventure cards with Continue/Save as Template/Delete buttons + template cards with Start button
+- **Play** (`AdventurePlay`): Location bar (back button, adventure name, location dropdown) + chat messages + input + active entries panel (right sidebar)
+- **Template start flow:** Dialog to name the copy → `POST /api/lorebooks/copy` → `POST /api/chats` → navigate to `/adventure/:slug`
+- **Save as Template flow:** Dialog to name the template → `POST /api/lorebooks/make-template` → refreshes picker
 - **Location change:** Dropdown change → `PUT /api/adventures/location` → system narration message appended to chat
 
 ### API routes
 
-- `GET /api/adventures` — returns adventure picker HTML (user lorebooks + templates)
-- `GET /api/adventures/resume?lorebook=` — returns JSON `{ lorebook, chatId, name, location }` for the latest conversation of a lorebook (404 if none). Used by the router to restore adventure play from a URL.
-- `GET /api/adventures/locations?lorebook=` — returns `<option>` elements for the location dropdown
-- `PUT /api/adventures/location` — JSON `{ chatId, location }` → loads location entry, appends narration, returns narration HTML + `X-Location` header + `HX-Trigger: refreshActiveEntries`
-- `GET /api/adventures/active-entries?chatId=` — returns HTML panel of currently active lorebook entries based on context (location, chat text, traits)
-- `PUT /api/adventures/traits` — JSON `{ chatId, traits }` → updates player traits and returns updated active entries HTML
-- `GET /api/chats?lorebook=` — returns chat list HTML, optional lorebook filter
-- `POST /api/chats` — JSON `{ lorebook?, location? }` → create conversation bound to lorebook → `X-Chat-Id` header
-- `GET /api/chats/messages?id=` — load conversation messages as HTML (supports system messages)
-- `POST /api/chat` — JSON `{ message, chatId?, lorebook? }` → auto-creates conversation with lorebook if no chatId
+All routes return JSON. Error responses use `{ error: "message" }` with appropriate status codes.
+
+- `GET /api/adventures` → `{ adventures: [{slug, name, latestChatId, currentLocation, locationName, updatedAt}], templates: [{slug, name, preset}] }`
+- `DELETE /api/adventures?lorebook=` → `{ ok: true }`
+- `GET /api/adventures/resume?lorebook=` → `{ lorebook, chatId, name, location }` (404 if none)
+- `GET /api/adventures/locations?lorebook=` → `[{ path, name }]`
+- `PUT /api/adventures/location` — JSON `{ chatId, location }` → `{ location, narration }`
+- `GET /api/adventures/active-entries?chatId=` → `{ traits, entries }`
+- `PUT /api/adventures/traits` — JSON `{ chatId, traits }` → `{ traits, entries }`
+- `GET /api/chats?lorebook=` → `ChatMeta[]`
+- `POST /api/chats` — JSON `{ lorebook?, location? }` → `{ chatId }`
+- `GET /api/chats/messages?id=` → `{ meta, messages }`
+- `POST /api/chat` — JSON `{ message, chatId?, lorebook? }` → `{ chatId, messages, location, isNew }`
 - **Location detection (dummy LLM):** `POST /api/chat` parses movement intent from user messages (e.g. "go to X", "enter X", "walk to X"). If a destination is detected and a lorebook is attached:
   - Matches against existing location entries (case-insensitive, partial matching)
   - If no match, creates a new lorebook entry under `locations/<slugified-name>.json` with a generated description
   - Calls `changeLocation()` to update the conversation and append system narration
-  - Returns system narration HTML + assistant HTML + `X-Location` header
-  - Client reads `X-Location` from the response and refreshes the location dropdown
+  - Returns `{ chatId, messages: [user, system, assistant], location, isNew }`
 - **Current behavior:** When no location change is detected, assistant responds with "Hello World" (placeholder for future LLM integration). When a location change is detected, assistant responds with "You arrive at \<location\>."
-
-## Routing
-
-Hash-based client-side routing. The browser back/forward buttons work, and URLs are shareable/bookmarkable.
-
-### URL scheme
-
-| Hash | View |
-|------|------|
-| `#adventure` (or empty) | Adventure tab, picker |
-| `#adventure/<slug>` | Adventure tab, playing that adventure (resumed via `/api/adventures/resume`) |
-| `#lorebook` | Lorebook tab, picker |
-| `#lorebook/<slug>` | Lorebook tab, editing that lorebook (restored via `/api/lorebooks/meta`) |
-| `#settings` | Settings tab |
-
-### Implementation
-
-- `navigateTo(hash, skipPush)` — core router function. Parses hash, calls `switchTab()`, then transitions to the correct view. `skipPush=true` prevents pushing a new history entry (used by popstate and initial load).
-- `switchTab(tabName)` — toggles CSS classes on tabs/panels only, no side effects.
-- `popstate` listener calls `navigateTo(location.hash, true)`.
-- Initial page load calls `navigateTo(location.hash, true)` to restore state from the URL.
-- Tab clicks call `navigateTo('#' + tabName, false)` which pushes history.
-- Lorebook picker/editor transitions push `#lorebook/<slug>` or `#lorebook`.
-- Adventure play/picker transitions push `#adventure/<slug>` or `#adventure`.
 
 ## Settings
 
-- **Module:** `src/settings.ts` — `Settings` type, `DEFAULT_SETTINGS`, `loadSettings()`, `saveSettings()`
+- **Module:** `src/settings.ts` — `Settings` type, `DEFAULT_SETTINGS`, `loadSettings()`, `saveSettings()`, `validateSettings()`
 - **Persistence:** `data/settings.json` (project root) — created on first save, gitignored (contains API keys)
-- **UI:** Settings tab in index.html, also standalone at `/settings.html`
+- **UI:** `SettingsPage.tsx` — controlled form with feedback messages
 - **API routes:**
-  - `GET /api/settings` — returns JSON (API key masked)
-  - `GET /api/settings/form` — returns pre-filled HTML form fragment
-  - `PUT /api/settings` — validates & saves, returns HTML feedback + updated form
+  - `GET /api/settings` → Settings JSON (API key masked)
+  - `PUT /api/settings` → `{ ok: true, settings }` or `{ error }` on 400
 
 ## Unified Lorebook / Adventure Model
 
@@ -179,27 +208,27 @@ Hash-based client-side routing. The browser back/forward buttons work, and URLs 
 - **Migration:** On startup, `migrateOrphanLorebooks()` converts non-template, non-preset lorebooks with no conversations into templates.
 - **All CRUD functions** take `lorebook: string` as their first argument (the lorebook slug)
 - **Functions:** `saveLorebookMeta(slug, meta)` — writes updated `_lorebook.json` for an existing lorebook
-- **UI:** Lorebook tab in index.html (also standalone at `/lorebook.html`) — two-step layout mirroring the Adventure tab:
-  - **Picker** (`#lorebook-picker`): Card-based list of lorebooks. Adventures (non-template) get an Edit button. User templates get Edit + Delete buttons. Preset templates get View + Copy buttons. Includes "+ Template" button.
-  - **Editor** (`#lorebook-edit`): Header bar (back button + lorebook name) + tree browser with per-folder "+ New" buttons + entry editor panel.
+- **UI:** Lorebook tab — two-step layout mirroring the Adventure tab:
+  - **Picker** (`LorebookPicker`): Card-based list of lorebooks. Adventures (non-template) get an Edit button. User templates get Edit + Delete buttons. Preset templates get View + Copy buttons. Includes "+ Template" button.
+  - **Editor** (`LorebookEditor`): Two-column grid — `TreeBrowser` sidebar + `EntryForm` editor. Manages selected entry path, new entry/folder dialogs.
 - **API routes:**
   - Lorebook management (under `/api/lorebooks`):
-    - `GET /api/lorebooks` — returns lorebook picker HTML (card-based list + "+ Template" button)
-    - `GET /api/lorebooks/meta?slug=` — returns JSON `{ slug, name, template, preset }` for a lorebook (404 if not found). Used by router to restore lorebook editor from URL.
-    - `POST /api/lorebooks` — create template (JSON `{ slug, name }`) → `HX-Trigger: refreshLorebooks`
-    - `POST /api/lorebooks/copy` — copy a lorebook as non-template (JSON `{ source, slug, name }`) → `HX-Trigger: refreshLorebooks`
-    - `POST /api/lorebooks/make-template` — copy a lorebook as template (JSON `{ source, slug, name }`) → `HX-Trigger: refreshLorebooks`
-    - `DELETE /api/lorebooks?slug=...` — delete a lorebook (403 for presets) → `HX-Trigger: refreshLorebooks`
+    - `GET /api/lorebooks` → `{ adventures: [{slug, name, preset}], templates: [{slug, name, preset}] }`
+    - `GET /api/lorebooks/meta?slug=` → `{ slug, name, template, preset }` (404 if not found)
+    - `POST /api/lorebooks` — JSON `{ slug, name }` → `{ ok: true }`
+    - `POST /api/lorebooks/copy` — JSON `{ source, slug, name }` → `{ ok: true }`
+    - `POST /api/lorebooks/make-template` — JSON `{ source, slug, name }` → `{ ok: true }`
+    - `DELETE /api/lorebooks?slug=...` → `{ ok: true }` (403 for presets)
   - Lorebook entries (under `/api/lorebook/`, use `?path=` and `?lorebook=` query params):
-    - `GET /api/lorebook/tree?lorebook=...` — returns tree HTML fragment (read-only for presets: no "+ New" or delete buttons)
-    - `GET /api/lorebook/entry?path=...&lorebook=...` — returns entry editor form (read-only with disabled inputs for presets)
-    - `POST /api/lorebook/entry?path=...&lorebook=...` — create entry (403 for presets)
-    - `PUT /api/lorebook/entry?path=...&lorebook=...` — update entry (403 for presets)
-    - `DELETE /api/lorebook/entry?path=...&lorebook=...` — delete entry (403 for presets)
-    - `POST /api/lorebook/folder?lorebook=...` — create folder (403 for presets)
-    - `DELETE /api/lorebook/folder?path=...&lorebook=...` — delete folder (403 for presets)
-    - `PUT /api/lorebook/entry/move?lorebook=...` — JSON `{ path, destination }` → move entry to different folder (403 for presets, 400 for collisions). Returns refreshed tree HTML + `HX-Trigger: refreshTree` + `X-New-Path` header
-- **Drag & Drop:** Hold-to-drag interaction for moving entries between folders in the tree browser. Hold mousedown 1s (circular progress ring), then drag to a folder or root. Implemented in `drag-tree.js` as a self-contained IIFE with document-level event delegation. Read-only preset lorebooks are excluded.
+    - `GET /api/lorebook/tree?lorebook=` → `{ nodes: TreeNode[], readonly }`
+    - `GET /api/lorebook/entry?path=&lorebook=` → `{ path, entry, isNew, readonly }`
+    - `POST /api/lorebook/entry?path=&lorebook=` → `{ ok: true, entry }`
+    - `PUT /api/lorebook/entry?path=&lorebook=` → `{ ok: true, entry }`
+    - `DELETE /api/lorebook/entry?path=&lorebook=` → `{ ok: true }`
+    - `POST /api/lorebook/folder?lorebook=` — JSON `{ path }` → `{ ok: true }`
+    - `DELETE /api/lorebook/folder?path=&lorebook=` → `{ ok: true }`
+    - `PUT /api/lorebook/entry/move?lorebook=` — JSON `{ path, destination }` → `{ ok: true, newPath }`
+- **Drag & Drop:** Hold-to-drag interaction for moving entries between folders in the tree browser. Hold mousedown 1s (circular progress ring), then drag to a folder or root. Implemented in `useDragTree.ts` as a React hook with document-level event listeners managed by `useEffect`. Read-only preset lorebooks are excluded.
 - **Matching:** `findMatchingEntries(lorebook, text)` — returns enabled entries matching via keywords or regex, sorted by priority desc
 - **Locations:** `listLocationEntries(lorebook)` — returns entries whose path starts with `locations/`, sorted by name. Used by the adventure system for the location dropdown.
 - **Context-Aware Activation:** `findActiveEntries(lorebook, context)` — returns entries that should be active given the current context. Uses a fixed-point algorithm:
@@ -208,7 +237,7 @@ Hash-based client-side routing. The browser back/forward buttons work, and URLs 
   - **Algorithm:** (1) Seed active set with current location entry. (2) Location entries (`locations/*`) are exclusive — only the current location is active; other locations never activate via keywords. (3) For each inactive non-location entry, check if all context gates are satisfied (paths in active set, traits in context). (4) If context-eligible, check keyword/regex match against text. (5) If matched, add to active set. (6) Repeat until no new activations (fixed point).
   - **Chained activation:** Current location → characters/items whose context is satisfied → more items whose context is now satisfied. Chains never end at a location entry.
   - **Player traits:** Stored in `ChatMeta.traits`. Referenced as `trait:<name>` in contexts. Managed via the active entries panel UI.
-  - **UI:** Right-side panel in adventure play view shows active entries grouped by category + trait management (pills with add/remove).
+  - **UI:** `ActiveEntriesPanel` — right-side panel in adventure play view shows active entries grouped by category + trait management (pills with add/remove).
   - **Key Quest example:** village-square (always eligible) → characters activate when at village-square + keyword match → iron-key activates when blacksmith is active → treasure-room activates when iron-key is active.
 - **Integration:** Called by adventure system for location data and active lore context; future chat system will inject lore context into LLM prompts
 
@@ -227,10 +256,8 @@ Hash-based client-side routing. The browser back/forward buttons work, and URLs 
 
 - After completing a unit of work, provide a commit message the user can use.
 - **Commit messages** use semantic prefixes: `feat(topic):`, `fix(topic):`, `chore(topic):`, `refactor(topic):`, `test(topic):`, `docs(topic):`.
-- API routes live under `/api/` and return **HTML fragments** (not JSON) for HTMX to swap in.
-  - Exception: `GET /api/settings` returns JSON for programmatic access (API key masked).
-- All user-supplied strings must be escaped with `escapeHtml()` before embedding in HTML responses.
-- Static files are served from `src/public/`. Any unmatched path falls back to `index.html`.
+- API routes live under `/api/` and return **JSON** (not HTML). All responses use `Response.json()`.
+- Static files are served from `dist/` in production (Vite build output). In dev mode, Vite serves the frontend.
 - Default port is **3001** (override via `PORT` env var).
 - The `data/` directory is gitignored and stores runtime data (settings, etc.).
 - The `presets/` directory is checked into git and stores read-only built-in templates.
@@ -257,4 +284,5 @@ Hash-based client-side routing. The browser back/forward buttons work, and URLs 
 
 - **Phase:** Phase 1 — Core Chat MVP in progress
 - **Completed modules:** Lorebook (full CRUD + matching + templates + location listing + context-aware activation), Settings (persistence + validation), Chat (persistence + adventure-centric multi-conversation CRUD + location changes + player traits), Adventure system (picker + play view + location bar + active entries panel)
+- **Frontend:** Converted from HTMX + vanilla JS to React 18 + Vite + react-router-dom 7
 - **Next up:** Phase 1.1 — LLM streaming integration, Phase 1.3 — Character cards, Phase 1.4 — Prompt construction

@@ -37,23 +37,23 @@ describe("lorebook API routes", () => {
   beforeEach(cleanLorebooks);
   afterEach(cleanLorebooks);
 
-  test("GET /api/lorebook/tree returns HTML with empty state", async () => {
+  test("GET /api/lorebook/tree returns JSON with empty state", async () => {
     await createLorebook("default", "Default Lorebook");
     const res = await fetch(`${BASE}/api/lorebook/tree?lorebook=default`);
     expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toContain("text/html");
-    const body = await res.text();
-    expect(body).toContain("No entries yet.");
+    expect(res.headers.get("content-type")).toContain("application/json");
+    const data = await res.json();
+    expect(data.nodes).toEqual([]);
+    expect(data.readonly).toBe(false);
   });
 
-  test("GET /api/lorebook/entry returns editor form for new entry", async () => {
+  test("GET /api/lorebook/entry returns entry data for new entry", async () => {
     await createLorebook("default", "Default Lorebook");
     const res = await fetch(`${BASE}/api/lorebook/entry?path=test-new&lorebook=default`);
     expect(res.status).toBe(200);
-    const body = await res.text();
-    expect(body).toContain("test-new");
-    expect(body).toContain("hx-post"); // new entry uses POST
-    expect(body).toContain("Create");
+    const data = await res.json();
+    expect(data.path).toBe("test-new");
+    expect(data.isNew).toBe(true);
   });
 
   test("GET /api/lorebook/entry returns 400 without path", async () => {
@@ -76,10 +76,9 @@ describe("lorebook API routes", () => {
       }),
     });
     expect(res.status).toBe(200);
-    const body = await res.text();
-    expect(body).toContain("Entry created.");
-    expect(body).toContain("hx-put"); // editor switches to update mode
-    expect(res.headers.get("hx-trigger")).toBe("refreshTree");
+    const data = await res.json();
+    expect(data.ok).toBe(true);
+    expect(data.entry.name).toBe("The Rusty Tankard");
 
     // Verify it persisted
     const loaded = await loadEntry("default", "locations/tavern");
@@ -96,8 +95,8 @@ describe("lorebook API routes", () => {
       body: JSON.stringify({ content: "no name" }),
     });
     expect(res.status).toBe(400);
-    const body = await res.text();
-    expect(body).toContain("Name is required");
+    const data = await res.json();
+    expect(data.error).toContain("Name is required");
   });
 
   test("PUT /api/lorebook/entry updates an existing entry", async () => {
@@ -109,6 +108,7 @@ describe("lorebook API routes", () => {
       regex: "",
       priority: 1,
       enabled: true,
+      contexts: [],
     });
 
     const res = await fetch(`${BASE}/api/lorebook/entry?path=update-me&lorebook=default`, {
@@ -124,9 +124,8 @@ describe("lorebook API routes", () => {
       }),
     });
     expect(res.status).toBe(200);
-    const body = await res.text();
-    expect(body).toContain("Entry saved.");
-    expect(res.headers.get("hx-trigger")).toBe("refreshTree");
+    const data = await res.json();
+    expect(data.ok).toBe(true);
 
     const loaded = await loadEntry("default", "update-me");
     expect(loaded!.name).toBe("Updated");
@@ -142,15 +141,15 @@ describe("lorebook API routes", () => {
       regex: "",
       priority: 0,
       enabled: true,
+      contexts: [],
     });
 
     const res = await fetch(`${BASE}/api/lorebook/entry?path=delete-me&lorebook=default`, {
       method: "DELETE",
     });
     expect(res.status).toBe(200);
-    const body = await res.text();
-    expect(body).toContain("Entry deleted.");
-    expect(res.headers.get("hx-trigger")).toBe("refreshTree");
+    const data = await res.json();
+    expect(data.ok).toBe(true);
 
     expect(await loadEntry("default", "delete-me")).toBeNull();
   });
@@ -159,13 +158,12 @@ describe("lorebook API routes", () => {
     await createLorebook("default", "Default Lorebook");
     const res = await fetch(`${BASE}/api/lorebook/folder?lorebook=default`, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: "path=test-folder",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: "test-folder" }),
     });
     expect(res.status).toBe(200);
-    const body = await res.text();
-    expect(body).toContain("Folder created.");
-    expect(res.headers.get("hx-trigger")).toBe("refreshTree");
+    const data = await res.json();
+    expect(data.ok).toBe(true);
 
     const contents = await readdir(join(LOREBOOKS_DIR, "default"));
     expect(contents).toContain("test-folder");
@@ -178,13 +176,14 @@ describe("lorebook API routes", () => {
       method: "DELETE",
     });
     expect(res.status).toBe(200);
-    expect(res.headers.get("hx-trigger")).toBe("refreshTree");
+    const data = await res.json();
+    expect(data.ok).toBe(true);
 
     const contents = await readdir(join(LOREBOOKS_DIR, "default")).catch(() => []);
     expect(contents).not.toContain("remove-folder");
   });
 
-  test("GET /api/lorebook/entry returns edit form for existing entry", async () => {
+  test("GET /api/lorebook/entry returns existing entry data", async () => {
     await createLorebook("default", "Default Lorebook");
     await saveEntry("default", "existing", {
       name: "Existing Entry",
@@ -193,16 +192,15 @@ describe("lorebook API routes", () => {
       regex: "test.*",
       priority: 7,
       enabled: true,
+      contexts: [],
     });
 
     const res = await fetch(`${BASE}/api/lorebook/entry?path=existing&lorebook=default`);
     expect(res.status).toBe(200);
-    const body = await res.text();
-    expect(body).toContain("Existing Entry");
-    expect(body).toContain("hx-put"); // existing entry uses PUT
-    expect(body).toContain("Save");
-    expect(body).toContain("Delete");
-    expect(body).toContain("foo, bar");
+    const data = await res.json();
+    expect(data.entry.name).toBe("Existing Entry");
+    expect(data.isNew).toBe(false);
+    expect(data.entry.keywords).toEqual(["foo", "bar"]);
   });
 
   test("GET /api/lorebook/tree shows entries after creation", async () => {
@@ -214,26 +212,27 @@ describe("lorebook API routes", () => {
       regex: "",
       priority: 0,
       enabled: true,
+      contexts: [],
     });
 
     const res = await fetch(`${BASE}/api/lorebook/tree?lorebook=default`);
-    const body = await res.text();
-    expect(body).toContain("Gabrielle");
-    expect(body).toContain("people");
+    const data = await res.json();
+    // Should have a "people" folder with "Gabrielle" entry inside
+    const peopleNode = data.nodes.find((n: { name: string }) => n.name === "people");
+    expect(peopleNode).toBeTruthy();
+    const gabNode = peopleNode.children.find((n: { name: string }) => n.name === "Gabrielle");
+    expect(gabNode).toBeTruthy();
   });
 
   // --- Lorebook management API tests ---
 
-  test("GET /api/lorebooks returns picker HTML with templates", async () => {
+  test("GET /api/lorebooks returns JSON with templates", async () => {
     await createLorebook("default", "Default Lorebook", true);
     const res = await fetch(`${BASE}/api/lorebooks`);
     expect(res.status).toBe(200);
-    const body = await res.text();
-    expect(body).toContain("adventure-card");
-    expect(body).toContain("lorebook-edit-btn");
-    expect(body).toContain("Default Lorebook");
-    expect(body).toContain("btn-new-lorebook");
-    expect(body).toContain("+ Template");
+    const data = await res.json();
+    expect(data.templates).toBeDefined();
+    expect(data.templates.some((t: { name: string }) => t.name === "Default Lorebook")).toBe(true);
   });
 
   test("POST /api/lorebooks creates a lorebook", async () => {
@@ -243,14 +242,13 @@ describe("lorebook API routes", () => {
       body: JSON.stringify({ slug: "homebrew", name: "Homebrew Setting" }),
     });
     expect(res.status).toBe(200);
-    const body = await res.text();
-    expect(body).toContain("Lorebook created.");
-    expect(res.headers.get("hx-trigger")).toBe("refreshLorebooks");
+    const data = await res.json();
+    expect(data.ok).toBe(true);
 
     // Verify it shows up in the list
     const listRes = await fetch(`${BASE}/api/lorebooks`);
-    const listBody = await listRes.text();
-    expect(listBody).toContain("Homebrew Setting");
+    const listData = await listRes.json();
+    expect(listData.templates.some((t: { name: string }) => t.name === "Homebrew Setting")).toBe(true);
   });
 
   test("DELETE /api/lorebooks removes a lorebook", async () => {
@@ -259,7 +257,8 @@ describe("lorebook API routes", () => {
       method: "DELETE",
     });
     expect(res.status).toBe(200);
-    expect(res.headers.get("hx-trigger")).toBe("refreshLorebooks");
+    const data = await res.json();
+    expect(data.ok).toBe(true);
   });
 
   test("DELETE /api/lorebooks returns 403 for preset lorebook", async () => {
@@ -269,7 +268,7 @@ describe("lorebook API routes", () => {
     expect(res.status).toBe(403);
   });
 
-  test("tree renders per-folder + New buttons with data-prefix", async () => {
+  test("tree returns nodes and readonly flag", async () => {
     await createLorebook("default", "Default Lorebook");
     await saveEntry("default", "people/gabrielle", {
       name: "Gabrielle",
@@ -278,23 +277,21 @@ describe("lorebook API routes", () => {
       regex: "",
       priority: 0,
       enabled: true,
+      contexts: [],
     });
 
     const res = await fetch(`${BASE}/api/lorebook/tree?lorebook=default`);
-    const body = await res.text();
-    // Root-level + New button with empty prefix
-    expect(body).toContain('data-prefix=""');
-    // Folder-level + New button with prefix
-    expect(body).toContain('data-prefix="people/"');
-    expect(body).toContain('data-lorebook="default"');
-    expect(body).toContain("btn-new-entry");
+    const data = await res.json();
+    expect(data.readonly).toBe(false);
+    expect(data.nodes.length).toBeGreaterThan(0);
   });
 
-  test("entry form includes lorebook param in URLs", async () => {
+  test("entry response includes lorebook context", async () => {
     await createLorebook("homebrew", "Homebrew");
     const res = await fetch(`${BASE}/api/lorebook/entry?path=dragon&lorebook=homebrew`);
-    const body = await res.text();
-    expect(body).toContain("lorebook=homebrew");
+    const data = await res.json();
+    expect(data.path).toBe("dragon");
+    expect(data.isNew).toBe(true);
   });
 
   // --- Template API tests ---
@@ -308,6 +305,7 @@ describe("lorebook API routes", () => {
       regex: "",
       priority: 0,
       enabled: true,
+      contexts: [],
     });
 
     const res = await fetch(`${BASE}/api/lorebooks/copy`, {
@@ -316,9 +314,8 @@ describe("lorebook API routes", () => {
       body: JSON.stringify({ source: "default", slug: "my-copy", name: "My Copy" }),
     });
     expect(res.status).toBe(200);
-    const body = await res.text();
-    expect(body).toContain("Lorebook created from template.");
-    expect(res.headers.get("hx-trigger")).toBe("refreshLorebooks");
+    const data = await res.json();
+    expect(data.ok).toBe(true);
 
     // Verify the copy has the entry
     const hero = await loadEntry("my-copy", "hero");
@@ -335,39 +332,28 @@ describe("lorebook API routes", () => {
     expect(res.status).toBe(400);
   });
 
-  test("GET /api/lorebooks shows templates as cards with edit buttons, presets with View and Copy", async () => {
+  test("GET /api/lorebooks returns templates and adventures", async () => {
     const res = await fetch(`${BASE}/api/lorebooks`);
     expect(res.status).toBe(200);
-    const body = await res.text();
-    expect(body).toContain("adventure-card");
-    expect(body).toContain("Key Quest");
-    expect(body).toContain("Default Lorebook");
-    expect(body).toContain("lorebook-edit-btn");
-    // Preset cards should have View + Copy buttons, no Delete
-    expect(body).toContain("lorebook-copy-btn");
-    expect(body).toContain(">View<");
-    expect(body).not.toContain("template-select");
-    expect(body).not.toContain("btn-use-template");
+    const data = await res.json();
+    expect(data.templates).toBeDefined();
+    expect(data.adventures).toBeDefined();
+    expect(data.templates.some((t: { name: string }) => t.name === "Key Quest")).toBe(true);
+    expect(data.templates.some((t: { name: string }) => t.name === "Default Lorebook")).toBe(true);
   });
 
-  test("GET /api/lorebooks shows both templates and adventures as cards", async () => {
+  test("GET /api/lorebooks shows both templates and adventures", async () => {
     await createLorebook("my-adventure", "My Adventure"); // non-template
     await createLorebook("user-tpl", "User Template", true); // user-created template
     const res = await fetch(`${BASE}/api/lorebooks`);
-    const body = await res.text();
-    // Templates section (presets)
-    expect(body).toContain("Templates");
-    expect(body).toContain('data-slug="template-key-quest"');
-    expect(body).toContain("Default Lorebook");
+    const data = await res.json();
+    // Templates section
+    expect(data.templates.some((t: { slug: string }) => t.slug === "template-key-quest")).toBe(true);
     // Adventures section
-    expect(body).toContain("Your Adventures");
-    expect(body).toContain('data-slug="my-adventure"');
-    expect(body).toContain("My Adventure");
-    // Card-based layout
-    expect(body).toContain("adventure-card");
-    expect(body).toContain("lorebook-edit-btn");
-    // User-created templates get Edit + Delete, not View + Copy
-    expect(body).toContain("lorebook-delete-btn");
+    expect(data.adventures.some((a: { slug: string }) => a.slug === "my-adventure")).toBe(true);
+    expect(data.adventures.find((a: { slug: string }) => a.slug === "my-adventure").name).toBe("My Adventure");
+    // User template
+    expect(data.templates.some((t: { slug: string }) => t.slug === "user-tpl")).toBe(true);
   });
 
   // --- Preset guard tests ---
@@ -400,8 +386,8 @@ describe("lorebook API routes", () => {
   test("POST /api/lorebook/folder on preset returns 403", async () => {
     const res = await fetch(`${BASE}/api/lorebook/folder?lorebook=template-key-quest`, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: "path=new-folder",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: "new-folder" }),
     });
     expect(res.status).toBe(403);
   });
@@ -413,37 +399,41 @@ describe("lorebook API routes", () => {
     expect(res.status).toBe(403);
   });
 
-  test("GET /api/lorebook/tree on preset returns tree without + New buttons", async () => {
+  test("GET /api/lorebook/tree on preset returns readonly tree", async () => {
     const res = await fetch(`${BASE}/api/lorebook/tree?lorebook=template-key-quest`);
     expect(res.status).toBe(200);
-    const body = await res.text();
-    expect(body).toContain("The Old Sage");
-    expect(body).not.toContain("btn-new-entry");
-    expect(body).not.toContain("Delete folder");
+    const data = await res.json();
+    expect(data.readonly).toBe(true);
+    // Should have entries
+    expect(data.nodes.length).toBeGreaterThan(0);
+    // Find the characters folder with Old Sage
+    const chars = data.nodes.find((n: { name: string }) => n.name === "characters");
+    expect(chars).toBeTruthy();
+    const sage = chars.children.find((n: { name: string }) => n.name === "The Old Sage");
+    expect(sage).toBeTruthy();
   });
 
-  test("GET /api/lorebook/entry on preset returns read-only form", async () => {
+  test("GET /api/lorebook/entry on preset returns readonly entry", async () => {
     const res = await fetch(`${BASE}/api/lorebook/entry?path=characters/old-sage&lorebook=template-key-quest`);
     expect(res.status).toBe(200);
-    const body = await res.text();
-    expect(body).toContain("The Old Sage");
-    expect(body).toContain("disabled");
-    expect(body).toContain("Preset");
-    expect(body).not.toContain("editor-actions");
+    const data = await res.json();
+    expect(data.entry.name).toBe("The Old Sage");
+    expect(data.readonly).toBe(true);
+    expect(data.isNew).toBe(false);
   });
 
   // --- Chat API tests ---
 
-  test("POST /api/chat returns Hello World", async () => {
+  test("POST /api/chat returns Hello World in messages", async () => {
     const res = await fetch(`${BASE}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: "Hi there" }),
     });
     expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toContain("text/html");
-    const body = await res.text();
-    expect(body).toContain("Hello World");
-    expect(body).toContain("chat-msg-assistant");
+    expect(res.headers.get("content-type")).toContain("application/json");
+    const data = await res.json();
+    const assistantMsg = data.messages.find((m: { role: string }) => m.role === "assistant");
+    expect(assistantMsg.content).toContain("Hello World");
   });
 });
