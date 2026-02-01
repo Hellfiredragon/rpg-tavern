@@ -406,6 +406,8 @@ describe("PUT /api/adventures/location", () => {
     const pickRes = await api("/api/adventures");
     const pickHtml = await pickRes.text();
     expect(pickHtml).toContain('data-location="locations/village-square"');
+    // Location display name should appear on the card
+    expect(pickHtml).toContain("Location: The Village Square");
   });
 
   test("returns 400 for missing chatId", async () => {

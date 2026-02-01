@@ -257,7 +257,7 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
   if (url.pathname === "/api/adventures" && req.method === "GET") {
     const lorebooks = await listLorebooks();
     const allConvos = await listConversations();
-    return html(renderAdventurePicker(lorebooks, allConvos));
+    return html(await renderAdventurePicker(lorebooks, allConvos));
   }
 
   if (url.pathname === "/api/adventures" && req.method === "DELETE") {
@@ -273,7 +273,7 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
     // Return updated picker
     const lorebooks = await listLorebooks();
     const allConvos = await listConversations();
-    return html(renderAdventurePicker(lorebooks, allConvos), 200, {
+    return html(await renderAdventurePicker(lorebooks, allConvos), 200, {
       "HX-Trigger": "refreshAdventures",
     });
   }
@@ -790,7 +790,7 @@ function renderChatMessages(messages: ChatMessage[]): string {
   return out;
 }
 
-function renderAdventurePicker(lorebooks: { slug: string; meta: LorebookMeta; preset: boolean }[], allConvos: ChatMeta[]): string {
+async function renderAdventurePicker(lorebooks: { slug: string; meta: LorebookMeta; preset: boolean }[], allConvos: ChatMeta[]): Promise<string> {
   const templates = lorebooks.filter((lb) => lb.meta.template);
 
   // Only show user lorebooks that have been started (have at least one conversation)
@@ -804,6 +804,15 @@ function renderAdventurePicker(lorebooks: { slug: string; meta: LorebookMeta; pr
   // Sort by last played (most recent first)
   startedAdventures.sort((a, b) => b.latest.updatedAt.localeCompare(a.latest.updatedAt));
 
+  // Resolve location display names for adventures with a current location
+  const locationNames = new Map<string, string>();
+  await Promise.all(startedAdventures.map(async (adv) => {
+    if (!adv.latest.currentLocation) return;
+    const entry = await loadEntry(adv.slug, adv.latest.currentLocation);
+    const name = entry?.name ?? adv.latest.currentLocation.split("/").pop() ?? "";
+    if (name) locationNames.set(adv.slug, name);
+  }));
+
   let out = "";
 
   // User adventures
@@ -811,11 +820,12 @@ function renderAdventurePicker(lorebooks: { slug: string; meta: LorebookMeta; pr
     out += `<h2>Your Adventures</h2>`;
     for (const adv of startedAdventures) {
       const lastPlayed = formatRelativeDate(adv.latest.updatedAt);
+      const locName = locationNames.get(adv.slug);
 
       out += `<div class="adventure-card" data-lorebook="${escapeHtml(adv.slug)}">
         <div class="adventure-card-info">
           <span class="adventure-card-name">${escapeHtml(adv.meta.name)}</span>
-          <span class="adventure-card-meta">Last played: ${escapeHtml(lastPlayed)}</span>
+          <span class="adventure-card-meta">Last played: ${escapeHtml(lastPlayed)}${locName ? ` · Location: ${escapeHtml(locName)}` : ""}</span>
         </div>
         <div class="adventure-card-actions">
           <button class="btn-sm adventure-continue-btn"
