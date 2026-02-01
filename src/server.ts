@@ -635,8 +635,8 @@ function renderLorebookPicker(lorebooks: { slug: string; meta: LorebookMeta; pre
       out += `<div class="adventure-card adventure-card-template">
         <span class="adventure-card-name">${escapeHtml(lb.meta.name)}</span>
         <div class="adventure-card-actions">
-          <button class="btn-sm lorebook-edit-btn" data-slug="${escapeHtml(lb.slug)}" data-name="${escapeHtml(lb.meta.name)}"${presetAttr}>Edit</button>
-          ${lb.preset ? "" : `<button class="btn-sm btn-danger lorebook-delete-btn" data-slug="${escapeHtml(lb.slug)}" data-name="${escapeHtml(lb.meta.name)}">Delete</button>`}
+          <button class="btn-sm lorebook-edit-btn" data-slug="${escapeHtml(lb.slug)}" data-name="${escapeHtml(lb.meta.name)}"${presetAttr}>${lb.preset ? "View" : "Edit"}</button>
+          ${lb.preset ? `<button class="btn-sm lorebook-copy-btn" data-slug="${escapeHtml(lb.slug)}" data-name="${escapeHtml(lb.meta.name)}">Copy</button>` : `<button class="btn-sm btn-danger lorebook-delete-btn" data-slug="${escapeHtml(lb.slug)}" data-name="${escapeHtml(lb.meta.name)}">Delete</button>`}
         </div>
       </div>`;
     }

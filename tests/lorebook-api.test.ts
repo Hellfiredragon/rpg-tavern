@@ -335,7 +335,7 @@ describe("lorebook API routes", () => {
     expect(res.status).toBe(400);
   });
 
-  test("GET /api/lorebooks shows templates as cards with edit buttons, presets without delete", async () => {
+  test("GET /api/lorebooks shows templates as cards with edit buttons, presets with View and Copy", async () => {
     const res = await fetch(`${BASE}/api/lorebooks`);
     expect(res.status).toBe(200);
     const body = await res.text();
@@ -343,13 +343,16 @@ describe("lorebook API routes", () => {
     expect(body).toContain("Key Quest");
     expect(body).toContain("Default Lorebook");
     expect(body).toContain("lorebook-edit-btn");
-    // Presets should NOT have delete buttons
+    // Preset cards should have View + Copy buttons, no Delete
+    expect(body).toContain("lorebook-copy-btn");
+    expect(body).toContain(">View<");
     expect(body).not.toContain("template-select");
     expect(body).not.toContain("btn-use-template");
   });
 
   test("GET /api/lorebooks shows both templates and adventures as cards", async () => {
     await createLorebook("my-adventure", "My Adventure"); // non-template
+    await createLorebook("user-tpl", "User Template", true); // user-created template
     const res = await fetch(`${BASE}/api/lorebooks`);
     const body = await res.text();
     // Templates section (presets)
@@ -363,6 +366,8 @@ describe("lorebook API routes", () => {
     // Card-based layout
     expect(body).toContain("adventure-card");
     expect(body).toContain("lorebook-edit-btn");
+    // User-created templates get Edit + Delete, not View + Copy
+    expect(body).toContain("lorebook-delete-btn");
   });
 
   // --- Preset guard tests ---

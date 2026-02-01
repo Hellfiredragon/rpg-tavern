@@ -159,14 +159,14 @@ Hash-based client-side routing. The browser back/forward buttons work, and URLs 
   - Write functions (`saveEntry`, `deleteEntry`, `createFolder`, `deleteFolder`, `deleteLorebook`, `saveLorebookMeta`) call `assertNotPreset()` which throws if the lorebook is a read-only preset
   - `copyLorebook(source, dest, name)` can copy FROM a preset (source resolves via both dirs) but always writes TO the data dir
   - `listLorebooks()` returns `{ slug, meta, preset: boolean }[]` — scans data dir first, then presets (skipping slugs already in data dir)
-  - UI: preset templates show Edit button (read-only view) but no Delete button; tree/entry forms are rendered in read-only mode
+  - UI: preset template cards show View button (read-only editor) + Copy button (creates editable user template); no Delete button. Tree/entry forms are rendered in read-only mode for presets.
   - **Key Quest template** (`template-key-quest`): A story where the player asks three NPCs who has the key and where to open a locked room to get the treasure. Contains 7 entries (3 characters, 1 item, 3 locations).
 - **Templates:** Lorebooks with `"template": true` in metadata. Shown as cards in the Lorebook tab picker with Edit buttons, plus a "+ Template" button. User-created templates also get a Delete button.
 - **Migration:** On startup, `migrateOrphanLorebooks()` converts non-template, non-preset lorebooks with no conversations into templates.
 - **All CRUD functions** take `lorebook: string` as their first argument (the lorebook slug)
 - **Functions:** `saveLorebookMeta(slug, meta)` — writes updated `_lorebook.json` for an existing lorebook
 - **UI:** Lorebook tab in index.html (also standalone at `/lorebook.html`) — two-step layout mirroring the Adventure tab:
-  - **Picker** (`#lorebook-picker`): Card-based list of lorebooks. Adventures (non-template) get an Edit button. Templates get Edit + Delete buttons. Includes "+ Template" button.
+  - **Picker** (`#lorebook-picker`): Card-based list of lorebooks. Adventures (non-template) get an Edit button. User templates get Edit + Delete buttons. Preset templates get View + Copy buttons. Includes "+ Template" button.
   - **Editor** (`#lorebook-edit`): Header bar (back button + lorebook name) + tree browser with per-folder "+ New" buttons + entry editor panel.
 - **API routes:**
   - Lorebook management (under `/api/lorebooks`):
