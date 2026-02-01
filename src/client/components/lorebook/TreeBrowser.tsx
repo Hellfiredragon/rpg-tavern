@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { Link } from "react-router-dom";
 import { moveEntry } from "../../api";
 import type { TreeNode } from "../../types";
 
@@ -6,7 +7,6 @@ type Props = {
   nodes: TreeNode[];
   lorebook: string;
   readonly: boolean;
-  onSelect: (path: string) => void;
   onNew: (prefix: string) => void;
   onMoved: () => void;
 };
@@ -18,11 +18,12 @@ function parentFolder(path: string) {
   return i > 0 ? path.slice(0, i) : "";
 }
 
-export function TreeBrowser({ nodes, lorebook, readonly, onSelect, onNew, onMoved }: Props) {
+export function TreeBrowser({ nodes, lorebook, readonly, onNew, onMoved }: Props) {
   const draggedPathRef = useRef("");
 
   function handleDragStart(e: React.DragEvent, path: string) {
     draggedPathRef.current = path;
+    e.dataTransfer.setData("text/plain", path);
     e.dataTransfer.setData(MIME, path);
     e.dataTransfer.effectAllowed = "copyMove";
     (e.currentTarget as HTMLElement).closest(".tree-entry")?.classList.add("dragging");
@@ -122,7 +123,6 @@ export function TreeBrowser({ nodes, lorebook, readonly, onSelect, onNew, onMove
           nodes={nodes}
           lorebook={lorebook}
           readonly={readonly}
-          onSelect={onSelect}
           onNew={onNew}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
@@ -140,7 +140,6 @@ type TreeLevelProps = {
   nodes: TreeNode[];
   lorebook: string;
   readonly: boolean;
-  onSelect: (path: string) => void;
   onNew: (prefix: string) => void;
   onDragStart: (e: React.DragEvent, path: string) => void;
   onDragEnd: (e: React.DragEvent) => void;
@@ -150,27 +149,29 @@ type TreeLevelProps = {
   onFolderDrop: (e: React.DragEvent, folderPath: string) => void;
 };
 
-function EntryLink({ node, readonly, onSelect, onDragStart, onDragEnd }: {
+function EntryLink({ node, lorebook, readonly, onDragStart, onDragEnd }: {
   node: TreeNode;
+  lorebook: string;
   readonly: boolean;
-  onSelect: (path: string) => void;
   onDragStart: (e: React.DragEvent, path: string) => void;
   onDragEnd: (e: React.DragEvent) => void;
 }) {
   return (
-    <a
+    <Link
+      className="tree-link"
+      to={`/lorebook/${encodeURIComponent(lorebook)}/${node.path}`}
+      replace
       draggable={!readonly}
-      onClick={() => onSelect(node.path)}
       onDragStart={readonly ? undefined : (e) => onDragStart(e, node.path)}
       onDragEnd={readonly ? undefined : onDragEnd}
     >
       {node.name}
       <span className="tree-path">{node.path}</span>
-    </a>
+    </Link>
   );
 }
 
-function TreeLevel({ nodes, lorebook, readonly, onSelect, onNew, onDragStart, onDragEnd, onFolderDragOver, onFolderDragEnter, onFolderDragLeave, onFolderDrop }: TreeLevelProps) {
+function TreeLevel({ nodes, lorebook, readonly, onNew, onDragStart, onDragEnd, onFolderDragOver, onFolderDragEnter, onFolderDragLeave, onFolderDrop }: TreeLevelProps) {
   const dragProps = { onDragStart, onDragEnd };
   const folderDropProps = { onFolderDragOver, onFolderDragEnter, onFolderDragLeave, onFolderDrop };
 
@@ -180,7 +181,7 @@ function TreeLevel({ nodes, lorebook, readonly, onSelect, onNew, onDragStart, on
         if (node.isEntry && node.children.length === 0) {
           return (
             <li className="tree-entry" data-path={node.path} key={node.path}>
-              <EntryLink node={node} readonly={readonly} onSelect={onSelect} {...dragProps} />
+              <EntryLink node={node} lorebook={lorebook} readonly={readonly} {...dragProps} />
             </li>
           );
         }
@@ -202,7 +203,7 @@ function TreeLevel({ nodes, lorebook, readonly, onSelect, onNew, onDragStart, on
                 {node.isEntry && (
                   <ul className="tree-list">
                     <li className="tree-entry" data-path={node.path}>
-                      <EntryLink node={node} readonly={readonly} onSelect={onSelect} {...dragProps} />
+                      <EntryLink node={node} lorebook={lorebook} readonly={readonly} {...dragProps} />
                     </li>
                   </ul>
                 )}
@@ -210,7 +211,7 @@ function TreeLevel({ nodes, lorebook, readonly, onSelect, onNew, onDragStart, on
                   <button className="btn-sm btn-new-entry" data-prefix={folderPrefix} data-lorebook={lorebook}
                     onClick={() => onNew(folderPrefix)}>+ New</button>
                 )}
-                <TreeLevel nodes={node.children} lorebook={lorebook} readonly={readonly} onSelect={onSelect} onNew={onNew}
+                <TreeLevel nodes={node.children} lorebook={lorebook} readonly={readonly} onNew={onNew}
                   {...dragProps} {...folderDropProps} />
               </details>
             </li>

@@ -208,7 +208,7 @@
   padding-left: 0;
 }
 
-.tree-entry a {
+.tree-entry .tree-link {
   color: #e0e0e0;
   text-decoration: none;
   padding: 0.25rem 0.5rem;
@@ -218,15 +218,15 @@
   user-select: none;
 }
 
-.tree-entry a[draggable="true"] {
+.tree-entry .tree-link[draggable="true"] {
   cursor: grab;
 }
 
-.tree-entry a[draggable="true"]:active {
+.tree-entry .tree-link[draggable="true"]:active {
   cursor: grabbing;
 }
 
-.tree-entry a:hover {
+.tree-entry .tree-link:hover {
   background: #1a1a2e;
   color: #e2b04a;
 }
@@ -455,7 +455,7 @@
   opacity: 0.35;
 }
 
-.tree-entry.dragging a {
+.tree-entry.dragging .tree-link {
   pointer-events: none;
 }
 
@@ -484,15 +484,86 @@
 
 /* Form field drop zones */
 
-.drop-zone {
-  border-radius: 4px;
-  transition: box-shadow 0.15s, border-color 0.15s;
+.drop-zone-field {
+  min-height: 44px;
+  padding: 0.5rem;
+  border: 2px dashed #444;
+  border-radius: 6px;
+  background: #1a1a2e;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
 }
 
-.drop-zone-active {
-  box-shadow: 0 0 0 2px rgba(226, 176, 74, 0.5);
+.drop-zone-field.drop-zone-active {
+  border-color: #e2b04a;
+  background: rgba(226, 176, 74, 0.08);
+  box-shadow: 0 0 12px rgba(226, 176, 74, 0.15);
 }
 
-.drop-zone input {
-  width: 100%;
+.drop-zone-placeholder {
+  color: #555;
+  font-size: 0.8rem;
+  font-style: italic;
+  user-select: none;
+  pointer-events: none;
+}
+
+.drop-zone-active .drop-zone-placeholder {
+  color: #e2b04a;
+}
+
+/* Badge list for multi-value drop zones */
+
+.drop-badge-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+/* Individual drop badge */
+
+.drop-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  background: #2a3a5e;
+  border: 1px solid #3a4a6e;
+  border-radius: 16px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.8rem;
+  animation: badge-pop 0.2s ease-out;
+  white-space: nowrap;
+}
+
+.drop-badge-folder {
+  color: #777;
+  font-size: 0.7rem;
+}
+
+.drop-badge-name {
+  color: #e2b04a;
+  font-weight: 600;
+}
+
+.drop-badge-x {
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 1.05rem;
+  cursor: pointer;
+  padding: 0 0 0 0.15rem;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.drop-badge-x:hover {
+  color: #ff6b6b;
+}
+
+@keyframes badge-pop {
+  0% { transform: scale(0.7); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
 }

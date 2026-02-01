@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import * as api from "../../api";
 import type { LorebookEntry } from "../../types";
 
@@ -9,8 +9,32 @@ function hasType(types: DataTransfer["types"], mime: string) {
   return "includes" in types ? types.includes(mime) : (types as unknown as DOMStringList).contains(mime);
 }
 
+function pathToLabel(path: string): string {
+  const filename = path.split("/").pop() || path;
+  return filename.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function PathBadge({ path, onRemove, readonly }: {
+  path: string;
+  onRemove?: () => void;
+  readonly: boolean;
+}) {
+  const folder = path.includes("/") ? path.split("/")[0] : null;
+  return (
+    <span className="drop-badge" title={path}>
+      {folder && <span className="drop-badge-folder">{folder}/</span>}
+      <span className="drop-badge-name">{pathToLabel(path)}</span>
+      {!readonly && onRemove && (
+        <button type="button" className="drop-badge-x" onClick={onRemove}
+          aria-label={`Remove ${pathToLabel(path)}`}>&times;</button>
+      )}
+    </span>
+  );
+}
+
 function useDropZone(onDrop: (path: string) => void) {
   const [active, setActive] = useState(false);
+  const enterCount = useRef(0);
 
   const handlers = {
     onDragOver: (e: React.DragEvent) => {
@@ -21,16 +45,16 @@ function useDropZone(onDrop: (path: string) => void) {
     onDragEnter: (e: React.DragEvent) => {
       if (!hasType(e.dataTransfer.types, MIME)) return;
       e.preventDefault();
-      setActive(true);
+      enterCount.current++;
+      if (enterCount.current === 1) setActive(true);
     },
-    onDragLeave: (e: React.DragEvent) => {
-      const container = e.currentTarget as HTMLElement;
-      if (!container.contains(e.relatedTarget as Node)) {
-        setActive(false);
-      }
+    onDragLeave: () => {
+      enterCount.current--;
+      if (enterCount.current === 0) setActive(false);
     },
     onDrop: (e: React.DragEvent) => {
       e.preventDefault();
+      enterCount.current = 0;
       setActive(false);
       const path = e.dataTransfer.getData(MIME);
       if (path) onDrop(path);
@@ -99,7 +123,6 @@ export function EntryForm({ lorebook, path, readonly, onSaved, onDeleted }: Prop
   const contextsStr = Array.isArray(entry.contexts) ? entry.contexts.join(", ") : String(entry.contexts);
   const isCharacter = path.startsWith("characters/");
   const isLocation = path.startsWith("locations/");
-  const charactersStr = Array.isArray(entry.characters) ? entry.characters.join(", ") : "";
 
   const homeLocationDrop = useDropZone(useCallback((droppedPath: string) => {
     setEntry((prev) => ({ ...prev, homeLocation: droppedPath }));
@@ -140,20 +163,37 @@ export function EntryForm({ lorebook, path, readonly, onSaved, onDeleted }: Prop
 
         {isCharacter && (
           <>
-            <label htmlFor="lb-home-location">Home Location <span className="hint">(location path, e.g. locations/village-square — or drag from tree)</span></label>
-            <div className={`drop-zone${homeLocationDrop.active ? " drop-zone-active" : ""}`} {...(readonly ? {} : homeLocationDrop.handlers)}>
-              <input id="lb-home-location" type="text" value={entry.homeLocation ?? ""} disabled={readonly}
-                onChange={(e) => setEntry({ ...entry, homeLocation: e.target.value.trim() || undefined })} />
+            <label>Home Location <span className="hint">(drag a location from the tree)</span></label>
+            <div className={`drop-zone-field${homeLocationDrop.active ? " drop-zone-active" : ""}`}
+              {...(readonly ? {} : homeLocationDrop.handlers)}>
+              {entry.homeLocation ? (
+                <PathBadge path={entry.homeLocation} readonly={readonly}
+                  onRemove={() => setEntry((prev) => ({ ...prev, homeLocation: undefined }))} />
+              ) : (
+                <span className="drop-zone-placeholder">Drop a location here</span>
+              )}
             </div>
           </>
         )}
 
         {isLocation && (
           <>
-            <label htmlFor="lb-characters">Characters <span className="hint">(comma-separated character paths — or drag from tree)</span></label>
-            <div className={`drop-zone${charactersDrop.active ? " drop-zone-active" : ""}`} {...(readonly ? {} : charactersDrop.handlers)}>
-              <input id="lb-characters" type="text" value={charactersStr} disabled={readonly}
-                onChange={(e) => setEntry({ ...entry, characters: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} />
+            <label>Characters <span className="hint">(drag characters from the tree)</span></label>
+            <div className={`drop-zone-field${charactersDrop.active ? " drop-zone-active" : ""}`}
+              {...(readonly ? {} : charactersDrop.handlers)}>
+              {Array.isArray(entry.characters) && entry.characters.length > 0 && (
+                <div className="drop-badge-list">
+                  {entry.characters.map((ch) => (
+                    <PathBadge key={ch} path={ch} readonly={readonly}
+                      onRemove={() => setEntry((prev) => ({
+                        ...prev, characters: (prev.characters || []).filter((c) => c !== ch),
+                      }))} />
+                  ))}
+                </div>
+              )}
+              <span className="drop-zone-placeholder">
+                {!entry.characters || entry.characters.length === 0 ? "Drop characters here" : "+ Drop more"}
+              </span>
             </div>
           </>
         )}

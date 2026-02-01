@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { TreeBrowser } from "./TreeBrowser";
 import { EntryForm } from "./EntryForm";
 import { Dialog } from "../shared/Dialog";
@@ -9,12 +10,13 @@ type Props = {
   slug: string;
   name: string;
   readonly: boolean;
+  entryPath: string | null;
   onBack: () => void;
 };
 
-export function LorebookEditor({ slug, name, readonly, onBack }: Props) {
+export function LorebookEditor({ slug, name, readonly, entryPath, onBack }: Props) {
+  const navigate = useNavigate();
   const [nodes, setNodes] = useState<TreeNode[]>([]);
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [newDialog, setNewDialog] = useState<{ prefix: string } | null>(null);
   const [newName, setNewName] = useState("");
   const [treeKey, setTreeKey] = useState(0);
@@ -33,7 +35,7 @@ export function LorebookEditor({ slug, name, readonly, onBack }: Props) {
     const path = newDialog.prefix + n;
     setNewDialog(null);
     setNewName("");
-    setSelectedPath(path);
+    navigate(`/lorebook/${encodeURIComponent(slug)}/${path}`, { replace: true });
   };
 
   const handleCreateFolder = async () => {
@@ -64,21 +66,20 @@ export function LorebookEditor({ slug, name, readonly, onBack }: Props) {
               nodes={nodes}
               lorebook={slug}
               readonly={readonly}
-              onSelect={setSelectedPath}
               onNew={(prefix) => { setNewDialog({ prefix }); setNewName(""); }}
               onMoved={handleEntryMoved}
             />
           </div>
         </div>
         <div className="lorebook-editor">
-          {selectedPath ? (
+          {entryPath ? (
             <EntryForm
-              key={selectedPath}
+              key={entryPath}
               lorebook={slug}
-              path={selectedPath}
+              path={entryPath}
               readonly={readonly}
               onSaved={() => setTreeKey((k) => k + 1)}
-              onDeleted={() => { setSelectedPath(null); setTreeKey((k) => k + 1); }}
+              onDeleted={() => { navigate(`/lorebook/${encodeURIComponent(slug)}`, { replace: true }); setTreeKey((k) => k + 1); }}
             />
           ) : (
             <p className="editor-placeholder">

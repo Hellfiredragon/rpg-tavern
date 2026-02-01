@@ -12,7 +12,7 @@ export function App() {
         <Route path="/adventure" element={<AdventurePage />} />
         <Route path="/adventure/:slug" element={<AdventurePage />} />
         <Route path="/lorebook" element={<LorebookPage />} />
-        <Route path="/lorebook/:slug" element={<LorebookPage />} />
+        <Route path="/lorebook/:slug/*" element={<LorebookPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/adventure" replace />} />
       </Route>

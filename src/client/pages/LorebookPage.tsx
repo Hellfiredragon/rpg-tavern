@@ -7,7 +7,7 @@ import * as api from "../api";
 import type { Template } from "../types";
 
 export function LorebookPage() {
-  const { slug } = useParams<{ slug: string }>();
+  const { slug, "*": entryPath } = useParams<{ slug: string; "*": string }>();
   const navigate = useNavigate();
 
   const [adventures, setAdventures] = useState<Template[]>([]);
@@ -69,6 +69,7 @@ export function LorebookPage() {
         slug={editorMeta.slug}
         name={editorMeta.name}
         readonly={editorMeta.preset}
+        entryPath={entryPath || null}
         onBack={() => navigate("/lorebook")}
       />
     );
