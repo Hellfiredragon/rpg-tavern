@@ -27,7 +27,7 @@ import {
 
 // The lorebook module stores data in data/lorebooks/ relative to src/.
 // Tests use that real directory, so we clean it before/after each test.
-const LOREBOOKS_DIR = resolve(join(import.meta.dir, "..", "data", "lorebooks"));
+const LOREBOOKS_DIR = resolve(join(import.meta.dir, "..", "data-test", "lorebooks"));
 
 async function cleanLorebooks() {
   try {

@@ -13,7 +13,7 @@ import {
   type ChatMessage,
 } from "./chat";
 
-const CHATS_DIR = resolve(join(import.meta.dir, "..", "data", "chats"));
+const CHATS_DIR = resolve(join(import.meta.dir, "..", "data-test", "chats"));
 
 async function cleanChats() {
   try {

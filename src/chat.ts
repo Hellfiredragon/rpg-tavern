@@ -24,7 +24,7 @@ export type ChatMessage = {
 // Constants
 // ---------------------------------------------------------------------------
 
-const DATA_DIR = join(import.meta.dir, "..", "data");
+const DATA_DIR = process.env.DATA_DIR || join(import.meta.dir, "..", "data");
 const CHATS_DIR = join(DATA_DIR, "chats");
 
 // ---------------------------------------------------------------------------

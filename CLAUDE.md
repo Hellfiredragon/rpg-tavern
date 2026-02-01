@@ -86,8 +86,8 @@ Hash-based client-side routing. The browser back/forward buttons work, and URLs 
 |------|------|
 | `#adventure` (or empty) | Adventure tab, picker |
 | `#adventure/<slug>` | Adventure tab, playing that adventure (resumed via `/api/adventures/resume`) |
-| `#lorebook` | Lorebook tab, first template selected |
-| `#lorebook/<slug>` | Lorebook tab, that lorebook selected |
+| `#lorebook` | Lorebook tab, picker |
+| `#lorebook/<slug>` | Lorebook tab, editing that lorebook (restored via `/api/lorebooks/meta`) |
 | `#settings` | Settings tab |
 
 ### Implementation
@@ -97,7 +97,7 @@ Hash-based client-side routing. The browser back/forward buttons work, and URLs 
 - `popstate` listener calls `navigateTo(location.hash, true)`.
 - Initial page load calls `navigateTo(location.hash, true)` to restore state from the URL.
 - Tab clicks call `navigateTo('#' + tabName, false)` which pushes history.
-- Lorebook selector changes use `history.replaceState` (no new back entry).
+- Lorebook picker/editor transitions push `#lorebook/<slug>` or `#lorebook`.
 - Adventure play/picker transitions push `#adventure/<slug>` or `#adventure`.
 
 ## Settings
@@ -148,15 +148,18 @@ Hash-based client-side routing. The browser back/forward buttons work, and URLs 
           cellar.json
           treasure-room.json
     ```
-- **Templates:** Lorebooks with `"template": true` in metadata. Shown in a single dropdown in the Lorebook tab with a "+ Template" button. Built-in templates are seeded at startup via `seedTemplates()`.
+- **Templates:** Lorebooks with `"template": true` in metadata. Shown as cards in the Lorebook tab picker with Edit and Delete buttons, plus a "+ Template" button. Built-in templates are seeded at startup via `seedTemplates()`.
   - **Key Quest template** (`template-key-quest`): A story where the player asks three NPCs who has the key and where to open a locked room to get the treasure. Contains 7 entries (3 characters, 1 item, 3 locations).
 - **Migration:** On startup, `ensureDefaultLorebook()` migrates legacy flat files into a `default/` subdirectory (as a template). `migrateOrphanLorebooks()` converts non-template lorebooks with no conversations into templates.
 - **All CRUD functions** take `lorebook: string` as their first argument (the lorebook slug)
 - **Functions:** `saveLorebookMeta(slug, meta)` — writes updated `_lorebook.json` for an existing lorebook
-- **UI:** Lorebook tab in index.html (also standalone at `/lorebook.html`) — two-panel layout with template-only selector dropdown, "+ Template" button, tree browser with per-folder "+ New" buttons, and entry editor.
+- **UI:** Lorebook tab in index.html (also standalone at `/lorebook.html`) — two-step layout mirroring the Adventure tab:
+  - **Picker** (`#lorebook-picker`): Card-based list of lorebooks. Adventures (non-template) get an Edit button. Templates get Edit + Delete buttons. Includes "+ Template" button.
+  - **Editor** (`#lorebook-edit`): Header bar (back button + lorebook name) + tree browser with per-folder "+ New" buttons + entry editor panel.
 - **API routes:**
   - Lorebook management (under `/api/lorebooks`):
-    - `GET /api/lorebooks` — returns lorebook selector HTML (templates-only dropdown + "+ Template" button)
+    - `GET /api/lorebooks` — returns lorebook picker HTML (card-based list + "+ Template" button)
+    - `GET /api/lorebooks/meta?slug=` — returns JSON `{ slug, name, template }` for a lorebook (404 if not found). Used by router to restore lorebook editor from URL.
     - `POST /api/lorebooks` — create template (JSON `{ slug, name }`) → `HX-Trigger: refreshLorebooks`
     - `POST /api/lorebooks/copy` — copy a lorebook as non-template (JSON `{ source, slug, name }`) → `HX-Trigger: refreshLorebooks`
     - `POST /api/lorebooks/make-template` — copy a lorebook as template (JSON `{ source, slug, name }`) → `HX-Trigger: refreshLorebooks`

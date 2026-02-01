@@ -48,16 +48,23 @@
 
     <!-- Lorebook tab -->
     <div class="tab-panel" id="panel-lorebook">
-      <div class="lorebook-container">
-        <div class="lorebook-sidebar">
-          <div id="lorebook-selector"
-               hx-get="/api/lorebooks"
-               hx-trigger="load, refreshLorebooks from:body"
-               hx-swap="innerHTML"></div>
-          <div class="lorebook-tree" id="lorebook-tree"></div>
+      <div id="lorebook-picker"
+           hx-get="/api/lorebooks"
+           hx-trigger="load, refreshLorebooks from:body"
+           hx-swap="innerHTML">
+      </div>
+      <div id="lorebook-edit" style="display:none">
+        <div class="lorebook-header-bar">
+          <button class="btn-sm" id="lorebook-back-btn">&larr;</button>
+          <span id="lorebook-edit-name"></span>
         </div>
-        <div class="lorebook-editor" id="lorebook-editor">
-          <p class="editor-placeholder">Select an entry from the tree, or create a new one.</p>
+        <div class="lorebook-container">
+          <div class="lorebook-sidebar">
+            <div class="lorebook-tree" id="lorebook-tree"></div>
+          </div>
+          <div class="lorebook-editor" id="lorebook-editor">
+            <p class="editor-placeholder">Select an entry from the tree, or create a new one.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -403,6 +410,10 @@
     var lbForm = document.getElementById('lorebook-form');
     var lbNameInput = document.getElementById('lb-new-name');
 
+    var lorebookPicker = document.getElementById('lorebook-picker');
+    var lorebookEdit = document.getElementById('lorebook-edit');
+    var lorebookEditName = document.getElementById('lorebook-edit-name');
+
     var currentLorebook = '';
     var currentPrefix = '';
 
@@ -416,51 +427,46 @@
       refreshTree();
     });
 
-    // After lorebook selector loads, activate the right item and load tree
-    var pendingLorebookSlug = '';
+    function showLorebookPicker(skipPush) {
+      lorebookPicker.style.display = '';
+      lorebookEdit.style.display = 'none';
+      currentLorebook = '';
+      htmx.trigger(document.body, 'refreshLorebooks');
+      if (!skipPush) history.pushState(null, '', '#lorebook');
+    }
 
-    document.body.addEventListener('htmx:afterSettle', function(evt) {
-      if (evt.detail.target && evt.detail.target.id === 'lorebook-selector') {
-        if (pendingLorebookSlug) {
-          // Activate the pending slug from URL or new-template creation
-          document.querySelectorAll('.lorebook-list-item').forEach(function(item) {
-            if (item.getAttribute('data-slug') === pendingLorebookSlug) {
-              item.classList.add('active');
-            } else {
-              item.classList.remove('active');
-            }
-          });
-          currentLorebook = pendingLorebookSlug;
-          pendingLorebookSlug = '';
-        } else {
-          // Use server-side active item, or fall back to first item
-          var active = document.querySelector('.lorebook-list-item.active');
-          if (!active) {
-            active = document.querySelector('.lorebook-list-item');
-            if (active) active.classList.add('active');
-          }
-          currentLorebook = active ? active.getAttribute('data-slug') || '' : '';
-        }
-        refreshTree();
-      }
+    function enterLorebookEdit(slug, name, skipPush) {
+      lorebookPicker.style.display = 'none';
+      lorebookEdit.style.display = '';
+      currentLorebook = slug;
+      lorebookEditName.textContent = name;
+      refreshTree();
+      document.getElementById('lorebook-editor').innerHTML =
+        '<p class="editor-placeholder">Select an entry from the tree, or create a new one.</p>';
+      if (!skipPush) history.pushState(null, '', '#lorebook/' + encodeURIComponent(slug));
+    }
+
+    // Back button
+    document.getElementById('lorebook-back-btn').addEventListener('click', function() {
+      showLorebookPicker(false);
     });
 
     // Event delegation for dynamic buttons
     document.addEventListener('click', function(e) {
-      // Lorebook list item click
-      var lbItem = e.target.closest('.lorebook-list-item');
-      if (lbItem) {
-        var slug = lbItem.getAttribute('data-slug');
-        if (slug === currentLorebook) return;
-        document.querySelectorAll('.lorebook-list-item').forEach(function(item) {
-          item.classList.remove('active');
-        });
-        lbItem.classList.add('active');
-        currentLorebook = slug;
-        refreshTree();
-        document.getElementById('lorebook-editor').innerHTML =
-          '<p class="editor-placeholder">Select an entry from the tree, or create a new one.</p>';
-        history.replaceState(null, '', '#lorebook/' + encodeURIComponent(slug));
+      // Edit button on lorebook cards
+      var editBtn = e.target.closest('.lorebook-edit-btn');
+      if (editBtn) {
+        enterLorebookEdit(editBtn.getAttribute('data-slug'), editBtn.getAttribute('data-name'));
+        return;
+      }
+
+      // Delete button on template cards
+      var delBtn = e.target.closest('.lorebook-delete-btn');
+      if (delBtn) {
+        if (confirm('Delete template "' + delBtn.getAttribute('data-name') + '"?')) {
+          fetch('/api/lorebooks?slug=' + encodeURIComponent(delBtn.getAttribute('data-slug')), { method: 'DELETE' })
+            .then(function() { htmx.trigger(document.body, 'refreshLorebooks'); });
+        }
         return;
       }
 
@@ -475,7 +481,7 @@
         return;
       }
 
-      // "+ Lorebook" button
+      // "+ Template" button
       if (e.target.id === 'btn-new-lorebook' || e.target.closest('#btn-new-lorebook')) {
         lbNameInput.value = '';
         lbDialog.showModal();
@@ -553,8 +559,8 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ slug: slug, name: name })
       }).then(function() {
-        pendingLorebookSlug = slug;
         htmx.trigger(document.body, 'refreshLorebooks');
+        enterLorebookEdit(slug, name);
       });
     });
 
@@ -640,23 +646,16 @@
         }
       } else if (tab === 'lorebook') {
         if (slug) {
-          pendingLorebookSlug = slug;
-          // If selector is already loaded, apply immediately
-          var items = document.querySelectorAll('.lorebook-list-item');
-          if (items.length > 0) {
-            items.forEach(function(item) {
-              if (item.getAttribute('data-slug') === slug) {
-                item.classList.add('active');
-              } else {
-                item.classList.remove('active');
-              }
+          fetch('/api/lorebooks/meta?slug=' + encodeURIComponent(slug))
+            .then(function(res) {
+              if (!res.ok) { showLorebookPicker(true); return; }
+              return res.json();
+            })
+            .then(function(data) {
+              if (data) enterLorebookEdit(data.slug, data.name, skipPush);
             });
-            currentLorebook = slug;
-            pendingLorebookSlug = '';
-            refreshTree();
-            document.getElementById('lorebook-editor').innerHTML =
-              '<p class="editor-placeholder">Select an entry from the tree, or create a new one.</p>';
-          }
+        } else {
+          showLorebookPicker(true);
         }
         if (!skipPush) history.pushState(null, '', hash || '#lorebook');
       } else if (tab === 'settings') {

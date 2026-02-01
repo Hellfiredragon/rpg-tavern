@@ -35,7 +35,7 @@ export type TreeNode = {
 // Constants
 // ---------------------------------------------------------------------------
 
-const DATA_DIR = join(import.meta.dir, "..", "data");
+const DATA_DIR = process.env.DATA_DIR || join(import.meta.dir, "..", "data");
 const LOREBOOKS_DIR = join(DATA_DIR, "lorebooks");
 const LOREBOOK_META_FILE = "_lorebook.json";
 

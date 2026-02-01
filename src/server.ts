@@ -302,8 +302,19 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
 
   if (url.pathname === "/api/lorebooks" && req.method === "GET") {
     const lorebooks = await listLorebooks();
-    const active = url.searchParams.get("active") || "default";
-    return html(renderLorebookSelector(lorebooks, active));
+    return html(renderLorebookPicker(lorebooks));
+  }
+
+  if (url.pathname === "/api/lorebooks/meta" && req.method === "GET") {
+    const slug = url.searchParams.get("slug") || "";
+    if (!slug) return Response.json({ error: "Missing slug" }, { status: 400 });
+    try {
+      const meta = await loadLorebookMeta(slug);
+      if (!meta) return Response.json({ error: "Not found" }, { status: 404 });
+      return Response.json({ slug, name: meta.name, template: !!meta.template });
+    } catch {
+      return Response.json({ error: "Not found" }, { status: 404 });
+    }
   }
 
   if (url.pathname === "/api/lorebooks" && req.method === "POST") {
@@ -588,30 +599,42 @@ function renderNewButton(prefix: string, lorebook: string): string {
   return `<button class="btn-sm btn-new-entry" data-prefix="${escapeHtml(prefix)}" data-lorebook="${escapeHtml(lorebook)}">+ New</button>`;
 }
 
-function renderLorebookSelector(lorebooks: { slug: string; meta: LorebookMeta }[], active: string): string {
+function renderLorebookPicker(lorebooks: { slug: string; meta: LorebookMeta }[]): string {
   const templates = lorebooks.filter((lb) => lb.meta.template);
   const adventures = lorebooks.filter((lb) => !lb.meta.template);
 
-  let out = `<div class="lorebook-list">`;
+  let out = "";
 
-  out += `<h3 class="lorebook-section-heading">Your Adventures</h3>`;
+  // Adventures section (non-template lorebooks)
   if (adventures.length > 0) {
+    out += `<h2>Your Adventures</h2>`;
     for (const lb of adventures) {
-      const activeCls = lb.slug === active ? " active" : "";
-      out += `<div class="lorebook-list-item${activeCls}" data-slug="${escapeHtml(lb.slug)}">${escapeHtml(lb.meta.name)}</div>`;
+      out += `<div class="adventure-card">
+        <span class="adventure-card-name">${escapeHtml(lb.meta.name)}</span>
+        <div class="adventure-card-actions">
+          <button class="btn-sm lorebook-edit-btn" data-slug="${escapeHtml(lb.slug)}" data-name="${escapeHtml(lb.meta.name)}">Edit</button>
+        </div>
+      </div>`;
+    }
+  }
+
+  // Templates section
+  out += `<h2>Templates</h2>`;
+  if (templates.length > 0) {
+    for (const lb of templates) {
+      out += `<div class="adventure-card adventure-card-template">
+        <span class="adventure-card-name">${escapeHtml(lb.meta.name)}</span>
+        <div class="adventure-card-actions">
+          <button class="btn-sm lorebook-edit-btn" data-slug="${escapeHtml(lb.slug)}" data-name="${escapeHtml(lb.meta.name)}">Edit</button>
+          <button class="btn-sm btn-danger lorebook-delete-btn" data-slug="${escapeHtml(lb.slug)}" data-name="${escapeHtml(lb.meta.name)}">Delete</button>
+        </div>
+      </div>`;
     }
   } else {
-    out += `<p class="lorebook-list-empty">No adventures yet.</p>`;
+    out += `<p class="editor-placeholder">No templates yet.</p>`;
   }
 
-  out += `<h3 class="lorebook-section-heading">Templates</h3>`;
-  for (const lb of templates) {
-    const activeCls = lb.slug === active ? " active" : "";
-    out += `<div class="lorebook-list-item${activeCls}" data-slug="${escapeHtml(lb.slug)}">${escapeHtml(lb.meta.name)}</div>`;
-  }
-
-  out += `</div>`;
-  out += `<button type="button" id="btn-new-lorebook" class="btn-sm">+ Template</button>`;
+  out += `<button type="button" id="btn-new-lorebook" class="btn-sm" style="margin-top:0.5rem">+ Template</button>`;
 
   return out;
 }

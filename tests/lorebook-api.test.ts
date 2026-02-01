@@ -11,7 +11,7 @@ import {
 } from "../src/lorebook";
 import { startServer } from "../src/server";
 
-const LOREBOOKS_DIR = resolve(join(import.meta.dir, "..", "data", "lorebooks"));
+const LOREBOOKS_DIR = resolve(join(import.meta.dir, "..", "data-test", "lorebooks"));
 
 async function cleanLorebooks() {
   try {
@@ -225,12 +225,13 @@ describe("lorebook API routes", () => {
 
   // --- Lorebook management API tests ---
 
-  test("GET /api/lorebooks returns selector HTML with templates only", async () => {
+  test("GET /api/lorebooks returns picker HTML with templates", async () => {
     await createLorebook("default", "Default Lorebook", true);
     const res = await fetch(`${BASE}/api/lorebooks`);
     expect(res.status).toBe(200);
     const body = await res.text();
-    expect(body).toContain("lorebook-list");
+    expect(body).toContain("adventure-card");
+    expect(body).toContain("lorebook-edit-btn");
     expect(body).toContain("Default Lorebook");
     expect(body).toContain("btn-new-lorebook");
     expect(body).toContain("+ Template");
@@ -336,28 +337,28 @@ describe("lorebook API routes", () => {
     expect(res.status).toBe(400);
   });
 
-  test("GET /api/lorebooks shows templates in single dropdown", async () => {
+  test("GET /api/lorebooks shows templates as cards with edit and delete buttons", async () => {
     await createLorebook("default", "Default Lorebook", true);
     await seedTemplates();
     const res = await fetch(`${BASE}/api/lorebooks`);
     expect(res.status).toBe(200);
     const body = await res.text();
-    // Single dropdown with templates
+    expect(body).toContain("adventure-card");
     expect(body).toContain("Key Quest");
     expect(body).toContain("Default Lorebook");
-    // No separate template selector or Use Template button
+    expect(body).toContain("lorebook-edit-btn");
+    expect(body).toContain("lorebook-delete-btn");
     expect(body).not.toContain("template-select");
     expect(body).not.toContain("btn-use-template");
   });
 
-  test("GET /api/lorebooks shows both templates and adventures in section list", async () => {
+  test("GET /api/lorebooks shows both templates and adventures as cards", async () => {
     await createLorebook("default", "Default Lorebook", true);
     await createLorebook("my-adventure", "My Adventure"); // non-template
     await seedTemplates();
     const res = await fetch(`${BASE}/api/lorebooks`);
     const body = await res.text();
     // Templates section
-    expect(body).toContain("lorebook-section-heading");
     expect(body).toContain("Templates");
     expect(body).toContain('data-slug="template-key-quest"');
     expect(body).toContain("Default Lorebook");
@@ -365,6 +366,11 @@ describe("lorebook API routes", () => {
     expect(body).toContain("Your Adventures");
     expect(body).toContain('data-slug="my-adventure"');
     expect(body).toContain("My Adventure");
+    // Card-based layout
+    expect(body).toContain("adventure-card");
+    expect(body).toContain("lorebook-edit-btn");
+    // Delete only on templates
+    expect(body).toContain("lorebook-delete-btn");
   });
 
   // --- Chat API tests ---

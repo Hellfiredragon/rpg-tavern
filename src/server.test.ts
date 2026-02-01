@@ -3,7 +3,7 @@ import { join, resolve } from "path";
 import { rm } from "fs/promises";
 import { startServer } from "./server";
 
-const DATA_DIR = resolve(join(import.meta.dir, "..", "data"));
+const DATA_DIR = resolve(join(import.meta.dir, "..", "data-test"));
 const CHATS_DIR = join(DATA_DIR, "chats");
 const LOREBOOKS_DIR = join(DATA_DIR, "lorebooks");
 
@@ -595,7 +595,7 @@ describe("POST /api/lorebooks/make-template", () => {
 // ---------------------------------------------------------------------------
 
 describe("GET /api/lorebooks — unified model", () => {
-  test("returns both templates and adventures in the selector", async () => {
+  test("returns both templates and adventures as cards", async () => {
     // Create an adventure (non-template) by copying
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "non-tpl-adv", name: "Non-Tpl Adventure" });
     await jsonPost("/api/chats", { lorebook: "non-tpl-adv" });
@@ -603,13 +603,15 @@ describe("GET /api/lorebooks — unified model", () => {
     const res = await api("/api/lorebooks");
     const html = await res.text();
 
-    // Templates should appear under Templates optgroup
+    // Templates section with cards
     expect(html).toContain("Key Quest");
     expect(html).toContain("Default Lorebook");
     expect(html).toContain("Templates");
-    // Adventures should appear under Adventures optgroup
+    expect(html).toContain("adventure-card");
+    expect(html).toContain("lorebook-edit-btn");
+    // Adventures section
     expect(html).toContain("Non-Tpl Adventure");
-    expect(html).toContain("Adventures");
+    expect(html).toContain("Your Adventures");
   });
 
   test("shows + Template button instead of + Lorebook", async () => {
@@ -617,9 +619,33 @@ describe("GET /api/lorebooks — unified model", () => {
     const html = await res.text();
     expect(html).toContain("+ Template");
     expect(html).not.toContain("+ Lorebook");
-    // No separate template dropdown/Use Template button
     expect(html).not.toContain("btn-use-template");
     expect(html).not.toContain("template-select");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/lorebooks/meta — lorebook metadata
+// ---------------------------------------------------------------------------
+
+describe("GET /api/lorebooks/meta", () => {
+  test("returns JSON with slug, name, template for existing lorebook", async () => {
+    const res = await api("/api/lorebooks/meta?slug=template-key-quest");
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.slug).toBe("template-key-quest");
+    expect(data.name).toBe("Key Quest");
+    expect(data.template).toBe(true);
+  });
+
+  test("returns 404 for nonexistent lorebook", async () => {
+    const res = await api("/api/lorebooks/meta?slug=does-not-exist");
+    expect(res.status).toBe(404);
+  });
+
+  test("returns 400 for missing slug", async () => {
+    const res = await api("/api/lorebooks/meta");
+    expect(res.status).toBe(400);
   });
 });
 

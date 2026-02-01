@@ -25,7 +25,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
 };
 
-const DATA_DIR = join(import.meta.dir, "..", "data");
+const DATA_DIR = process.env.DATA_DIR || join(import.meta.dir, "..", "data");
 const SETTINGS_PATH = join(DATA_DIR, "settings.json");
 
 export async function loadSettings(): Promise<Settings> {
