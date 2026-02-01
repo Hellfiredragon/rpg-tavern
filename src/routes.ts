@@ -1,6 +1,6 @@
 import { loadSettings, saveSettings, type Settings } from "./settings";
 import {
-  scanTree, loadEntry, saveEntry, deleteEntry,
+  scanTree, loadEntry, saveEntry, deleteEntry, moveEntry,
   createFolder, deleteFolder, validateEntry, DEFAULT_ENTRY,
   listLorebooks, createLorebook, deleteLorebook,
   copyLorebook, listLocationEntries, loadLorebookMeta,
@@ -522,6 +522,27 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
       200,
       { "HX-Trigger": "refreshTree" },
     );
+  }
+
+  if (url.pathname === "/api/lorebook/entry/move" && req.method === "PUT") {
+    const lb = getLorebookSlug(url);
+    if (await isReadOnlyPreset(lb)) return html(`<div class="feedback error">Cannot modify a preset lorebook</div>`, 403);
+    try {
+      const body = await req.json();
+      const path = typeof body.path === "string" ? body.path.trim() : "";
+      const destination = typeof body.destination === "string" ? body.destination : "";
+      if (!path) return html(`<div class="feedback error">Missing path</div>`, 400);
+      const newPath = await moveEntry(lb, path, destination);
+      const tree = await scanTree(lb);
+      const readonly = await isReadOnlyPreset(lb);
+      return html(renderTree(tree, lb, readonly), 200, {
+        "HX-Trigger": "refreshTree",
+        "X-New-Path": newPath,
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Move failed";
+      return html(`<div class="feedback error">${escapeHtml(msg)}</div>`, 400);
+    }
   }
 
   return new Response("Not Found", { status: 404 });

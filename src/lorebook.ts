@@ -1,5 +1,5 @@
 import { join, dirname, resolve } from "path";
-import { mkdir, readdir, unlink, rm, rmdir, cp } from "fs/promises";
+import { mkdir, readdir, unlink, rm, rmdir, cp, rename } from "fs/promises";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -271,6 +271,58 @@ export async function deleteEntry(lorebook: string, relativePath: string): Promi
       break;
     }
   }
+}
+
+/**
+ * Move an entry from one folder to another within a lorebook.
+ * Returns the new relative path (without .json extension).
+ */
+export async function moveEntry(lorebook: string, oldPath: string, newFolder: string): Promise<string> {
+  await assertNotPreset(lorebook);
+  const root = lorebookRoot(lorebook);
+
+  // Extract filename stem from oldPath (e.g. "characters/sage" → "sage")
+  const parts = oldPath.replace(/^\/+|\/+$/g, "").split("/");
+  const stem = parts[parts.length - 1];
+  const oldFolder = parts.length > 1 ? parts.slice(0, -1).join("/") : "";
+
+  // Compute new relative path
+  const newRelPath = newFolder ? `${newFolder}/${stem}` : stem;
+
+  // Same folder → no-op
+  if (oldFolder === newFolder) return oldPath;
+
+  // Check destination doesn't already exist
+  const newAbs = resolveEntryPath(lorebook, newRelPath, root);
+  if (await Bun.file(newAbs).exists()) {
+    throw new Error(`Entry already exists at ${newRelPath}`);
+  }
+
+  // Ensure destination directory exists
+  await mkdir(dirname(newAbs), { recursive: true });
+
+  // Move the file (atomic rename on same filesystem)
+  const oldAbs = resolveEntryPath(lorebook, oldPath, root);
+  await rename(oldAbs, newAbs);
+
+  // Clean up empty source directories up to the lorebook root
+  let dir = dirname(oldAbs);
+  const rootResolved = resolve(root);
+  while (dir !== rootResolved && dir.startsWith(rootResolved)) {
+    try {
+      const contents = await readdir(dir);
+      if (contents.length === 0) {
+        await rmdir(dir);
+        dir = dirname(dir);
+      } else {
+        break;
+      }
+    } catch {
+      break;
+    }
+  }
+
+  return newRelPath;
 }
 
 /** Create a directory (for organizational folders). */

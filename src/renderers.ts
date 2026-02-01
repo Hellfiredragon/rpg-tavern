@@ -93,17 +93,18 @@ export function settingsFormHtml(s: Settings): string {
 // ---------------------------------------------------------------------------
 
 export function renderTree(nodes: TreeNode[], lorebook: string, readonly = false): string {
-  if (nodes.length === 0) {
-    return (readonly ? "" : renderNewButton("", lorebook)) + `<p class="tree-empty">No entries yet.</p>`;
-  }
-  return (readonly ? "" : renderNewButton("", lorebook)) + renderTreeLevel(nodes, lorebook, readonly);
+  const roAttr = readonly ? ` data-readonly="true"` : "";
+  const inner = nodes.length === 0
+    ? (readonly ? "" : renderNewButton("", lorebook)) + `<p class="tree-empty">No entries yet.</p>`
+    : (readonly ? "" : renderNewButton("", lorebook)) + renderTreeLevel(nodes, lorebook, readonly);
+  return `<div class="tree-root" data-lorebook="${escapeHtml(lorebook)}"${roAttr}>${inner}</div>`;
 }
 
 function renderTreeLevel(nodes: TreeNode[], lorebook: string, readonly = false): string {
   let out = '<ul class="tree-list">';
   for (const node of nodes) {
     if (node.isEntry) {
-      out += `<li class="tree-entry">
+      out += `<li class="tree-entry" data-path="${escapeHtml(node.path)}">
         <a href="#"
            hx-get="/api/lorebook/entry?path=${encodeURIComponent(node.path)}&lorebook=${encodeURIComponent(lorebook)}"
            hx-target="#lorebook-editor"
@@ -113,7 +114,7 @@ function renderTreeLevel(nodes: TreeNode[], lorebook: string, readonly = false):
     if (node.children.length > 0) {
       const folderName = node.isEntry ? node.path.split("/").pop()! : node.name;
       const folderPrefix = node.path + "/";
-      out += `<li class="tree-folder">
+      out += `<li class="tree-folder" data-path="${escapeHtml(node.path)}">
         <details open>
           <summary>${escapeHtml(folderName)}/</summary>
           ${readonly ? "" : renderNewButton(folderPrefix, lorebook)}
@@ -123,7 +124,7 @@ function renderTreeLevel(nodes: TreeNode[], lorebook: string, readonly = false):
     } else if (!node.isEntry) {
       // Empty folder
       const folderPrefix = node.path + "/";
-      out += `<li class="tree-folder">
+      out += `<li class="tree-folder" data-path="${escapeHtml(node.path)}">
         <details>
           <summary>${escapeHtml(node.name)}/</summary>
           ${readonly ? "" : renderNewButton(folderPrefix, lorebook)}

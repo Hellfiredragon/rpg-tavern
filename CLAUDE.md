@@ -26,6 +26,7 @@ src/
   public/          # Static assets served by the backend
     index.html     # HTML structure + dialogs
     app.js         # Client-side JavaScript (tabs, routing, event handlers)
+    drag-tree.js   # Lorebook tree drag-and-drop (hold-to-drag entry moving)
     styles.css     # Base layout + utility CSS
     components.css # Feature component CSS (adventure, lorebook, chat)
     lorebook.html  # Standalone lorebook page
@@ -197,6 +198,8 @@ Hash-based client-side routing. The browser back/forward buttons work, and URLs 
     - `DELETE /api/lorebook/entry?path=...&lorebook=...` — delete entry (403 for presets)
     - `POST /api/lorebook/folder?lorebook=...` — create folder (403 for presets)
     - `DELETE /api/lorebook/folder?path=...&lorebook=...` — delete folder (403 for presets)
+    - `PUT /api/lorebook/entry/move?lorebook=...` — JSON `{ path, destination }` → move entry to different folder (403 for presets, 400 for collisions). Returns refreshed tree HTML + `HX-Trigger: refreshTree` + `X-New-Path` header
+- **Drag & Drop:** Hold-to-drag interaction for moving entries between folders in the tree browser. Hold mousedown 1s (circular progress ring), then drag to a folder or root. Implemented in `drag-tree.js` as a self-contained IIFE with document-level event delegation. Read-only preset lorebooks are excluded.
 - **Matching:** `findMatchingEntries(lorebook, text)` — returns enabled entries matching via keywords or regex, sorted by priority desc
 - **Locations:** `listLocationEntries(lorebook)` — returns entries whose path starts with `locations/`, sorted by name. Used by the adventure system for the location dropdown.
 - **Context-Aware Activation:** `findActiveEntries(lorebook, context)` — returns entries that should be active given the current context. Uses a fixed-point algorithm:

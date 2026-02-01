@@ -8,6 +8,7 @@ import {
   saveEntry,
   loadEntry,
   deleteEntry,
+  moveEntry,
   createFolder,
   deleteFolder,
   scanTree,
@@ -404,5 +405,89 @@ describe("scanTree", () => {
     const names = tree.map((n) => n.name);
     expect(names).not.toContain("_lorebook");
     expect(names).toContain("Tavern");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// moveEntry
+// ---------------------------------------------------------------------------
+
+describe("moveEntry", () => {
+  beforeEach(async () => { await cleanLorebooks(); await createLorebook("default", "Default"); });
+  afterEach(cleanLorebooks);
+
+  const sampleEntry: LorebookEntry = {
+    name: "Test Entry",
+    content: "Some content.",
+    keywords: ["test"],
+    regex: "",
+    priority: 0,
+    enabled: true,
+    contexts: [],
+  };
+
+  test("moves entry from one folder to another", async () => {
+    await saveEntry("default", "characters/sage", sampleEntry);
+    const newPath = await moveEntry("default", "characters/sage", "items");
+    expect(newPath).toBe("items/sage");
+
+    // Old location should be gone
+    expect(await loadEntry("default", "characters/sage")).toBeNull();
+    // New location should have the entry
+    const loaded = await loadEntry("default", "items/sage");
+    expect(loaded).not.toBeNull();
+    expect(loaded!.name).toBe("Test Entry");
+  });
+
+  test("moves entry to root", async () => {
+    await saveEntry("default", "characters/sage", sampleEntry);
+    const newPath = await moveEntry("default", "characters/sage", "");
+    expect(newPath).toBe("sage");
+
+    expect(await loadEntry("default", "characters/sage")).toBeNull();
+    expect(await loadEntry("default", "sage")).not.toBeNull();
+  });
+
+  test("moves entry from root to folder", async () => {
+    await saveEntry("default", "sage", sampleEntry);
+    const newPath = await moveEntry("default", "sage", "characters");
+    expect(newPath).toBe("characters/sage");
+
+    expect(await loadEntry("default", "sage")).toBeNull();
+    expect(await loadEntry("default", "characters/sage")).not.toBeNull();
+  });
+
+  test("returns same path for same-folder move (no-op)", async () => {
+    await saveEntry("default", "characters/sage", sampleEntry);
+    const newPath = await moveEntry("default", "characters/sage", "characters");
+    expect(newPath).toBe("characters/sage");
+
+    // Entry should still be at original location
+    expect(await loadEntry("default", "characters/sage")).not.toBeNull();
+  });
+
+  test("throws when destination already exists", async () => {
+    await saveEntry("default", "characters/sage", sampleEntry);
+    await saveEntry("default", "items/sage", { ...sampleEntry, name: "Other" });
+
+    await expect(moveEntry("default", "characters/sage", "items"))
+      .rejects.toThrow("Entry already exists at items/sage");
+  });
+
+  test("cleans up empty source directory", async () => {
+    await saveEntry("default", "empty-folder/sage", sampleEntry);
+    await moveEntry("default", "empty-folder/sage", "characters");
+
+    const contents = await readdir(join(LOREBOOKS_DIR, "default")).catch(() => []);
+    expect(contents).not.toContain("empty-folder");
+  });
+
+  test("preserves non-empty source directory", async () => {
+    await saveEntry("default", "characters/sage", sampleEntry);
+    await saveEntry("default", "characters/knight", { ...sampleEntry, name: "Knight" });
+    await moveEntry("default", "characters/sage", "items");
+
+    // characters/ should still exist with knight
+    expect(await loadEntry("default", "characters/knight")).not.toBeNull();
   });
 });
