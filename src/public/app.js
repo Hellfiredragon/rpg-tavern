@@ -36,6 +36,16 @@
   var adventurePlay = document.getElementById('adventure-play');
   var adventureNameEl = document.getElementById('adventure-name');
   var locationSelect = document.getElementById('adventure-location-select');
+  var activeEntriesContent = document.getElementById('active-entries-content');
+
+  function refreshActiveEntries() {
+    if (!currentChatId) return;
+    fetch('/api/adventures/active-entries?chatId=' + encodeURIComponent(currentChatId))
+      .then(function(res) { return res.text(); })
+      .then(function(html) {
+        activeEntriesContent.innerHTML = html;
+      });
+  }
 
   function showAdventurePicker(skipPush) {
     adventurePicker.style.display = '';
@@ -44,6 +54,7 @@
     currentChatId = '';
     currentLocation = '';
     adventureName = '';
+    activeEntriesContent.innerHTML = '<p class="active-entries-empty">Start chatting to see active lore.</p>';
     htmx.trigger(document.body, 'refreshAdventures');
     if (!skipPush) history.pushState(null, '', '#adventure');
   }
@@ -72,6 +83,9 @@
     }).then(function() {
       chatMessages.scrollTop = chatMessages.scrollHeight;
     });
+
+    // Load active entries panel
+    refreshActiveEntries();
 
     if (!skipPush) history.pushState(null, '', '#adventure/' + encodeURIComponent(lorebook));
   }
@@ -104,6 +118,7 @@
       tmp.innerHTML = html;
       while (tmp.firstChild) chatMessages.appendChild(tmp.firstChild);
       chatMessages.scrollTop = chatMessages.scrollHeight;
+      refreshActiveEntries();
     });
   });
 
@@ -152,7 +167,13 @@
       tmp.innerHTML = html;
       while (tmp.firstChild) chatMessages.appendChild(tmp.firstChild);
       chatMessages.scrollTop = chatMessages.scrollHeight;
+      refreshActiveEntries();
     });
+  });
+
+  // Listen for refreshActiveEntries event from HX-Trigger headers
+  document.body.addEventListener('refreshActiveEntries', function() {
+    refreshActiveEntries();
   });
 
   // -----------------------------------------------------------------------
@@ -251,6 +272,56 @@
       .then(function() {
         htmx.trigger(document.body, 'refreshAdventures');
       });
+  });
+
+  // -----------------------------------------------------------------------
+  // Trait handlers (active entries panel)
+  // -----------------------------------------------------------------------
+  document.addEventListener('click', function(e) {
+    var removeBtn = e.target.closest('.trait-remove');
+    if (!removeBtn) return;
+    var trait = removeBtn.getAttribute('data-trait');
+    var chatId = removeBtn.getAttribute('data-chat-id');
+    // Collect current traits from the DOM, minus the removed one
+    var tags = document.querySelectorAll('.trait-tag');
+    var traits = [];
+    tags.forEach(function(tag) {
+      var btn = tag.querySelector('.trait-remove');
+      if (btn) {
+        var t = btn.getAttribute('data-trait');
+        if (t !== trait) traits.push(t);
+      }
+    });
+    fetch('/api/adventures/traits', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chatId: chatId, traits: traits })
+    }).then(function(res) { return res.text(); })
+      .then(function(html) { activeEntriesContent.innerHTML = html; });
+  });
+
+  document.addEventListener('submit', function(e) {
+    var form = e.target.closest('.trait-add-form');
+    if (!form) return;
+    e.preventDefault();
+    var input = form.querySelector('.trait-add-input');
+    var newTrait = input.value.trim();
+    if (!newTrait) return;
+    var chatId = form.getAttribute('data-chat-id');
+    // Collect current traits from the DOM
+    var tags = document.querySelectorAll('.trait-tag');
+    var traits = [];
+    tags.forEach(function(tag) {
+      var btn = tag.querySelector('.trait-remove');
+      if (btn) traits.push(btn.getAttribute('data-trait'));
+    });
+    traits.push(newTrait);
+    fetch('/api/adventures/traits', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chatId: chatId, traits: traits })
+    }).then(function(res) { return res.text(); })
+      .then(function(html) { activeEntriesContent.innerHTML = html; });
   });
 
   // -----------------------------------------------------------------------

@@ -13,6 +13,7 @@ export type LorebookEntry = {
   regex: string; // empty string = no regex trigger
   priority: number; // higher = injected earlier
   enabled: boolean;
+  contexts: string[]; // entry paths or "trait:" refs — all must be active for entry to activate
 };
 
 /** Metadata stored in _lorebook.json for each lorebook */
@@ -47,6 +48,7 @@ export const DEFAULT_ENTRY: LorebookEntry = {
   regex: "",
   priority: 0,
   enabled: true,
+  contexts: [],
 };
 
 // ---------------------------------------------------------------------------
@@ -231,7 +233,9 @@ export async function loadEntry(lorebook: string, relativePath: string): Promise
   const f = Bun.file(absPath);
   if (!(await f.exists())) return null;
   try {
-    return (await f.json()) as LorebookEntry;
+    const data = (await f.json()) as LorebookEntry;
+    if (!Array.isArray(data.contexts)) data.contexts = [];
+    return data;
   } catch {
     return null;
   }
@@ -302,6 +306,7 @@ async function collectEntries(absDir: string, relativePrefix: string): Promise<M
       const relPath = relativePrefix ? relativePrefix + "/" + stem : stem;
       try {
         const data = (await Bun.file(join(absDir, ent.name)).json()) as LorebookEntry;
+        if (!Array.isArray(data.contexts)) data.contexts = [];
         results.push({ ...data, path: relPath });
       } catch {
         // skip invalid files
@@ -374,6 +379,109 @@ export async function findMatchingEntries(lorebook: string, text: string): Promi
   // Sort by priority descending
   matched.sort((a, b) => b.priority - a.priority);
   return matched;
+}
+
+// ---------------------------------------------------------------------------
+// Context-aware activation engine
+// ---------------------------------------------------------------------------
+
+export type ActivationContext = {
+  text: string;           // recent chat text to match keywords against
+  currentLocation: string; // entry path, e.g. "locations/village-square"
+  traits: string[];       // player traits, e.g. ["warrior", "stealthy"]
+};
+
+export type ActiveEntry = {
+  path: string;
+  name: string;
+  content: string;
+  category: string; // first path segment or "other"
+};
+
+/**
+ * Find all lorebook entries that should be active given the current context.
+ * Uses a fixed-point algorithm:
+ * 1. Seed: current location entry is always active
+ * 2. Iterate: for each inactive entry, check if all context gates are satisfied
+ *    (paths in active set, trait: refs in traits list). Empty contexts = always eligible.
+ * 3. If context-eligible, check keyword/regex match against text
+ * 4. If matched, add to active set and repeat until stable
+ */
+export async function findActiveEntries(
+  lorebook: string, context: ActivationContext
+): Promise<ActiveEntry[]> {
+  const allEntries = await loadAllEntries(lorebook);
+  const activeSet = new Set<string>(); // paths of active entries
+  const entryMap = new Map<string, MatchedEntry>();
+  const textLower = context.text.toLowerCase();
+
+  for (const entry of allEntries) {
+    if (!entry.enabled) continue;
+    entryMap.set(entry.path, entry);
+  }
+
+  // Seed: current location is always active
+  if (context.currentLocation && entryMap.has(context.currentLocation)) {
+    activeSet.add(context.currentLocation);
+  }
+
+  // Fixed-point iteration
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const [path, entry] of entryMap) {
+      if (activeSet.has(path)) continue;
+
+      // Check context gates
+      const contextsOk = entry.contexts.length === 0 || entry.contexts.every((ctx) => {
+        if (ctx.startsWith("trait:")) {
+          return context.traits.includes(ctx.slice(6));
+        }
+        return activeSet.has(ctx);
+      });
+      if (!contextsOk) continue;
+
+      // Check keyword/regex match
+      let matched = false;
+      if (entry.keywords.some((kw) => textLower.includes(kw.toLowerCase()))) {
+        matched = true;
+      }
+      if (!matched && entry.regex !== "") {
+        try {
+          if (new RegExp(entry.regex, "i").test(context.text)) {
+            matched = true;
+          }
+        } catch {
+          // invalid regex — skip
+        }
+      }
+
+      // Location entries matching the current location are already seeded above;
+      // for other entries we require keyword match unless they ARE the location
+      if (path === context.currentLocation) {
+        matched = true;
+      }
+
+      if (matched) {
+        activeSet.add(path);
+        changed = true;
+      }
+    }
+  }
+
+  // Build result
+  const result: ActiveEntry[] = [];
+  for (const path of activeSet) {
+    const entry = entryMap.get(path);
+    if (!entry) continue;
+    const slashIdx = path.indexOf("/");
+    const category = slashIdx > 0 ? path.slice(0, slashIdx) : "other";
+    result.push({ path, name: entry.name, content: entry.content, category });
+  }
+
+  // Sort by category then name
+  result.sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -526,5 +634,22 @@ export function validateEntry(body: unknown): LorebookEntry {
   // enabled — json-enc sends "on" for checked checkboxes, omits unchecked
   const enabled = obj.enabled === true || obj.enabled === "on";
 
-  return { name, content, keywords, regex, priority, enabled };
+  // contexts — accept comma-separated string or array
+  let contexts: string[];
+  const rawContexts = obj.contexts;
+  if (typeof rawContexts === "string") {
+    contexts = rawContexts
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  } else if (Array.isArray(rawContexts)) {
+    contexts = rawContexts
+      .filter((c) => typeof c === "string")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  } else {
+    contexts = [];
+  }
+
+  return { name, content, keywords, regex, priority, enabled, contexts };
 }

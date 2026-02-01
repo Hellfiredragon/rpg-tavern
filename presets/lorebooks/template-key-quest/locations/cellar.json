@@ -4,5 +4,6 @@
   "keywords": ["cellar", "inn cellar", "locked door", "iron door"],
   "regex": "",
   "priority": 10,
-  "enabled": true
+  "enabled": true,
+  "contexts": []
 }

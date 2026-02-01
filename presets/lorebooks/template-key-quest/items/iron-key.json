@@ -4,5 +4,6 @@
   "keywords": ["iron key", "key", "runed key"],
   "regex": "",
   "priority": 15,
-  "enabled": true
+  "enabled": true,
+  "contexts": ["characters/blacksmith"]
 }

@@ -1,7 +1,7 @@
 import { loadSettings, DEFAULT_SETTINGS, type Settings } from "./settings";
 import {
   loadEntry,
-  type LorebookEntry, type LorebookMeta, type TreeNode,
+  type LorebookEntry, type LorebookMeta, type TreeNode, type ActiveEntry,
 } from "./lorebook";
 import type { ChatMeta, ChatMessage } from "./chat";
 
@@ -208,6 +208,10 @@ export function entryFormHtml(path: string, entry: LorebookEntry, isNew: boolean
   <label for="lb-regex">Regex pattern <span class="hint">(leave empty for none)</span></label>
   <input id="lb-regex" name="regex" type="text" value="${escapeHtml(entry.regex)}"${dis} />
 
+  <label for="lb-contexts">Contexts <span class="hint">(comma-separated entry paths or trait: refs)</span></label>
+  <input id="lb-contexts" name="contexts" type="text"
+         value="${escapeHtml(entry.contexts.join(", "))}"${dis} />
+
   <label for="lb-priority">Priority: <strong>${entry.priority}</strong></label>
   <input id="lb-priority" name="priority" type="number" value="${entry.priority}"${dis} />
 
@@ -327,6 +331,68 @@ export async function renderAdventurePicker(lorebooks: { slug: string; meta: Lor
                 data-name="${escapeHtml(lb.meta.name)}">Start</button>
       </div>`;
     }
+  }
+
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Active entries panel renderer
+// ---------------------------------------------------------------------------
+
+export function renderActiveEntries(entries: ActiveEntry[], traits: string[], chatId: string): string {
+  let out = "";
+
+  // Traits section
+  out += `<div class="active-entries-traits">`;
+  out += `<h4>Traits</h4>`;
+  out += `<div class="trait-tags">`;
+  for (const trait of traits) {
+    out += `<span class="trait-tag">${escapeHtml(trait)}<button class="trait-remove" data-trait="${escapeHtml(trait)}" data-chat-id="${escapeHtml(chatId)}">&times;</button></span>`;
+  }
+  out += `</div>`;
+  out += `<form class="trait-add-form" data-chat-id="${escapeHtml(chatId)}">`;
+  out += `<input type="text" class="trait-add-input" placeholder="Add trait..." />`;
+  out += `<button type="submit" class="btn-sm">+</button>`;
+  out += `</form></div>`;
+
+  // Entries grouped by category
+  if (entries.length === 0) {
+    out += `<p class="active-entries-empty">No active entries.</p>`;
+    return out;
+  }
+
+  // Group by category
+  const groups = new Map<string, ActiveEntry[]>();
+  for (const e of entries) {
+    const list = groups.get(e.category) || [];
+    list.push(e);
+    groups.set(e.category, list);
+  }
+
+  // Sort groups: locations, characters, items, then alphabetical
+  const order = ["locations", "characters", "items"];
+  const sortedKeys = [...groups.keys()].sort((a, b) => {
+    const ai = order.indexOf(a);
+    const bi = order.indexOf(b);
+    if (ai >= 0 && bi >= 0) return ai - bi;
+    if (ai >= 0) return -1;
+    if (bi >= 0) return 1;
+    return a.localeCompare(b);
+  });
+
+  for (const key of sortedKeys) {
+    const group = groups.get(key)!;
+    out += `<div class="active-entries-group">`;
+    out += `<h4>${escapeHtml(key)}</h4>`;
+    for (const e of group) {
+      const preview = e.content.length > 80 ? e.content.slice(0, 80) + "..." : e.content;
+      out += `<div class="active-entry-item">`;
+      out += `<span class="active-entry-name">${escapeHtml(e.name)}</span>`;
+      out += `<span class="active-entry-preview">${escapeHtml(preview)}</span>`;
+      out += `</div>`;
+    }
+    out += `</div>`;
   }
 
   return out;

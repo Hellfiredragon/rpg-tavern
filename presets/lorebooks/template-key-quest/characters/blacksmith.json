@@ -4,5 +4,6 @@
   "keywords": ["blacksmith", "brondar", "forge", "dwarf"],
   "regex": "",
   "priority": 10,
-  "enabled": true
+  "enabled": true,
+  "contexts": ["locations/village-square"]
 }

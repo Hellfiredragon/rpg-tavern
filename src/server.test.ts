@@ -542,6 +542,105 @@ describe("GET /api/adventures/resume", () => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /api/adventures/active-entries — active lorebook entries
+// ---------------------------------------------------------------------------
+
+describe("GET /api/adventures/active-entries", () => {
+  beforeEach(cleanChats);
+
+  test("returns active entries HTML for a conversation", async () => {
+    await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "active-test", name: "Active Test" });
+    const chatRes = await jsonPost("/api/chats", { lorebook: "active-test" });
+    const chatId = chatRes.headers.get("X-Chat-Id")!;
+
+    // Change location to village-square so NPCs can activate
+    await jsonPut("/api/adventures/location", { chatId, location: "locations/village-square" });
+
+    // Send a message mentioning the sage
+    await jsonPost("/api/chat", { message: "I talk to the sage", chatId, lorebook: "active-test" });
+
+    const res = await api("/api/adventures/active-entries?chatId=" + chatId);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    // Village Square should be active (current location)
+    expect(html).toContain("Village Square");
+    // The sage should be active (context: village-square is active + keyword match)
+    expect(html).toContain("Old Sage");
+  });
+
+  test("returns 400 for missing chatId", async () => {
+    const res = await api("/api/adventures/active-entries");
+    expect(res.status).toBe(400);
+  });
+
+  test("returns 404 for nonexistent conversation", async () => {
+    const res = await api("/api/adventures/active-entries?chatId=9999999999999-aaa");
+    expect(res.status).toBe(404);
+  });
+
+  test("includes traits section in HTML", async () => {
+    await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "trait-html-test", name: "Trait HTML" });
+    const chatRes = await jsonPost("/api/chats", { lorebook: "trait-html-test" });
+    const chatId = chatRes.headers.get("X-Chat-Id")!;
+
+    const res = await api("/api/adventures/active-entries?chatId=" + chatId);
+    const html = await res.text();
+    expect(html).toContain("trait-add-form");
+    expect(html).toContain("Traits");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PUT /api/adventures/traits — update player traits
+// ---------------------------------------------------------------------------
+
+describe("PUT /api/adventures/traits", () => {
+  beforeEach(cleanChats);
+
+  test("updates traits and returns active entries HTML", async () => {
+    await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "traits-test", name: "Traits Test" });
+    const chatRes = await jsonPost("/api/chats", { lorebook: "traits-test" });
+    const chatId = chatRes.headers.get("X-Chat-Id")!;
+
+    const res = await jsonPut("/api/adventures/traits", { chatId, traits: ["warrior", "stealthy"] });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("warrior");
+    expect(html).toContain("stealthy");
+    expect(html).toContain("trait-tag");
+  });
+
+  test("returns 400 for missing chatId", async () => {
+    const res = await jsonPut("/api/adventures/traits", { traits: ["warrior"] });
+    expect(res.status).toBe(400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// HX-Trigger: refreshActiveEntries
+// ---------------------------------------------------------------------------
+
+describe("refreshActiveEntries trigger", () => {
+  beforeEach(cleanChats);
+
+  test("POST /api/chat includes refreshActiveEntries in HX-Trigger", async () => {
+    const res = await jsonPost("/api/chat", { message: "hello", lorebook: "test" });
+    const trigger = res.headers.get("HX-Trigger");
+    expect(trigger).toContain("refreshActiveEntries");
+  });
+
+  test("PUT /api/adventures/location includes refreshActiveEntries in HX-Trigger", async () => {
+    await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "trigger-test", name: "Trigger Test" });
+    const chatRes = await jsonPost("/api/chats", { lorebook: "trigger-test" });
+    const chatId = chatRes.headers.get("X-Chat-Id")!;
+
+    const res = await jsonPut("/api/adventures/location", { chatId, location: "locations/village-square" });
+    const trigger = res.headers.get("HX-Trigger");
+    expect(trigger).toContain("refreshActiveEntries");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Full adventure flow
 // ---------------------------------------------------------------------------
 

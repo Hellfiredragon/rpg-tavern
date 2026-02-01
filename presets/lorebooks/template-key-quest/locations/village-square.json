@@ -4,5 +4,6 @@
   "keywords": ["village square", "square", "village", "fountain"],
   "regex": "",
   "priority": 5,
-  "enabled": true
+  "enabled": true,
+  "contexts": []
 }

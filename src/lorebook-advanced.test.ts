@@ -10,6 +10,7 @@ import {
   loadAllEntries,
   scanTree,
   findMatchingEntries,
+  findActiveEntries,
   listLocationEntries,
   createLorebook,
   listLorebooks,
@@ -452,5 +453,150 @@ describe("listLocationEntries", () => {
     const paths = locations.map((e) => e.path);
     expect(paths).toContain("locations/town/market");
     expect(paths).toContain("locations/town/inn");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// findActiveEntries — context-aware activation engine
+// ---------------------------------------------------------------------------
+
+describe("findActiveEntries", () => {
+  beforeEach(async () => { await cleanLorebooks(); await createLorebook("default", "Default"); });
+  afterEach(cleanLorebooks);
+
+  async function seedContextEntries() {
+    // Location: village-square (no contexts — always eligible)
+    await saveEntry("default", "locations/village-square", {
+      ...DEFAULT_ENTRY, name: "Village Square", keywords: ["village", "square"],
+      priority: 5, enabled: true, contexts: [],
+    });
+    // Character: sage (requires village-square to be active)
+    await saveEntry("default", "characters/sage", {
+      ...DEFAULT_ENTRY, name: "The Sage", keywords: ["sage", "wise man"],
+      priority: 10, enabled: true, contexts: ["locations/village-square"],
+    });
+    // Item: iron-key (requires sage to be active — chained)
+    await saveEntry("default", "items/iron-key", {
+      ...DEFAULT_ENTRY, name: "Iron Key", keywords: ["key", "iron key"],
+      priority: 15, enabled: true, contexts: ["characters/sage"],
+    });
+    // Location: treasure-room (requires iron-key — chained from sage)
+    await saveEntry("default", "locations/treasure-room", {
+      ...DEFAULT_ENTRY, name: "Treasure Room", keywords: ["treasure"],
+      priority: 20, enabled: true, contexts: ["items/iron-key"],
+    });
+    // Character: guard (requires trait:warrior)
+    await saveEntry("default", "characters/guard", {
+      ...DEFAULT_ENTRY, name: "The Guard", keywords: ["guard"],
+      priority: 10, enabled: true, contexts: ["trait:warrior"],
+    });
+  }
+
+  test("current location entry is always active", async () => {
+    await seedContextEntries();
+    const result = await findActiveEntries("default", {
+      text: "", currentLocation: "locations/village-square", traits: [],
+    });
+    const paths = result.map((e) => e.path);
+    expect(paths).toContain("locations/village-square");
+  });
+
+  test("entry with empty contexts activates on keyword match", async () => {
+    await seedContextEntries();
+    const result = await findActiveEntries("default", {
+      text: "I see the village square", currentLocation: "", traits: [],
+    });
+    const paths = result.map((e) => e.path);
+    expect(paths).toContain("locations/village-square");
+  });
+
+  test("entry with unsatisfied context does NOT activate even with keyword match", async () => {
+    await seedContextEntries();
+    // sage requires village-square to be active; without it, sage shouldn't activate
+    const result = await findActiveEntries("default", {
+      text: "I talk to the sage", currentLocation: "", traits: [],
+    });
+    const paths = result.map((e) => e.path);
+    expect(paths).not.toContain("characters/sage");
+  });
+
+  test("chained activation (A activates B which activates C)", async () => {
+    await seedContextEntries();
+    // village-square is current location → sage matches "sage" → iron-key matches "key" → treasure matches "treasure"
+    const result = await findActiveEntries("default", {
+      text: "I ask the sage about the key and the treasure",
+      currentLocation: "locations/village-square",
+      traits: [],
+    });
+    const paths = result.map((e) => e.path);
+    expect(paths).toContain("locations/village-square");
+    expect(paths).toContain("characters/sage");
+    expect(paths).toContain("items/iron-key");
+    expect(paths).toContain("locations/treasure-room");
+  });
+
+  test("trait-based context activation", async () => {
+    await seedContextEntries();
+    // guard requires trait:warrior
+    const result = await findActiveEntries("default", {
+      text: "I see the guard", currentLocation: "", traits: ["warrior"],
+    });
+    const paths = result.map((e) => e.path);
+    expect(paths).toContain("characters/guard");
+  });
+
+  test("trait-based context not satisfied without trait", async () => {
+    await seedContextEntries();
+    const result = await findActiveEntries("default", {
+      text: "I see the guard", currentLocation: "", traits: [],
+    });
+    const paths = result.map((e) => e.path);
+    expect(paths).not.toContain("characters/guard");
+  });
+
+  test("fixed-point convergence — entries only activate when chain is complete", async () => {
+    await seedContextEntries();
+    // Without village-square active, the chain sage→key→treasure can't fire
+    const result = await findActiveEntries("default", {
+      text: "sage key treasure",
+      currentLocation: "locations/treasure-room", // treasure-room is current but won't seed the chain
+      traits: [],
+    });
+    const paths = result.map((e) => e.path);
+    // treasure-room is always active as current location
+    expect(paths).toContain("locations/treasure-room");
+    // But sage should NOT be active — its context (village-square) is not satisfied
+    expect(paths).not.toContain("characters/sage");
+    // And iron-key should NOT be active — its context (sage) is not satisfied
+    expect(paths).not.toContain("items/iron-key");
+  });
+
+  test("disabled entries are not activated", async () => {
+    await saveEntry("default", "characters/ghost", {
+      ...DEFAULT_ENTRY, name: "Ghost", keywords: ["ghost"],
+      priority: 10, enabled: false, contexts: [],
+    });
+    const result = await findActiveEntries("default", {
+      text: "I see a ghost", currentLocation: "", traits: [],
+    });
+    const paths = result.map((e) => e.path);
+    expect(paths).not.toContain("characters/ghost");
+  });
+
+  test("returns entries with correct category", async () => {
+    await seedContextEntries();
+    const result = await findActiveEntries("default", {
+      text: "village", currentLocation: "", traits: [],
+    });
+    const square = result.find((e) => e.path === "locations/village-square");
+    expect(square).toBeDefined();
+    expect(square!.category).toBe("locations");
+  });
+
+  test("returns empty array for empty lorebook", async () => {
+    const result = await findActiveEntries("default", {
+      text: "anything", currentLocation: "", traits: [],
+    });
+    expect(result).toEqual([]);
   });
 });

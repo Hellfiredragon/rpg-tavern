@@ -4,5 +4,6 @@
   "keywords": ["old sage", "sage", "wise man", "old man"],
   "regex": "",
   "priority": 10,
-  "enabled": true
+  "enabled": true,
+  "contexts": ["locations/village-square"]
 }

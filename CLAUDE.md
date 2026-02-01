@@ -50,7 +50,7 @@ The Chat tab has been redesigned into an **Adventure** tab. Users pick an advent
 ### Chat module (`src/chat.ts`)
 
 - **Types:**
-  - `ChatMeta` — `{ id, title, createdAt, updatedAt, lorebook, currentLocation }`
+  - `ChatMeta` — `{ id, title, createdAt, updatedAt, lorebook, currentLocation, traits }`
   - `ChatMessage` — `{ role: "user"|"assistant"|"system", content, timestamp }`
   - System messages are narration (e.g. location transitions), rendered centered/italic
 - **Storage:** `data/chats/<id>.jsonl` — one file per conversation in JSONL format
@@ -58,16 +58,17 @@ The Chat tab has been redesigned into an **Adventure** tab. Users pick an advent
   - Lines 2+: `ChatMessage`
   - ID format: `<timestamp>-<3-char-hex>` (e.g. `1738262400000-a3f`)
   - Title: auto-set from first user message, truncated to 50 chars
-  - Old JSONL files missing `lorebook`/`currentLocation` default to `""` on load
-- **Functions:** `generateChatId()`, `createConversation(opts?)`, `listConversations(lorebook?)`, `loadConversation()`, `appendMessage()`, `deleteConversation()`, `changeLocation()`
-  - `createConversation` accepts `{ id?, lorebook?, currentLocation? }`
+  - Old JSONL files missing `lorebook`/`currentLocation`/`traits` default to `""`/`""`/`[]` on load
+- **Functions:** `generateChatId()`, `createConversation(opts?)`, `listConversations(lorebook?)`, `loadConversation()`, `appendMessage()`, `deleteConversation()`, `changeLocation()`, `updateTraits()`
+  - `createConversation` accepts `{ id?, lorebook?, currentLocation?, traits? }`
   - `listConversations` accepts optional lorebook filter
   - `changeLocation(id, locationPath, narration)` — updates meta.currentLocation + appends system message atomically
+  - `updateTraits(id, traits)` — rewrites meta line with updated traits array
 
 ### Adventure UI
 
 - **Picker state** (`#adventure-picker`): Shows adventure cards with Continue/Save as Template/Delete buttons + template cards with Start button
-- **Play state** (`#adventure-play`): Location bar (back button, adventure name, location dropdown) + chat messages + input
+- **Play state** (`#adventure-play`): Location bar (back button, adventure name, location dropdown) + chat messages + input + active entries panel (right sidebar)
 - **Template start flow:** Dialog to name the copy → `POST /api/lorebooks/copy` → `POST /api/chats` → enter play view
 - **Save as Template flow:** Dialog to name the template → `POST /api/lorebooks/make-template` → refreshes lorebook selector
 - **Location change:** Dropdown change → `PUT /api/adventures/location` → system narration message appended to chat
@@ -77,7 +78,9 @@ The Chat tab has been redesigned into an **Adventure** tab. Users pick an advent
 - `GET /api/adventures` — returns adventure picker HTML (user lorebooks + templates)
 - `GET /api/adventures/resume?lorebook=` — returns JSON `{ lorebook, chatId, name, location }` for the latest conversation of a lorebook (404 if none). Used by the router to restore adventure play from a URL.
 - `GET /api/adventures/locations?lorebook=` — returns `<option>` elements for the location dropdown
-- `PUT /api/adventures/location` — JSON `{ chatId, location }` → loads location entry, appends narration, returns narration HTML + `X-Location` header
+- `PUT /api/adventures/location` — JSON `{ chatId, location }` → loads location entry, appends narration, returns narration HTML + `X-Location` header + `HX-Trigger: refreshActiveEntries`
+- `GET /api/adventures/active-entries?chatId=` — returns HTML panel of currently active lorebook entries based on context (location, chat text, traits)
+- `PUT /api/adventures/traits` — JSON `{ chatId, traits }` → updates player traits and returns updated active entries HTML
 - `GET /api/chats?lorebook=` — returns chat list HTML, optional lorebook filter
 - `POST /api/chats` — JSON `{ lorebook?, location? }` → create conversation bound to lorebook → `X-Chat-Id` header
 - `GET /api/chats/messages?id=` — load conversation messages as HTML (supports system messages)
@@ -196,7 +199,26 @@ Hash-based client-side routing. The browser back/forward buttons work, and URLs 
     - `DELETE /api/lorebook/folder?path=...&lorebook=...` — delete folder (403 for presets)
 - **Matching:** `findMatchingEntries(lorebook, text)` — returns enabled entries matching via keywords or regex, sorted by priority desc
 - **Locations:** `listLocationEntries(lorebook)` — returns entries whose path starts with `locations/`, sorted by name. Used by the adventure system for the location dropdown.
-- **Integration:** Called by adventure system for location data; future chat system will inject lore context into LLM prompts
+- **Context-Aware Activation:** `findActiveEntries(lorebook, context)` — returns entries that should be active given the current context. Uses a fixed-point algorithm:
+  - **`LorebookEntry.contexts`** — `string[]` field: entry paths (e.g. `locations/village-square`) or trait refs (e.g. `trait:warrior`). All must be satisfied for the entry to activate (AND logic). Empty = always context-eligible.
+  - **`ActivationContext`** — `{ text, currentLocation, traits }` — recent chat text, current location path, and player traits
+  - **Algorithm:** (1) Seed active set with current location entry. (2) For each inactive entry, check if all context gates are satisfied (paths in active set, traits in context). (3) If context-eligible, check keyword/regex match against text. (4) If matched, add to active set. (5) Repeat until no new activations (fixed point).
+  - **Chained activation:** Entry A activates → satisfies context for Entry B → B activates → satisfies context for Entry C, etc.
+  - **Player traits:** Stored in `ChatMeta.traits`. Referenced as `trait:<name>` in contexts. Managed via the active entries panel UI.
+  - **UI:** Right-side panel in adventure play view shows active entries grouped by category + trait management (pills with add/remove).
+  - **Key Quest example:** village-square (always eligible) → characters activate when at village-square + keyword match → iron-key activates when blacksmith is active → treasure-room activates when iron-key is active.
+- **Integration:** Called by adventure system for location data and active lore context; future chat system will inject lore context into LLM prompts
+
+### Context Activation — Improvement Ideas
+
+1. **Context inheritance** — folders define default contexts for contained entries
+2. **Negative contexts** — `!path` means active everywhere except that context
+3. **Weighted contexts** — priority modifiers for soft activation
+4. **Time-based contexts** — activate after N messages or at story beats
+5. **Context visualization** — graph view of entry dependencies
+6. **Auto-context suggestion** — suggest contexts based on keyword overlap
+7. **Context groups** — named groups referenced as a unit
+8. **Activation history** — show when entries became active/inactive
 
 ## Conventions
 
@@ -230,5 +252,5 @@ Hash-based client-side routing. The browser back/forward buttons work, and URLs 
 ### Current Status
 
 - **Phase:** Phase 1 — Core Chat MVP in progress
-- **Completed modules:** Lorebook (full CRUD + matching + templates + location listing), Settings (persistence + validation), Chat (persistence + adventure-centric multi-conversation CRUD + location changes), Adventure system (picker + play view + location bar)
+- **Completed modules:** Lorebook (full CRUD + matching + templates + location listing + context-aware activation), Settings (persistence + validation), Chat (persistence + adventure-centric multi-conversation CRUD + location changes + player traits), Adventure system (picker + play view + location bar + active entries panel)
 - **Next up:** Phase 1.1 — LLM streaming integration, Phase 1.3 — Character cards, Phase 1.4 — Prompt construction

@@ -4,5 +4,6 @@
   "keywords": ["treasure room", "treasure", "golden chest", "chest"],
   "regex": "",
   "priority": 20,
-  "enabled": true
+  "enabled": true,
+  "contexts": ["items/iron-key"]
 }

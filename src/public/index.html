@@ -35,14 +35,22 @@
             <option value="">-- Choose a location --</option>
           </select>
         </div>
-        <div class="chat-container">
-          <div class="chat-messages" id="chat-messages">
-            <p class="editor-placeholder">Your adventure begins...</p>
+        <div class="adventure-body">
+          <div class="chat-container">
+            <div class="chat-messages" id="chat-messages">
+              <p class="editor-placeholder">Your adventure begins...</p>
+            </div>
+            <form class="chat-input-area" id="chat-form">
+              <input type="text" id="chat-input" placeholder="What do you do?" autocomplete="off" required />
+              <button type="submit">Send</button>
+            </form>
           </div>
-          <form class="chat-input-area" id="chat-form">
-            <input type="text" id="chat-input" placeholder="What do you do?" autocomplete="off" required />
-            <button type="submit">Send</button>
-          </form>
+          <aside class="active-entries-panel" id="active-entries-panel">
+            <h3>Active Lore</h3>
+            <div id="active-entries-content">
+              <p class="active-entries-empty">Start chatting to see active lore.</p>
+            </div>
+          </aside>
         </div>
       </div>
     </div>

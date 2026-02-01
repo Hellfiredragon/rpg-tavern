@@ -4,19 +4,19 @@ import {
   createFolder, deleteFolder, validateEntry, DEFAULT_ENTRY,
   listLorebooks, createLorebook, deleteLorebook,
   copyLorebook, listLocationEntries, loadLorebookMeta,
-  saveLorebookMeta, isReadOnlyPreset,
+  saveLorebookMeta, isReadOnlyPreset, findActiveEntries,
   type LorebookEntry,
 } from "./lorebook";
 import {
   createConversation, listConversations, loadConversation,
-  appendMessage, deleteConversation, changeLocation,
+  appendMessage, deleteConversation, changeLocation, updateTraits,
   type ChatMessage,
 } from "./chat";
 import {
   html, escapeHtml,
   renderTree, renderLorebookPicker, entryFormHtml,
   renderChatList, renderChatMessages, renderAdventurePicker,
-  settingsFormHtml, validateSettings,
+  renderActiveEntries, settingsFormHtml, validateSettings,
 } from "./renderers";
 
 // ---------------------------------------------------------------------------
@@ -145,7 +145,7 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
       const userMsg: ChatMessage = { role: "user", content: message, timestamp: new Date().toISOString() };
       await appendMessage(chatId, userMsg);
 
-      const headers: Record<string, string> = { "HX-Trigger": "refreshChatList" };
+      const headers: Record<string, string> = { "HX-Trigger": "refreshChatList,refreshActiveEntries" };
       if (isNew) headers["X-Chat-Id"] = chatId;
 
       let responseHtml = "";
@@ -251,10 +251,57 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
       return html(
         `<div class="chat-msg chat-msg-system">${escapeHtml(narration)}</div>`,
         200,
-        { "X-Location": location },
+        { "X-Location": location, "HX-Trigger": "refreshActiveEntries" },
       );
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Location change error";
+      return html(`<div class="feedback error">${escapeHtml(msg)}</div>`, 400);
+    }
+  }
+
+  if (url.pathname === "/api/adventures/active-entries" && req.method === "GET") {
+    const chatId = url.searchParams.get("chatId") || "";
+    if (!chatId) return html(`<p class="active-entries-empty">No active entries.</p>`, 400);
+    const conv = await loadConversation(chatId);
+    if (!conv) return html(`<p class="active-entries-empty">Conversation not found.</p>`, 404);
+    if (!conv.meta.lorebook) return html(`<p class="active-entries-empty">No lorebook attached.</p>`);
+
+    // Collect text from last 20 messages
+    const recentMessages = conv.messages.slice(-20);
+    const text = recentMessages.map((m) => m.content).join(" ");
+
+    const entries = await findActiveEntries(conv.meta.lorebook, {
+      text,
+      currentLocation: conv.meta.currentLocation,
+      traits: conv.meta.traits,
+    });
+    return html(renderActiveEntries(entries, conv.meta.traits, chatId));
+  }
+
+  if (url.pathname === "/api/adventures/traits" && req.method === "PUT") {
+    try {
+      const body = await req.json();
+      const chatId = typeof body.chatId === "string" ? body.chatId : "";
+      const traits = Array.isArray(body.traits) ? body.traits.filter((t: unknown) => typeof t === "string" && t.trim()).map((t: string) => t.trim()) : [];
+      if (!chatId) return html(`<div class="feedback error">Missing chatId</div>`, 400);
+
+      const meta = await updateTraits(chatId, traits);
+
+      // Return updated active entries
+      const conv = await loadConversation(chatId);
+      if (!conv) return html(`<div class="feedback error">Conversation not found</div>`, 404);
+
+      const recentMessages = conv.messages.slice(-20);
+      const text = recentMessages.map((m) => m.content).join(" ");
+
+      const entries = await findActiveEntries(conv.meta.lorebook, {
+        text,
+        currentLocation: conv.meta.currentLocation,
+        traits: conv.meta.traits,
+      });
+      return html(renderActiveEntries(entries, conv.meta.traits, chatId));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Traits update error";
       return html(`<div class="feedback error">${escapeHtml(msg)}</div>`, 400);
     }
   }

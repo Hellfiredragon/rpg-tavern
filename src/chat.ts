@@ -12,6 +12,7 @@ export type ChatMeta = {
   updatedAt: string;
   lorebook: string;         // adventure lorebook slug, e.g. "key-quest", or ""
   currentLocation: string;  // entry path, e.g. "locations/village-square", or ""
+  traits: string[];         // player traits, e.g. ["warrior", "stealthy"]
 };
 
 export type ChatMessage = {
@@ -54,7 +55,7 @@ function chatFilePath(id: string): string {
 // CRUD
 // ---------------------------------------------------------------------------
 
-export async function createConversation(opts?: { id?: string; lorebook?: string; currentLocation?: string }): Promise<ChatMeta> {
+export async function createConversation(opts?: { id?: string; lorebook?: string; currentLocation?: string; traits?: string[] }): Promise<ChatMeta> {
   await mkdir(CHATS_DIR, { recursive: true });
   const chatId = opts?.id ?? generateChatId();
   const now = new Date().toISOString();
@@ -65,6 +66,7 @@ export async function createConversation(opts?: { id?: string; lorebook?: string
     updatedAt: now,
     lorebook: opts?.lorebook ?? "",
     currentLocation: opts?.currentLocation ?? "",
+    traits: opts?.traits ?? [],
   };
   const filePath = chatFilePath(chatId);
   await Bun.write(filePath, JSON.stringify(meta) + "\n");
@@ -87,6 +89,7 @@ export async function listConversations(lorebook?: string): Promise<ChatMeta[]> 
         // Default missing fields for old JSONL files
         if (meta.lorebook === undefined) meta.lorebook = "";
         if (meta.currentLocation === undefined) meta.currentLocation = "";
+        if (!Array.isArray(meta.traits)) meta.traits = [];
         if (lorebook !== undefined && meta.lorebook !== lorebook) continue;
         results.push(meta);
       }
@@ -113,6 +116,7 @@ export async function loadConversation(id: string): Promise<{ meta: ChatMeta; me
     // Default missing fields for old JSONL files
     if (meta.lorebook === undefined) meta.lorebook = "";
     if (meta.currentLocation === undefined) meta.currentLocation = "";
+    if (!Array.isArray(meta.traits)) meta.traits = [];
     const messages: ChatMessage[] = [];
 
     for (let i = 1; i < lines.length; i++) {
@@ -165,6 +169,28 @@ export async function appendMessage(id: string, message: ChatMessage): Promise<C
 export async function deleteConversation(id: string): Promise<void> {
   const filePath = chatFilePath(id);
   await unlink(filePath);
+}
+
+export async function updateTraits(id: string, traits: string[]): Promise<ChatMeta> {
+  const filePath = chatFilePath(id);
+  const f = Bun.file(filePath);
+  if (!(await f.exists())) throw new Error("Conversation not found");
+
+  const text = await f.text();
+  const lines = text.split("\n").filter((l) => l.trim() !== "");
+  if (lines.length === 0) throw new Error("Conversation not found");
+
+  const meta = JSON.parse(lines[0]) as ChatMeta;
+  meta.traits = traits;
+  meta.updatedAt = new Date().toISOString();
+
+  const newLines = [JSON.stringify(meta)];
+  for (let i = 1; i < lines.length; i++) {
+    newLines.push(lines[i]);
+  }
+
+  await Bun.write(filePath, newLines.join("\n") + "\n");
+  return meta;
 }
 
 export async function changeLocation(id: string, locationPath: string, narration: string): Promise<ChatMeta> {

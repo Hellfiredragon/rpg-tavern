@@ -43,6 +43,7 @@ describe("validateEntry", () => {
       regex: "",
       priority: 0,
       enabled: true,
+      contexts: [],
     });
   });
 
@@ -127,6 +128,26 @@ describe("validateEntry", () => {
   test("handles enabled as false", () => {
     expect(validateEntry({ name: "Test", enabled: false }).enabled).toBe(false);
   });
+
+  test("parses comma-separated contexts string", () => {
+    const result = validateEntry({ name: "Test", contexts: "locations/tavern, characters/sage" });
+    expect(result.contexts).toEqual(["locations/tavern", "characters/sage"]);
+  });
+
+  test("accepts contexts as array", () => {
+    const result = validateEntry({ name: "Test", contexts: ["locations/tavern", "trait:warrior"] });
+    expect(result.contexts).toEqual(["locations/tavern", "trait:warrior"]);
+  });
+
+  test("defaults contexts to empty array", () => {
+    const result = validateEntry({ name: "Test" });
+    expect(result.contexts).toEqual([]);
+  });
+
+  test("filters empty strings from contexts", () => {
+    const result = validateEntry({ name: "Test", contexts: "locations/tavern,,, ,characters/sage" });
+    expect(result.contexts).toEqual(["locations/tavern", "characters/sage"]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -180,6 +201,7 @@ describe("CRUD operations", () => {
     regex: "",
     priority: 10,
     enabled: true,
+    contexts: [],
   };
 
   test("saveEntry and loadEntry round-trip", async () => {
