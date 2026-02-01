@@ -5,11 +5,13 @@ import {
   listLorebooks, createLorebook, deleteLorebook,
   copyLorebook, listLocationEntries, loadLorebookMeta,
   saveLorebookMeta, isReadOnlyPreset, findActiveEntries,
+  loadAllEntries,
   type LorebookEntry,
 } from "./lorebook";
 import {
   createConversation, listConversations, loadConversation,
   appendMessage, deleteConversation, changeLocation, updateTraits,
+  updateSummonedCharacters,
   type ChatMessage,
 } from "./chat";
 
@@ -84,6 +86,56 @@ async function resolveOrCreateLocation(
   return { path, name: destination, content: entry.content, isNew: true };
 }
 
+/** Dummy LLM: detect summon intent from a user message. Returns character name or null. */
+function detectSummon(message: string): string | null {
+  const patterns = [
+    /\b(?:call|summon|bring|fetch|get)\s+(?:the\s+)?(.+?)(?:\s+here|\s+over|\s+to\s+.+)?$/i,
+    /\b(.+?),?\s+(?:come\s+here|come\s+over|come\s+to\s+.+)/i,
+  ];
+  for (const re of patterns) {
+    const m = message.match(re);
+    if (m && m[1]) {
+      return m[1].replace(/[.!?,;]+$/, "").trim();
+    }
+  }
+  return null;
+}
+
+/** Match a summoned character name against lorebook character entries, checking location allowance. */
+async function resolveCharacterSummon(
+  lorebook: string,
+  characterName: string,
+  currentLocation: string,
+): Promise<{ path: string; name: string; allowed: boolean } | null> {
+  const allEntries = await loadAllEntries(lorebook);
+  const lower = characterName.toLowerCase();
+
+  // Find matching character entry
+  let match: { path: string; name: string } | null = null;
+  for (const entry of allEntries) {
+    if (!entry.path.startsWith("characters/")) continue;
+    // Exact name match
+    if (entry.name.toLowerCase() === lower) {
+      match = { path: entry.path, name: entry.name };
+      break;
+    }
+    // Keyword match
+    if (entry.keywords.some((kw) => kw.toLowerCase() === lower || lower.includes(kw.toLowerCase()))) {
+      match = { path: entry.path, name: entry.name };
+      break;
+    }
+  }
+
+  if (!match) return null;
+
+  // Check if the character is allowed at the current location
+  if (!currentLocation) return { ...match, allowed: false };
+  const locationEntry = allEntries.find((e) => e.path === currentLocation);
+  if (!locationEntry) return { ...match, allowed: false };
+  const allowedChars = locationEntry.characters ?? [];
+  return { ...match, allowed: allowedChars.includes(match.path) };
+}
+
 // ---------------------------------------------------------------------------
 // API
 // ---------------------------------------------------------------------------
@@ -154,8 +206,40 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
         const assistantMsg: ChatMessage = { role: "assistant", content: `You arrive at ${loc.name}.`, timestamp: new Date().toISOString() };
         await appendMessage(chatId, assistantMsg);
         newMessages.push(assistantMsg);
+      } else if (lorebook) {
+        // Detect summon intent
+        const summonName = detectSummon(message);
+        const conv = await loadConversation(chatId);
+        if (summonName && conv && conv.meta.currentLocation) {
+          const result = await resolveCharacterSummon(lorebook, summonName, conv.meta.currentLocation);
+          if (result && result.allowed) {
+            const summoned = [...(conv.meta.summonedCharacters || [])];
+            if (!summoned.includes(result.path)) {
+              summoned.push(result.path);
+              await updateSummonedCharacters(chatId, summoned);
+            }
+            const narration = `${result.name} arrives at your location.`;
+            const systemMsg: ChatMessage = { role: "system", content: narration, timestamp: new Date().toISOString() };
+            await appendMessage(chatId, systemMsg);
+            newMessages.push(systemMsg);
+
+            const assistantMsg: ChatMessage = { role: "assistant", content: `${result.name} has joined you.`, timestamp: new Date().toISOString() };
+            await appendMessage(chatId, assistantMsg);
+            newMessages.push(assistantMsg);
+          } else {
+            // Character not found or not allowed — normal response
+            const assistantMsg: ChatMessage = { role: "assistant", content: "Hello World", timestamp: new Date().toISOString() };
+            await appendMessage(chatId, assistantMsg);
+            newMessages.push(assistantMsg);
+          }
+        } else {
+          // Placeholder response (future: LLM integration)
+          const assistantMsg: ChatMessage = { role: "assistant", content: "Hello World", timestamp: new Date().toISOString() };
+          await appendMessage(chatId, assistantMsg);
+          newMessages.push(assistantMsg);
+        }
       } else {
-        // Placeholder response (future: LLM integration)
+        // No lorebook — placeholder response
         const assistantMsg: ChatMessage = { role: "assistant", content: "Hello World", timestamp: new Date().toISOString() };
         await appendMessage(chatId, assistantMsg);
         newMessages.push(assistantMsg);
@@ -284,6 +368,7 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
       text,
       currentLocation: conv.meta.currentLocation,
       traits: conv.meta.traits,
+      summonedCharacters: conv.meta.summonedCharacters,
     });
     return json({ traits: conv.meta.traits, entries });
   }
@@ -308,6 +393,7 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
         text,
         currentLocation: conv.meta.currentLocation,
         traits: conv.meta.traits,
+        summonedCharacters: conv.meta.summonedCharacters,
       });
       return json({ traits: conv.meta.traits, entries });
     } catch (e: unknown) {

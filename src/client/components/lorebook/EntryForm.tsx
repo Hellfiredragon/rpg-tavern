@@ -59,6 +59,9 @@ export function EntryForm({ lorebook, path, readonly, onSaved, onDeleted }: Prop
 
   const keywordsStr = Array.isArray(entry.keywords) ? entry.keywords.join(", ") : String(entry.keywords);
   const contextsStr = Array.isArray(entry.contexts) ? entry.contexts.join(", ") : String(entry.contexts);
+  const isCharacter = path.startsWith("characters/");
+  const isLocation = path.startsWith("locations/");
+  const charactersStr = Array.isArray(entry.characters) ? entry.characters.join(", ") : "";
 
   return (
     <>
@@ -84,6 +87,22 @@ export function EntryForm({ lorebook, path, readonly, onSaved, onDeleted }: Prop
         <label htmlFor="lb-contexts">Contexts <span className="hint">(comma-separated entry paths or trait: refs)</span></label>
         <input id="lb-contexts" type="text" value={contextsStr} disabled={readonly}
           onChange={(e) => setEntry({ ...entry, contexts: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} />
+
+        {isCharacter && (
+          <>
+            <label htmlFor="lb-home-location">Home Location <span className="hint">(location path, e.g. locations/village-square)</span></label>
+            <input id="lb-home-location" type="text" value={entry.homeLocation ?? ""} disabled={readonly}
+              onChange={(e) => setEntry({ ...entry, homeLocation: e.target.value.trim() || undefined })} />
+          </>
+        )}
+
+        {isLocation && (
+          <>
+            <label htmlFor="lb-characters">Characters <span className="hint">(comma-separated character paths)</span></label>
+            <input id="lb-characters" type="text" value={charactersStr} disabled={readonly}
+              onChange={(e) => setEntry({ ...entry, characters: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} />
+          </>
+        )}
 
         <label htmlFor="lb-priority">Priority: <strong>{entry.priority}</strong></label>
         <input id="lb-priority" type="number" value={entry.priority} disabled={readonly}

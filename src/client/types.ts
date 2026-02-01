@@ -6,6 +6,7 @@ export type ChatMeta = {
   lorebook: string;
   currentLocation: string;
   traits: string[];
+  summonedCharacters: string[];
 };
 
 export type ChatMessage = {
@@ -56,6 +57,8 @@ export type LorebookEntry = {
   priority: number;
   enabled: boolean;
   contexts: string[];
+  characters?: string[];
+  homeLocation?: string;
 };
 
 export type Settings = {

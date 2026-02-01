@@ -103,7 +103,7 @@ The Chat tab has been redesigned into an **Adventure** tab. Users pick an advent
 ### Chat module (`src/chat.ts`)
 
 - **Types:**
-  - `ChatMeta` — `{ id, title, createdAt, updatedAt, lorebook, currentLocation, traits }`
+  - `ChatMeta` — `{ id, title, createdAt, updatedAt, lorebook, currentLocation, traits, summonedCharacters }`
   - `ChatMessage` — `{ role: "user"|"assistant"|"system", content, timestamp }`
   - System messages are narration (e.g. location transitions), rendered centered/italic
 - **Storage:** `data/chats/<id>.jsonl` — one file per conversation in JSONL format
@@ -111,12 +111,13 @@ The Chat tab has been redesigned into an **Adventure** tab. Users pick an advent
   - Lines 2+: `ChatMessage`
   - ID format: `<timestamp>-<3-char-hex>` (e.g. `1738262400000-a3f`)
   - Title: auto-set from first user message, truncated to 50 chars
-  - Old JSONL files missing `lorebook`/`currentLocation`/`traits` default to `""`/`""`/`[]` on load
-- **Functions:** `generateChatId()`, `createConversation(opts?)`, `listConversations(lorebook?)`, `loadConversation()`, `appendMessage()`, `deleteConversation()`, `changeLocation()`, `updateTraits()`
-  - `createConversation` accepts `{ id?, lorebook?, currentLocation?, traits? }`
+  - Old JSONL files missing `lorebook`/`currentLocation`/`traits`/`summonedCharacters` default to `""`/`""`/`[]`/`[]` on load
+- **Functions:** `generateChatId()`, `createConversation(opts?)`, `listConversations(lorebook?)`, `loadConversation()`, `appendMessage()`, `deleteConversation()`, `changeLocation()`, `updateTraits()`, `updateSummonedCharacters()`
+  - `createConversation` accepts `{ id?, lorebook?, currentLocation?, traits?, summonedCharacters? }`
   - `listConversations` accepts optional lorebook filter
-  - `changeLocation(id, locationPath, narration)` — updates meta.currentLocation + appends system message atomically
+  - `changeLocation(id, locationPath, narration)` — updates meta.currentLocation, clears summonedCharacters, appends system message atomically
   - `updateTraits(id, traits)` — rewrites meta line with updated traits array
+  - `updateSummonedCharacters(id, characters)` — rewrites meta line with updated summonedCharacters array
 
 ### Adventure UI
 
@@ -144,9 +145,14 @@ All routes return JSON. Error responses use `{ error: "message" }` with appropri
 - **Location detection (dummy LLM):** `POST /api/chat` parses movement intent from user messages (e.g. "go to X", "enter X", "walk to X"). If a destination is detected and a lorebook is attached:
   - Matches against existing location entries (case-insensitive, partial matching)
   - If no match, creates a new lorebook entry under `locations/<slugified-name>.json` with a generated description
-  - Calls `changeLocation()` to update the conversation and append system narration
+  - Calls `changeLocation()` to update the conversation, clear summoned characters, and append system narration
   - Returns `{ chatId, messages: [user, system, assistant], location, isNew }`
-- **Current behavior:** When no location change is detected, assistant responds with "Hello World" (placeholder for future LLM integration). When a location change is detected, assistant responds with "You arrive at \<location\>."
+- **Summon detection (dummy LLM):** `POST /api/chat` also parses summon intent (e.g. "call Marta", "summon the blacksmith"). If detected and a lorebook + current location exist:
+  - Matches character name against character entries (name + keywords, case-insensitive)
+  - Checks if the character is in the current location's `characters` list
+  - If allowed, adds to `ChatMeta.summonedCharacters` and appends system narration
+  - If not allowed or not found, falls through to normal response
+- **Current behavior:** When no location/summon is detected, assistant responds with "Hello World" (placeholder for future LLM integration). When a location change is detected, assistant responds with "You arrive at \<location\>." When a summon is detected, assistant responds with "\<character\> has joined you."
 
 ## Settings
 
@@ -231,14 +237,25 @@ All routes return JSON. Error responses use `{ error: "message" }` with appropri
 - **Drag & Drop:** Hold-to-drag interaction for moving entries between folders in the tree browser. Hold mousedown 1s (circular progress ring), then drag to a folder or root. Implemented in `useDragTree.ts` as a React hook with document-level event listeners managed by `useEffect`. Read-only preset lorebooks are excluded.
 - **Matching:** `findMatchingEntries(lorebook, text)` — returns enabled entries matching via keywords or regex, sorted by priority desc
 - **Locations:** `listLocationEntries(lorebook)` — returns entries whose path starts with `locations/`, sorted by name. Used by the adventure system for the location dropdown.
-- **Context-Aware Activation:** `findActiveEntries(lorebook, context)` — returns entries that should be active given the current context. Uses a fixed-point algorithm:
-  - **`LorebookEntry.contexts`** — `string[]` field: entry paths (e.g. `locations/village-square`) or trait refs (e.g. `trait:warrior`). All must be satisfied for the entry to activate (AND logic). Empty = always context-eligible.
-  - **`ActivationContext`** — `{ text, currentLocation, traits }` — recent chat text, current location path, and player traits
-  - **Algorithm:** (1) Seed active set with current location entry. (2) Location entries (`locations/*`) are exclusive — only the current location is active; other locations never activate via keywords. (3) For each inactive non-location entry, check if all context gates are satisfied (paths in active set, traits in context). (4) If context-eligible, check keyword/regex match against text. (5) If matched, add to active set. (6) Repeat until no new activations (fixed point).
-  - **Chained activation:** Current location → characters/items whose context is satisfied → more items whose context is now satisfied. Chains never end at a location entry.
+- **Character–Location Relationships:** Entry type is inferred from folder path (`locations/*` = location, `characters/*` = character). The base `LorebookEntry` has optional type-specific fields:
+  - **`LorebookEntry.characters`** — `string[]` (optional, location-specific): character paths that can appear at this location
+  - **`LorebookEntry.homeLocation`** — `string` (optional, character-specific): location path where this character auto-appears
+  - **`LorebookEntry.contexts`** — `string[]` field: entry paths or trait refs (e.g. `trait:warrior`). AND logic. Empty = always context-eligible. Used for quest-gating items/generic entries (e.g. iron-key requires blacksmith active).
+  - Characters no longer use `contexts` for location gating — that's handled by `characters` list on locations + `homeLocation`.
+- **Context-Aware Activation:** `findActiveEntries(lorebook, context)` — returns entries that should be active given the current context:
+  - **`ActivationContext`** — `{ text, currentLocation, traits, summonedCharacters }` — recent chat text, current location path, player traits, and summoned character paths
+  - **Algorithm:**
+    1. Seed active set with current location entry
+    2. Auto-activate home characters: characters whose `homeLocation` matches current location AND are in the location's `characters` list
+    3. Activate summoned characters: paths in `summonedCharacters` that are in the location's `characters` list
+    4. Fixed-point iteration for items/generic entries: check context gates + keyword/regex match
+    5. Characters NOT in the location's `characters` list never activate (even via keywords), unless summoned
+    6. Location entries are exclusive — only the current location is active
+  - **Summoned characters:** Stored in `ChatMeta.summonedCharacters`. Detected via `POST /api/chat` summon patterns ("call X", "summon X"). Cleared on location change.
+  - **Chained activation:** Current location → home characters auto-activate → items whose context is satisfied → more items. Chains never end at a location entry.
   - **Player traits:** Stored in `ChatMeta.traits`. Referenced as `trait:<name>` in contexts. Managed via the active entries panel UI.
-  - **UI:** `ActiveEntriesPanel` — right-side panel in adventure play view shows active entries grouped by category + trait management (pills with add/remove).
-  - **Key Quest example:** village-square (always eligible) → characters activate when at village-square + keyword match → iron-key activates when blacksmith is active → treasure-room activates when iron-key is active.
+  - **UI:** `ActiveEntriesPanel` — right-side panel in adventure play view shows active entries grouped by category + trait management (pills with add/remove). `EntryForm` shows `homeLocation` field for characters and `characters` list field for locations.
+  - **Key Quest example:** village-square has characters [sage, blacksmith, innkeeper]. sage/blacksmith/innkeeper have homeLocation: village-square → auto-appear at village-square. cellar has characters [innkeeper] → Marta can be summoned there. iron-key requires blacksmith active. treasure-room has no characters.
 - **Integration:** Called by adventure system for location data and active lore context; future chat system will inject lore context into LLM prompts
 
 ### Context Activation — Improvement Ideas
@@ -283,6 +300,6 @@ All routes return JSON. Error responses use `{ error: "message" }` with appropri
 ### Current Status
 
 - **Phase:** Phase 1 — Core Chat MVP in progress
-- **Completed modules:** Lorebook (full CRUD + matching + templates + location listing + context-aware activation), Settings (persistence + validation), Chat (persistence + adventure-centric multi-conversation CRUD + location changes + player traits), Adventure system (picker + play view + location bar + active entries panel)
+- **Completed modules:** Lorebook (full CRUD + matching + templates + location listing + context-aware activation + character–location relationships), Settings (persistence + validation), Chat (persistence + adventure-centric multi-conversation CRUD + location changes + player traits + summoned characters), Adventure system (picker + play view + location bar + active entries panel + summon detection)
 - **Frontend:** Converted from HTMX + vanilla JS to React 18 + Vite + react-router-dom 7
 - **Next up:** Phase 1.1 — LLM streaming integration, Phase 1.3 — Character cards, Phase 1.4 — Prompt construction

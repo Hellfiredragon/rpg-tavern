@@ -6,7 +6,7 @@
     "dev": "DEV=1 bun run --watch src/server.ts",
     "dev:client": "vite",
     "build": "vite build",
-    "start": "vite build && bun run src/server.ts",
+    "start": "bun run src/server.ts",
     "test": "bun test"
   },
   "dependencies": {

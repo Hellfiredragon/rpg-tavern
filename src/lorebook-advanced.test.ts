@@ -465,15 +465,17 @@ describe("findActiveEntries", () => {
   afterEach(cleanLorebooks);
 
   async function seedContextEntries() {
-    // Location: village-square (no contexts — always eligible)
+    // Location: village-square — has characters list
     await saveEntry("default", "locations/village-square", {
       ...DEFAULT_ENTRY, name: "Village Square", keywords: ["village", "square"],
       priority: 5, enabled: true, contexts: [],
+      characters: ["characters/sage", "characters/guard"],
     });
-    // Character: sage (requires village-square to be active)
+    // Character: sage (home at village-square)
     await saveEntry("default", "characters/sage", {
       ...DEFAULT_ENTRY, name: "The Sage", keywords: ["sage", "wise man"],
-      priority: 10, enabled: true, contexts: ["locations/village-square"],
+      priority: 10, enabled: true, contexts: [],
+      homeLocation: "locations/village-square",
     });
     // Item: iron-key (requires sage to be active — chained)
     await saveEntry("default", "items/iron-key", {
@@ -484,8 +486,9 @@ describe("findActiveEntries", () => {
     await saveEntry("default", "locations/treasure-room", {
       ...DEFAULT_ENTRY, name: "Treasure Room", keywords: ["treasure"],
       priority: 20, enabled: true, contexts: ["items/iron-key"],
+      characters: [],
     });
-    // Character: guard (requires trait:warrior)
+    // Character: guard (requires trait:warrior, allowed at village-square)
     await saveEntry("default", "characters/guard", {
       ...DEFAULT_ENTRY, name: "The Guard", keywords: ["guard"],
       priority: 10, enabled: true, contexts: ["trait:warrior"],
@@ -495,7 +498,7 @@ describe("findActiveEntries", () => {
   test("current location entry is always active", async () => {
     await seedContextEntries();
     const result = await findActiveEntries("default", {
-      text: "", currentLocation: "locations/village-square", traits: [],
+      text: "", currentLocation: "locations/village-square", traits: [], summonedCharacters: [],
     });
     const paths = result.map((e) => e.path);
     expect(paths).toContain("locations/village-square");
@@ -507,7 +510,7 @@ describe("findActiveEntries", () => {
       priority: 5, enabled: true, contexts: [],
     });
     const result = await findActiveEntries("default", {
-      text: "I pick up the torch", currentLocation: "", traits: [],
+      text: "I pick up the torch", currentLocation: "", traits: [], summonedCharacters: [],
     });
     const paths = result.map((e) => e.path);
     expect(paths).toContain("items/torch");
@@ -515,9 +518,8 @@ describe("findActiveEntries", () => {
 
   test("location entries do NOT activate via keyword — only current location is active", async () => {
     await seedContextEntries();
-    // Mentioning "village square" should NOT make it active if it's not the current location
     const result = await findActiveEntries("default", {
-      text: "I remember the village square", currentLocation: "locations/treasure-room", traits: [],
+      text: "I remember the village square", currentLocation: "locations/treasure-room", traits: [], summonedCharacters: [],
     });
     const paths = result.map((e) => e.path);
     expect(paths).toContain("locations/treasure-room");
@@ -526,22 +528,21 @@ describe("findActiveEntries", () => {
 
   test("entry with unsatisfied context does NOT activate even with keyword match", async () => {
     await seedContextEntries();
-    // sage requires village-square to be active; without it, sage shouldn't activate
+    // sage has homeLocation village-square, but current location is empty — not at home
     const result = await findActiveEntries("default", {
-      text: "I talk to the sage", currentLocation: "", traits: [],
+      text: "I talk to the sage", currentLocation: "", traits: [], summonedCharacters: [],
     });
     const paths = result.map((e) => e.path);
     expect(paths).not.toContain("characters/sage");
   });
 
-  test("chained activation (location → character → item)", async () => {
+  test("chained activation (location → home character → item)", async () => {
     await seedContextEntries();
-    // village-square is current location → sage matches "sage" → iron-key matches "key"
-    // treasure-room does NOT activate (locations are exclusive — only current location)
+    // village-square is current location → sage auto-activates (homeLocation) → iron-key matches "key"
     const result = await findActiveEntries("default", {
       text: "I ask the sage about the key and the treasure",
       currentLocation: "locations/village-square",
-      traits: [],
+      traits: [], summonedCharacters: [],
     });
     const paths = result.map((e) => e.path);
     expect(paths).toContain("locations/village-square");
@@ -550,11 +551,11 @@ describe("findActiveEntries", () => {
     expect(paths).not.toContain("locations/treasure-room");
   });
 
-  test("trait-based context activation", async () => {
+  test("trait-based context activation for character in allowed list", async () => {
     await seedContextEntries();
-    // guard requires trait:warrior
+    // guard requires trait:warrior and is in village-square's characters list
     const result = await findActiveEntries("default", {
-      text: "I see the guard", currentLocation: "", traits: ["warrior"],
+      text: "I see the guard", currentLocation: "locations/village-square", traits: ["warrior"], summonedCharacters: [],
     });
     const paths = result.map((e) => e.path);
     expect(paths).toContain("characters/guard");
@@ -563,7 +564,7 @@ describe("findActiveEntries", () => {
   test("trait-based context not satisfied without trait", async () => {
     await seedContextEntries();
     const result = await findActiveEntries("default", {
-      text: "I see the guard", currentLocation: "", traits: [],
+      text: "I see the guard", currentLocation: "locations/village-square", traits: [], summonedCharacters: [],
     });
     const paths = result.map((e) => e.path);
     expect(paths).not.toContain("characters/guard");
@@ -571,18 +572,15 @@ describe("findActiveEntries", () => {
 
   test("fixed-point convergence — entries only activate when chain is complete", async () => {
     await seedContextEntries();
-    // Without village-square active, the chain sage→key→treasure can't fire
+    // treasure-room has no characters — sage can't activate there
     const result = await findActiveEntries("default", {
       text: "sage key treasure",
-      currentLocation: "locations/treasure-room", // treasure-room is current but won't seed the chain
-      traits: [],
+      currentLocation: "locations/treasure-room",
+      traits: [], summonedCharacters: [],
     });
     const paths = result.map((e) => e.path);
-    // treasure-room is always active as current location
     expect(paths).toContain("locations/treasure-room");
-    // But sage should NOT be active — its context (village-square) is not satisfied
     expect(paths).not.toContain("characters/sage");
-    // And iron-key should NOT be active — its context (sage) is not satisfied
     expect(paths).not.toContain("items/iron-key");
   });
 
@@ -592,7 +590,7 @@ describe("findActiveEntries", () => {
       priority: 10, enabled: false, contexts: [],
     });
     const result = await findActiveEntries("default", {
-      text: "I see a ghost", currentLocation: "", traits: [],
+      text: "I see a ghost", currentLocation: "", traits: [], summonedCharacters: [],
     });
     const paths = result.map((e) => e.path);
     expect(paths).not.toContain("characters/ghost");
@@ -601,7 +599,7 @@ describe("findActiveEntries", () => {
   test("returns entries with correct category", async () => {
     await seedContextEntries();
     const result = await findActiveEntries("default", {
-      text: "I talk to the sage", currentLocation: "locations/village-square", traits: [],
+      text: "I talk to the sage", currentLocation: "locations/village-square", traits: [], summonedCharacters: [],
     });
     const square = result.find((e) => e.path === "locations/village-square");
     expect(square).toBeDefined();
@@ -613,8 +611,50 @@ describe("findActiveEntries", () => {
 
   test("returns empty array for empty lorebook", async () => {
     const result = await findActiveEntries("default", {
-      text: "anything", currentLocation: "", traits: [],
+      text: "anything", currentLocation: "", traits: [], summonedCharacters: [],
     });
     expect(result).toEqual([]);
+  });
+
+  test("home characters auto-activate at their home location", async () => {
+    await seedContextEntries();
+    // sage has homeLocation: village-square — should auto-activate when at village-square
+    const result = await findActiveEntries("default", {
+      text: "", currentLocation: "locations/village-square", traits: [], summonedCharacters: [],
+    });
+    const paths = result.map((e) => e.path);
+    expect(paths).toContain("characters/sage");
+  });
+
+  test("characters NOT in location's characters list do not activate", async () => {
+    await seedContextEntries();
+    // sage is not in treasure-room's characters list
+    const result = await findActiveEntries("default", {
+      text: "I talk to the sage", currentLocation: "locations/treasure-room", traits: [], summonedCharacters: [],
+    });
+    const paths = result.map((e) => e.path);
+    expect(paths).not.toContain("characters/sage");
+  });
+
+  test("summoned characters activate at allowed location", async () => {
+    await seedContextEntries();
+    // sage is in village-square's characters list — summon activates
+    const result = await findActiveEntries("default", {
+      text: "", currentLocation: "locations/village-square", traits: [],
+      summonedCharacters: ["characters/sage"],
+    });
+    const paths = result.map((e) => e.path);
+    expect(paths).toContain("characters/sage");
+  });
+
+  test("summoned characters do NOT activate at disallowed location", async () => {
+    await seedContextEntries();
+    // sage is NOT in treasure-room's characters list
+    const result = await findActiveEntries("default", {
+      text: "", currentLocation: "locations/treasure-room", traits: [],
+      summonedCharacters: ["characters/sage"],
+    });
+    const paths = result.map((e) => e.path);
+    expect(paths).not.toContain("characters/sage");
   });
 });

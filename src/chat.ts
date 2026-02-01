@@ -10,9 +10,10 @@ export type ChatMeta = {
   title: string;
   createdAt: string;
   updatedAt: string;
-  lorebook: string;         // adventure lorebook slug, e.g. "key-quest", or ""
-  currentLocation: string;  // entry path, e.g. "locations/village-square", or ""
-  traits: string[];         // player traits, e.g. ["warrior", "stealthy"]
+  lorebook: string;                // adventure lorebook slug, e.g. "key-quest", or ""
+  currentLocation: string;         // entry path, e.g. "locations/village-square", or ""
+  traits: string[];                // player traits, e.g. ["warrior", "stealthy"]
+  summonedCharacters: string[];    // character paths summoned to current location
 };
 
 export type ChatMessage = {
@@ -55,7 +56,7 @@ function chatFilePath(id: string): string {
 // CRUD
 // ---------------------------------------------------------------------------
 
-export async function createConversation(opts?: { id?: string; lorebook?: string; currentLocation?: string; traits?: string[] }): Promise<ChatMeta> {
+export async function createConversation(opts?: { id?: string; lorebook?: string; currentLocation?: string; traits?: string[]; summonedCharacters?: string[] }): Promise<ChatMeta> {
   await mkdir(CHATS_DIR, { recursive: true });
   const chatId = opts?.id ?? generateChatId();
   const now = new Date().toISOString();
@@ -67,6 +68,7 @@ export async function createConversation(opts?: { id?: string; lorebook?: string
     lorebook: opts?.lorebook ?? "",
     currentLocation: opts?.currentLocation ?? "",
     traits: opts?.traits ?? [],
+    summonedCharacters: opts?.summonedCharacters ?? [],
   };
   const filePath = chatFilePath(chatId);
   await Bun.write(filePath, JSON.stringify(meta) + "\n");
@@ -90,6 +92,7 @@ export async function listConversations(lorebook?: string): Promise<ChatMeta[]> 
         if (meta.lorebook === undefined) meta.lorebook = "";
         if (meta.currentLocation === undefined) meta.currentLocation = "";
         if (!Array.isArray(meta.traits)) meta.traits = [];
+        if (!Array.isArray(meta.summonedCharacters)) meta.summonedCharacters = [];
         if (lorebook !== undefined && meta.lorebook !== lorebook) continue;
         results.push(meta);
       }
@@ -117,6 +120,7 @@ export async function loadConversation(id: string): Promise<{ meta: ChatMeta; me
     if (meta.lorebook === undefined) meta.lorebook = "";
     if (meta.currentLocation === undefined) meta.currentLocation = "";
     if (!Array.isArray(meta.traits)) meta.traits = [];
+    if (!Array.isArray(meta.summonedCharacters)) meta.summonedCharacters = [];
     const messages: ChatMessage[] = [];
 
     for (let i = 1; i < lines.length; i++) {
@@ -204,6 +208,7 @@ export async function changeLocation(id: string, locationPath: string, narration
 
   const meta = JSON.parse(lines[0]) as ChatMeta;
   meta.currentLocation = locationPath;
+  meta.summonedCharacters = []; // clear summoned characters on location change
   meta.updatedAt = new Date().toISOString();
 
   const systemMsg: ChatMessage = { role: "system", content: narration, timestamp: new Date().toISOString() };
@@ -213,6 +218,28 @@ export async function changeLocation(id: string, locationPath: string, narration
     newLines.push(lines[i]);
   }
   newLines.push(JSON.stringify(systemMsg));
+
+  await Bun.write(filePath, newLines.join("\n") + "\n");
+  return meta;
+}
+
+export async function updateSummonedCharacters(id: string, characters: string[]): Promise<ChatMeta> {
+  const filePath = chatFilePath(id);
+  const f = Bun.file(filePath);
+  if (!(await f.exists())) throw new Error("Conversation not found");
+
+  const text = await f.text();
+  const lines = text.split("\n").filter((l) => l.trim() !== "");
+  if (lines.length === 0) throw new Error("Conversation not found");
+
+  const meta = JSON.parse(lines[0]) as ChatMeta;
+  meta.summonedCharacters = characters;
+  meta.updatedAt = new Date().toISOString();
+
+  const newLines = [JSON.stringify(meta)];
+  for (let i = 1; i < lines.length; i++) {
+    newLines.push(lines[i]);
+  }
 
   await Bun.write(filePath, newLines.join("\n") + "\n");
   return meta;
