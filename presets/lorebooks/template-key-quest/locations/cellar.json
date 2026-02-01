@@ -1,0 +1,8 @@
+{
+  "name": "The Inn Cellar",
+  "content": "A damp, dimly lit cellar beneath The Sleeping Fox inn. Barrels of ale line the walls. At the far end, a heavy iron door stands shut, covered in dust. The door has a single keyhole \u2014 the Iron Key fits it perfectly.",
+  "keywords": ["cellar", "inn cellar", "locked door", "iron door"],
+  "regex": "",
+  "priority": 10,
+  "enabled": true
+}

@@ -26,7 +26,7 @@ afterAll(async () => {
   await cleanData();
 });
 
-// Helper: reset chats between tests (lorebooks are seeded once)
+// Helper: reset chats between tests (presets provide templates automatically)
 async function cleanChats() {
   try { await rm(CHATS_DIR, { recursive: true }); } catch {}
 }
@@ -629,13 +629,14 @@ describe("GET /api/lorebooks — unified model", () => {
 // ---------------------------------------------------------------------------
 
 describe("GET /api/lorebooks/meta", () => {
-  test("returns JSON with slug, name, template for existing lorebook", async () => {
+  test("returns JSON with slug, name, template, preset for existing lorebook", async () => {
     const res = await api("/api/lorebooks/meta?slug=template-key-quest");
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.slug).toBe("template-key-quest");
     expect(data.name).toBe("Key Quest");
     expect(data.template).toBe(true);
+    expect(data.preset).toBe(true);
   });
 
   test("returns 404 for nonexistent lorebook", async () => {
@@ -666,12 +667,11 @@ describe("POST /api/lorebooks — creates templates", () => {
 });
 
 // ---------------------------------------------------------------------------
-// DELETE /api/lorebooks — no default guard
+// DELETE /api/lorebooks — preset guard
 // ---------------------------------------------------------------------------
 
-describe("DELETE /api/lorebooks — no default guard", () => {
-  test("can delete any lorebook including default", async () => {
-    // Create a template we can safely delete
+describe("DELETE /api/lorebooks — preset guard", () => {
+  test("can delete user-created lorebooks", async () => {
     await jsonPost("/api/lorebooks", { slug: "del-tpl-test", name: "Del Tpl Test" });
 
     const res = await api("/api/lorebooks?slug=del-tpl-test", { method: "DELETE" });
@@ -680,6 +680,11 @@ describe("DELETE /api/lorebooks — no default guard", () => {
     const lbRes = await api("/api/lorebooks");
     const lbHtml = await lbRes.text();
     expect(lbHtml).not.toContain("Del Tpl Test");
+  });
+
+  test("returns 403 when deleting a preset lorebook", async () => {
+    const res = await api("/api/lorebooks?slug=template-key-quest", { method: "DELETE" });
+    expect(res.status).toBe(403);
   });
 });
 
@@ -706,12 +711,11 @@ describe("adventure picker — Save as Template button", () => {
 // Startup migration — orphan lorebooks become templates
 // ---------------------------------------------------------------------------
 
-describe("startup migration", () => {
-  test("default lorebook is a template after startup", async () => {
-    // The default lorebook should have been migrated to a template at startup
+describe("preset lorebooks visible at startup", () => {
+  test("default lorebook is available as a preset template", async () => {
     const lbRes = await api("/api/lorebooks");
     const lbHtml = await lbRes.text();
-    // "default" should appear as a template in the selector
+    // "default" should appear as a template in the selector (from presets)
     expect(lbHtml).toContain("Default Lorebook");
   });
 });

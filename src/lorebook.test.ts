@@ -18,9 +18,8 @@ import {
   listLorebooks,
   deleteLorebook,
   loadLorebookMeta,
-  ensureDefaultLorebook,
   copyLorebook,
-  seedTemplates,
+  isPresetLorebook,
   DEFAULT_ENTRY,
   type LorebookEntry,
 } from "./lorebook";
@@ -178,7 +177,7 @@ describe("resolveDirPath", () => {
 // ---------------------------------------------------------------------------
 
 describe("CRUD operations", () => {
-  beforeEach(cleanLorebooks);
+  beforeEach(async () => { await cleanLorebooks(); await createLorebook("default", "Default"); });
   afterEach(cleanLorebooks);
 
   const sampleEntry: LorebookEntry = {
@@ -291,7 +290,7 @@ describe("CRUD operations", () => {
 // ---------------------------------------------------------------------------
 
 describe("scanTree", () => {
-  beforeEach(cleanLorebooks);
+  beforeEach(async () => { await cleanLorebooks(); await createLorebook("default", "Default"); });
   afterEach(cleanLorebooks);
 
   test("returns empty array for empty directory", async () => {
@@ -398,7 +397,7 @@ describe("scanTree", () => {
 // ---------------------------------------------------------------------------
 
 describe("findMatchingEntries", () => {
-  beforeEach(cleanLorebooks);
+  beforeEach(async () => { await cleanLorebooks(); await createLorebook("default", "Default"); });
   afterEach(cleanLorebooks);
 
   async function seedEntries() {
@@ -539,20 +538,25 @@ describe("lorebook management", () => {
     expect(meta).toEqual({ name: "Homebrew Setting" });
   });
 
-  test("listLorebooks returns sorted lorebooks", async () => {
+  test("listLorebooks returns sorted lorebooks including presets", async () => {
     await createLorebook("beta", "Beta World");
     await createLorebook("alpha", "Alpha World");
     const list = await listLorebooks();
-    expect(list).toHaveLength(2);
-    expect(list[0].slug).toBe("alpha");
-    expect(list[0].meta.name).toBe("Alpha World");
-    expect(list[1].slug).toBe("beta");
-    expect(list[1].meta.name).toBe("Beta World");
+    // Should include alpha, beta, default (preset), template-key-quest (preset)
+    const userSlugs = list.filter((l) => !l.preset).map((l) => l.slug);
+    expect(userSlugs).toContain("alpha");
+    expect(userSlugs).toContain("beta");
+    const presetSlugs = list.filter((l) => l.preset).map((l) => l.slug);
+    expect(presetSlugs).toContain("default");
+    expect(presetSlugs).toContain("template-key-quest");
   });
 
-  test("listLorebooks returns empty array when no lorebooks exist", async () => {
+  test("listLorebooks returns presets even when no user lorebooks exist", async () => {
     const list = await listLorebooks();
-    expect(list).toEqual([]);
+    expect(list.length).toBeGreaterThanOrEqual(2);
+    const slugs = list.map((l) => l.slug);
+    expect(slugs).toContain("default");
+    expect(slugs).toContain("template-key-quest");
   });
 
   test("deleteLorebook removes the lorebook directory", async () => {
@@ -601,72 +605,6 @@ describe("lorebook management", () => {
     const treeB = await scanTree("world-b");
     expect(treeB).toHaveLength(1);
     expect(treeB[0].name).toBe("Entry B");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// ensureDefaultLorebook migration
-// ---------------------------------------------------------------------------
-
-describe("ensureDefaultLorebook", () => {
-  beforeEach(cleanLorebooks);
-  afterEach(cleanLorebooks);
-
-  test("creates default lorebook when directory is empty", async () => {
-    await ensureDefaultLorebook();
-    const meta = await loadLorebookMeta("default");
-    expect(meta).toEqual({ name: "Default Lorebook", template: true });
-  });
-
-  test("migrates legacy flat files into default lorebook", async () => {
-    // Simulate legacy layout: files directly in LOREBOOKS_DIR
-    await mkdir(LOREBOOKS_DIR, { recursive: true });
-    const legacyEntry: LorebookEntry = {
-      name: "Legacy Tavern",
-      content: "Old tavern.",
-      keywords: ["tavern"],
-      regex: "",
-      priority: 5,
-      enabled: true,
-    };
-    await mkdir(join(LOREBOOKS_DIR, "people"), { recursive: true });
-    await Bun.write(
-      join(LOREBOOKS_DIR, "tavern.json"),
-      JSON.stringify(legacyEntry),
-    );
-    await Bun.write(
-      join(LOREBOOKS_DIR, "people", "gabrielle.json"),
-      JSON.stringify({ ...legacyEntry, name: "Gabrielle" }),
-    );
-
-    await ensureDefaultLorebook();
-
-    // Files should be migrated
-    const meta = await loadLorebookMeta("default");
-    expect(meta).toEqual({ name: "Default Lorebook", template: true });
-
-    const tavern = await loadEntry("default", "tavern");
-    expect(tavern).not.toBeNull();
-    expect(tavern!.name).toBe("Legacy Tavern");
-
-    const gabrielle = await loadEntry("default", "people/gabrielle");
-    expect(gabrielle).not.toBeNull();
-    expect(gabrielle!.name).toBe("Gabrielle");
-  });
-
-  test("does not migrate if a lorebook already exists", async () => {
-    await createLorebook("existing", "Existing");
-    await saveEntry("existing", "entry", { ...DEFAULT_ENTRY, name: "Keep" });
-
-    await ensureDefaultLorebook();
-
-    // "default" lorebook should NOT be created
-    const meta = await loadLorebookMeta("default");
-    expect(meta).toBeNull();
-
-    // existing lorebook untouched
-    const entry = await loadEntry("existing", "entry");
-    expect(entry!.name).toBe("Keep");
   });
 });
 
@@ -724,60 +662,82 @@ describe("copyLorebook", () => {
 });
 
 // ---------------------------------------------------------------------------
-// seedTemplates
+// Preset lorebooks
 // ---------------------------------------------------------------------------
 
-describe("seedTemplates", () => {
+describe("preset lorebooks", () => {
   beforeEach(cleanLorebooks);
   afterEach(cleanLorebooks);
 
-  test("creates the Key Quest template", async () => {
-    await seedTemplates();
+  test("isPresetLorebook returns true for preset slugs", async () => {
+    expect(await isPresetLorebook("template-key-quest")).toBe(true);
+    expect(await isPresetLorebook("default")).toBe(true);
+  });
+
+  test("isPresetLorebook returns false for non-preset slugs", async () => {
+    expect(await isPresetLorebook("my-custom")).toBe(false);
+    expect(await isPresetLorebook("")).toBe(false);
+  });
+
+  test("read functions work on preset lorebooks", async () => {
     const meta = await loadLorebookMeta("template-key-quest");
     expect(meta).not.toBeNull();
     expect(meta!.name).toBe("Key Quest");
     expect(meta!.template).toBe(true);
-  });
 
-  test("Key Quest template has expected entries", async () => {
-    await seedTemplates();
+    const entry = await loadEntry("template-key-quest", "characters/old-sage");
+    expect(entry).not.toBeNull();
+    expect(entry!.name).toBe("The Old Sage");
+
     const all = await loadAllEntries("template-key-quest");
-    const names = all.map((e) => e.name).sort();
-    expect(names).toContain("The Old Sage");
-    expect(names).toContain("Brondar the Blacksmith");
-    expect(names).toContain("Marta the Innkeeper");
-    expect(names).toContain("The Iron Key");
-    expect(names).toContain("The Village Square");
-    expect(names).toContain("The Inn Cellar");
-    expect(names).toContain("The Treasure Room");
     expect(all).toHaveLength(7);
   });
 
-  test("does not overwrite existing template", async () => {
-    await seedTemplates();
-    // Modify an entry in the template
-    await saveEntry("template-key-quest", "characters/old-sage", {
-      ...DEFAULT_ENTRY,
-      name: "Custom Sage",
-      enabled: true,
-    });
-
-    // Re-seed should not overwrite
-    await seedTemplates();
-    const sage = await loadEntry("template-key-quest", "characters/old-sage");
-    expect(sage!.name).toBe("Custom Sage");
+  test("write functions throw on preset lorebooks", async () => {
+    await expect(saveEntry("template-key-quest", "new-entry", { ...DEFAULT_ENTRY, name: "New" }))
+      .rejects.toThrow("Cannot modify a preset lorebook");
+    await expect(deleteEntry("template-key-quest", "characters/old-sage"))
+      .rejects.toThrow("Cannot modify a preset lorebook");
+    await expect(createFolder("template-key-quest", "new-folder"))
+      .rejects.toThrow("Cannot modify a preset lorebook");
+    await expect(deleteFolder("template-key-quest", "characters"))
+      .rejects.toThrow("Cannot modify a preset lorebook");
+    await expect(deleteLorebook("template-key-quest"))
+      .rejects.toThrow("Cannot modify a preset lorebook");
   });
 
-  test("template lorebooks are listed with template flag", async () => {
-    await seedTemplates();
-    await createLorebook("default", "Default Lorebook");
+  test("copyLorebook from preset works", async () => {
+    await copyLorebook("template-key-quest", "my-copy", "My Copy");
+    const meta = await loadLorebookMeta("my-copy");
+    expect(meta).toEqual({ name: "My Copy" });
+    const entry = await loadEntry("my-copy", "characters/old-sage");
+    expect(entry).not.toBeNull();
+    expect(entry!.name).toBe("The Old Sage");
+  });
+
+  test("listLorebooks includes presets with preset flag", async () => {
     const list = await listLorebooks();
-    const tpl = list.find((l) => l.slug === "template-key-quest");
-    expect(tpl).toBeDefined();
-    expect(tpl!.meta.template).toBe(true);
-    const def = list.find((l) => l.slug === "default");
-    expect(def).toBeDefined();
-    expect(def!.meta.template).toBeUndefined();
+    const keyQuest = list.find((l) => l.slug === "template-key-quest");
+    expect(keyQuest).toBeDefined();
+    expect(keyQuest!.preset).toBe(true);
+    expect(keyQuest!.meta.template).toBe(true);
+  });
+
+  test("user lorebook overrides preset of same slug", async () => {
+    await createLorebook("template-key-quest", "Custom Key Quest", true);
+    const list = await listLorebooks();
+    const keyQuest = list.find((l) => l.slug === "template-key-quest");
+    expect(keyQuest).toBeDefined();
+    expect(keyQuest!.preset).toBe(false);
+    expect(keyQuest!.meta.name).toBe("Custom Key Quest");
+  });
+
+  test("scanTree works on preset lorebooks", async () => {
+    const tree = await scanTree("template-key-quest");
+    const names = tree.map((n) => n.name);
+    expect(names).toContain("characters");
+    expect(names).toContain("items");
+    expect(names).toContain("locations");
   });
 });
 
@@ -786,7 +746,7 @@ describe("seedTemplates", () => {
 // ---------------------------------------------------------------------------
 
 describe("listLocationEntries", () => {
-  beforeEach(cleanLorebooks);
+  beforeEach(async () => { await cleanLorebooks(); await createLorebook("default", "Default"); });
   afterEach(cleanLorebooks);
 
   test("returns only entries under locations/", async () => {

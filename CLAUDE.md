@@ -26,6 +26,10 @@ src/
     lorebook.html  # Standalone lorebook page
     settings.html  # Standalone settings page
     styles.css
+presets/
+  lorebooks/       # Built-in read-only template lorebooks (checked into git)
+    default/
+    template-key-quest/
 ```
 
 ## UI
@@ -112,29 +116,30 @@ Hash-based client-side routing. The browser back/forward buttons work, and URLs 
 
 ## Unified Lorebook / Adventure Model
 
-- **Template** = lorebook with `template: true`. Shown and editable in the **Lorebook tab**.
+- **Preset** = built-in lorebook in `presets/lorebooks/`. Always available, read-only. Cannot be modified or deleted.
+- **Template** = lorebook with `template: true`. Shown and editable in the **Lorebook tab**. Presets are templates. User-created templates can be edited and deleted.
 - **Adventure** = non-template lorebook + conversations. Shown and playable in the **Adventure tab**.
 - Every non-template lorebook is an adventure (1:1). No orphan non-template lorebooks.
-- Adventures are created by copying a template (which creates a new non-template lorebook + conversation).
+- Adventures are created by copying a template (including presets, which creates a new non-template lorebook + conversation in `data/`).
 - Adventures can be saved back as templates ("Save as Template" button in the adventure picker).
-- On startup, `migrateOrphanLorebooks()` converts any non-template lorebook with zero conversations into a template.
+- On startup, `migrateOrphanLorebooks()` converts any non-template, non-preset lorebook with zero conversations into a template.
 
 ## Lorebook
 
-- **Module:** `src/lorebook.ts` — `LorebookEntry` type, `LorebookMeta` type, tree scanning, CRUD, matching engine, lorebook management, templates
-- **Storage:** `data/lorebooks/<lorebook-slug>/` — each top-level directory is one lorebook. Inside each lorebook:
-  - `_lorebook.json` — metadata file with `{ "name": "Display Name", "template"?: true }`
-  - Nested JSON files — each `.json` file (except `_lorebook.json`) is one entry
-  - Directories organize entries into categories
-  - Example layout:
+- **Module:** `src/lorebook.ts` — `LorebookEntry` type, `LorebookMeta` type, tree scanning, CRUD, matching engine, lorebook management, presets
+- **Storage:** Lorebooks are resolved from two directories:
+  - `data/lorebooks/<slug>/` — user-created lorebooks (runtime data, gitignored)
+  - `presets/lorebooks/<slug>/` — built-in read-only templates (checked into git)
+  - User data dir takes priority: if a slug exists in both, the data dir version is used
+  - Each lorebook directory contains:
+    - `_lorebook.json` — metadata file with `{ "name": "Display Name", "template"?: true }`
+    - Nested JSON files — each `.json` file (except `_lorebook.json`) is one entry
+    - Directories organize entries into categories
+  - Example preset layout:
     ```
-    data/lorebooks/
+    presets/lorebooks/
       default/
         _lorebook.json       # { "name": "Default Lorebook", "template": true }
-        people/
-          gabrielle.json
-        locations/
-          tavern.json
       template-key-quest/
         _lorebook.json       # { "name": "Key Quest", "template": true }
         characters/
@@ -148,9 +153,16 @@ Hash-based client-side routing. The browser back/forward buttons work, and URLs 
           cellar.json
           treasure-room.json
     ```
-- **Templates:** Lorebooks with `"template": true` in metadata. Shown as cards in the Lorebook tab picker with Edit and Delete buttons, plus a "+ Template" button. Built-in templates are seeded at startup via `seedTemplates()`.
+- **Presets:** Built-in lorebooks in `presets/lorebooks/` are read-only. They are always available and cannot be modified or deleted via the UI or API.
+  - `isPresetLorebook(slug)` — returns true if a slug exists in the presets directory
+  - `isReadOnlyPreset(slug)` — returns true if it's a preset AND there's no user-data override
+  - Write functions (`saveEntry`, `deleteEntry`, `createFolder`, `deleteFolder`, `deleteLorebook`, `saveLorebookMeta`) call `assertNotPreset()` which throws if the lorebook is a read-only preset
+  - `copyLorebook(source, dest, name)` can copy FROM a preset (source resolves via both dirs) but always writes TO the data dir
+  - `listLorebooks()` returns `{ slug, meta, preset: boolean }[]` — scans data dir first, then presets (skipping slugs already in data dir)
+  - UI: preset templates show Edit button (read-only view) but no Delete button; tree/entry forms are rendered in read-only mode
   - **Key Quest template** (`template-key-quest`): A story where the player asks three NPCs who has the key and where to open a locked room to get the treasure. Contains 7 entries (3 characters, 1 item, 3 locations).
-- **Migration:** On startup, `ensureDefaultLorebook()` migrates legacy flat files into a `default/` subdirectory (as a template). `migrateOrphanLorebooks()` converts non-template lorebooks with no conversations into templates.
+- **Templates:** Lorebooks with `"template": true` in metadata. Shown as cards in the Lorebook tab picker with Edit buttons, plus a "+ Template" button. User-created templates also get a Delete button.
+- **Migration:** On startup, `migrateOrphanLorebooks()` converts non-template, non-preset lorebooks with no conversations into templates.
 - **All CRUD functions** take `lorebook: string` as their first argument (the lorebook slug)
 - **Functions:** `saveLorebookMeta(slug, meta)` — writes updated `_lorebook.json` for an existing lorebook
 - **UI:** Lorebook tab in index.html (also standalone at `/lorebook.html`) — two-step layout mirroring the Adventure tab:
@@ -159,19 +171,19 @@ Hash-based client-side routing. The browser back/forward buttons work, and URLs 
 - **API routes:**
   - Lorebook management (under `/api/lorebooks`):
     - `GET /api/lorebooks` — returns lorebook picker HTML (card-based list + "+ Template" button)
-    - `GET /api/lorebooks/meta?slug=` — returns JSON `{ slug, name, template }` for a lorebook (404 if not found). Used by router to restore lorebook editor from URL.
+    - `GET /api/lorebooks/meta?slug=` — returns JSON `{ slug, name, template, preset }` for a lorebook (404 if not found). Used by router to restore lorebook editor from URL.
     - `POST /api/lorebooks` — create template (JSON `{ slug, name }`) → `HX-Trigger: refreshLorebooks`
     - `POST /api/lorebooks/copy` — copy a lorebook as non-template (JSON `{ source, slug, name }`) → `HX-Trigger: refreshLorebooks`
     - `POST /api/lorebooks/make-template` — copy a lorebook as template (JSON `{ source, slug, name }`) → `HX-Trigger: refreshLorebooks`
-    - `DELETE /api/lorebooks?slug=...` — delete any lorebook → `HX-Trigger: refreshLorebooks`
+    - `DELETE /api/lorebooks?slug=...` — delete a lorebook (403 for presets) → `HX-Trigger: refreshLorebooks`
   - Lorebook entries (under `/api/lorebook/`, use `?path=` and `?lorebook=` query params):
-    - `GET /api/lorebook/tree?lorebook=...` — returns tree HTML fragment with per-folder "+ New" buttons
-    - `GET /api/lorebook/entry?path=...&lorebook=...` — returns entry editor form
-    - `POST /api/lorebook/entry?path=...&lorebook=...` — create entry (JSON body, returns HTML)
-    - `PUT /api/lorebook/entry?path=...&lorebook=...` — update entry (JSON body, returns HTML)
-    - `DELETE /api/lorebook/entry?path=...&lorebook=...` — delete entry
-    - `POST /api/lorebook/folder?lorebook=...` — create folder (form data with `path`)
-    - `DELETE /api/lorebook/folder?path=...&lorebook=...` — delete folder
+    - `GET /api/lorebook/tree?lorebook=...` — returns tree HTML fragment (read-only for presets: no "+ New" or delete buttons)
+    - `GET /api/lorebook/entry?path=...&lorebook=...` — returns entry editor form (read-only with disabled inputs for presets)
+    - `POST /api/lorebook/entry?path=...&lorebook=...` — create entry (403 for presets)
+    - `PUT /api/lorebook/entry?path=...&lorebook=...` — update entry (403 for presets)
+    - `DELETE /api/lorebook/entry?path=...&lorebook=...` — delete entry (403 for presets)
+    - `POST /api/lorebook/folder?lorebook=...` — create folder (403 for presets)
+    - `DELETE /api/lorebook/folder?path=...&lorebook=...` — delete folder (403 for presets)
 - **Matching:** `findMatchingEntries(lorebook, text)` — returns enabled entries matching via keywords or regex, sorted by priority desc
 - **Locations:** `listLocationEntries(lorebook)` — returns entries whose path starts with `locations/`, sorted by name. Used by the adventure system for the location dropdown.
 - **Integration:** Called by adventure system for location data; future chat system will inject lore context into LLM prompts
@@ -185,6 +197,7 @@ Hash-based client-side routing. The browser back/forward buttons work, and URLs 
 - Static files are served from `src/public/`. Any unmatched path falls back to `index.html`.
 - Default port is **3001** (override via `PORT` env var).
 - The `data/` directory is gitignored and stores runtime data (settings, etc.).
+- The `presets/` directory is checked into git and stores read-only built-in templates.
 
 ## Progress Tracking
 

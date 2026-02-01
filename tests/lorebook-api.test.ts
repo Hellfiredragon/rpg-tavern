@@ -7,7 +7,6 @@ import {
   loadEntry,
   createFolder,
   createLorebook,
-  seedTemplates,
 } from "../src/lorebook";
 import { startServer } from "../src/server";
 
@@ -263,12 +262,11 @@ describe("lorebook API routes", () => {
     expect(res.headers.get("hx-trigger")).toBe("refreshLorebooks");
   });
 
-  test("DELETE /api/lorebooks allows deleting any lorebook", async () => {
-    await createLorebook("default", "Default Lorebook", true);
+  test("DELETE /api/lorebooks returns 403 for preset lorebook", async () => {
     const res = await fetch(`${BASE}/api/lorebooks?slug=default`, {
       method: "DELETE",
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(403);
   });
 
   test("tree renders per-folder + New buttons with data-prefix", async () => {
@@ -337,9 +335,7 @@ describe("lorebook API routes", () => {
     expect(res.status).toBe(400);
   });
 
-  test("GET /api/lorebooks shows templates as cards with edit and delete buttons", async () => {
-    await createLorebook("default", "Default Lorebook", true);
-    await seedTemplates();
+  test("GET /api/lorebooks shows templates as cards with edit buttons, presets without delete", async () => {
     const res = await fetch(`${BASE}/api/lorebooks`);
     expect(res.status).toBe(200);
     const body = await res.text();
@@ -347,18 +343,16 @@ describe("lorebook API routes", () => {
     expect(body).toContain("Key Quest");
     expect(body).toContain("Default Lorebook");
     expect(body).toContain("lorebook-edit-btn");
-    expect(body).toContain("lorebook-delete-btn");
+    // Presets should NOT have delete buttons
     expect(body).not.toContain("template-select");
     expect(body).not.toContain("btn-use-template");
   });
 
   test("GET /api/lorebooks shows both templates and adventures as cards", async () => {
-    await createLorebook("default", "Default Lorebook", true);
     await createLorebook("my-adventure", "My Adventure"); // non-template
-    await seedTemplates();
     const res = await fetch(`${BASE}/api/lorebooks`);
     const body = await res.text();
-    // Templates section
+    // Templates section (presets)
     expect(body).toContain("Templates");
     expect(body).toContain('data-slug="template-key-quest"');
     expect(body).toContain("Default Lorebook");
@@ -369,8 +363,68 @@ describe("lorebook API routes", () => {
     // Card-based layout
     expect(body).toContain("adventure-card");
     expect(body).toContain("lorebook-edit-btn");
-    // Delete only on templates
-    expect(body).toContain("lorebook-delete-btn");
+  });
+
+  // --- Preset guard tests ---
+
+  test("POST /api/lorebook/entry on preset returns 403", async () => {
+    const res = await fetch(`${BASE}/api/lorebook/entry?path=new-entry&lorebook=template-key-quest`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Test", content: "test", keywords: "", regex: "", priority: 0, enabled: true }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  test("PUT /api/lorebook/entry on preset returns 403", async () => {
+    const res = await fetch(`${BASE}/api/lorebook/entry?path=characters/old-sage&lorebook=template-key-quest`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Test", content: "test", keywords: "", regex: "", priority: 0, enabled: true }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  test("DELETE /api/lorebook/entry on preset returns 403", async () => {
+    const res = await fetch(`${BASE}/api/lorebook/entry?path=characters/old-sage&lorebook=template-key-quest`, {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(403);
+  });
+
+  test("POST /api/lorebook/folder on preset returns 403", async () => {
+    const res = await fetch(`${BASE}/api/lorebook/folder?lorebook=template-key-quest`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "path=new-folder",
+    });
+    expect(res.status).toBe(403);
+  });
+
+  test("DELETE /api/lorebook/folder on preset returns 403", async () => {
+    const res = await fetch(`${BASE}/api/lorebook/folder?path=characters&lorebook=template-key-quest`, {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(403);
+  });
+
+  test("GET /api/lorebook/tree on preset returns tree without + New buttons", async () => {
+    const res = await fetch(`${BASE}/api/lorebook/tree?lorebook=template-key-quest`);
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain("The Old Sage");
+    expect(body).not.toContain("btn-new-entry");
+    expect(body).not.toContain("Delete folder");
+  });
+
+  test("GET /api/lorebook/entry on preset returns read-only form", async () => {
+    const res = await fetch(`${BASE}/api/lorebook/entry?path=characters/old-sage&lorebook=template-key-quest`);
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain("The Old Sage");
+    expect(body).toContain("disabled");
+    expect(body).toContain("Preset");
+    expect(body).not.toContain("editor-actions");
   });
 
   // --- Chat API tests ---

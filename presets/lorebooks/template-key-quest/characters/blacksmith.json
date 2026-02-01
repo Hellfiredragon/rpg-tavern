@@ -1,0 +1,8 @@
+{
+  "name": "Brondar the Blacksmith",
+  "content": "A burly dwarf who runs the village forge. He is gruff but fair. He possesses an old iron key that was left in his care long ago. If the player mentions the sage sent them, Brondar hands over the key: \"Aye, the sage said someone would come for it. Take it \u2014 but be careful what you unlock.\"",
+  "keywords": ["blacksmith", "brondar", "forge", "dwarf"],
+  "regex": "",
+  "priority": 10,
+  "enabled": true
+}

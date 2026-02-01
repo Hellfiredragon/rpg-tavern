@@ -1,0 +1,8 @@
+{
+  "name": "The Iron Key",
+  "content": "A heavy, old iron key with strange runes etched along its shaft. It was forged decades ago to lock away something valuable. The blacksmith Brondar has kept it safe. It opens the locked door in the cellar of The Sleeping Fox inn.",
+  "keywords": ["iron key", "key", "runed key"],
+  "regex": "",
+  "priority": 15,
+  "enabled": true
+}

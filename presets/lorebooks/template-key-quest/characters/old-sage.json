@@ -1,0 +1,8 @@
+{
+  "name": "The Old Sage",
+  "content": "A wizened old man who sits by the fountain in the village square. He speaks in riddles but knows many secrets. When asked about the key, he says: \"The one who shapes iron holds what you seek. Visit the blacksmith's forge.\"",
+  "keywords": ["old sage", "sage", "wise man", "old man"],
+  "regex": "",
+  "priority": 10,
+  "enabled": true
+}

@@ -435,14 +435,16 @@
       if (!skipPush) history.pushState(null, '', '#lorebook');
     }
 
-    function enterLorebookEdit(slug, name, skipPush) {
+    function enterLorebookEdit(slug, name, skipPush, preset) {
       lorebookPicker.style.display = 'none';
       lorebookEdit.style.display = '';
       currentLorebook = slug;
-      lorebookEditName.textContent = name;
+      lorebookEditName.textContent = name + (preset ? ' (Preset)' : '');
       refreshTree();
       document.getElementById('lorebook-editor').innerHTML =
-        '<p class="editor-placeholder">Select an entry from the tree, or create a new one.</p>';
+        preset
+          ? '<p class="editor-placeholder">Select an entry from the tree to view it.</p>'
+          : '<p class="editor-placeholder">Select an entry from the tree, or create a new one.</p>';
       if (!skipPush) history.pushState(null, '', '#lorebook/' + encodeURIComponent(slug));
     }
 
@@ -456,7 +458,8 @@
       // Edit button on lorebook cards
       var editBtn = e.target.closest('.lorebook-edit-btn');
       if (editBtn) {
-        enterLorebookEdit(editBtn.getAttribute('data-slug'), editBtn.getAttribute('data-name'));
+        var preset = editBtn.getAttribute('data-preset') === 'true';
+        enterLorebookEdit(editBtn.getAttribute('data-slug'), editBtn.getAttribute('data-name'), false, preset);
         return;
       }
 
@@ -652,7 +655,7 @@
               return res.json();
             })
             .then(function(data) {
-              if (data) enterLorebookEdit(data.slug, data.name, skipPush);
+              if (data) enterLorebookEdit(data.slug, data.name, skipPush, data.preset);
             });
         } else {
           showLorebookPicker(true);

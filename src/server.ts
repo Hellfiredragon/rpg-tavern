@@ -4,9 +4,9 @@ import { loadSettings, saveSettings, DEFAULT_SETTINGS, type Settings } from "./s
 import {
   scanTree, loadEntry, saveEntry, deleteEntry,
   createFolder, deleteFolder, validateEntry, DEFAULT_ENTRY,
-  listLorebooks, createLorebook, deleteLorebook, ensureDefaultLorebook,
-  copyLorebook, seedTemplates, listLocationEntries, loadLorebookMeta,
-  saveLorebookMeta,
+  listLorebooks, createLorebook, deleteLorebook,
+  copyLorebook, listLocationEntries, loadLorebookMeta,
+  saveLorebookMeta, isPresetLorebook, isReadOnlyPreset,
   type LorebookEntry, type LorebookMeta, type TreeNode,
 } from "./lorebook";
 import {
@@ -29,7 +29,7 @@ async function migrateOrphanLorebooks(): Promise<void> {
   const allConvos = await listConversations();
 
   for (const lb of lorebooks) {
-    if (lb.meta.template) continue;
+    if (lb.meta.template || lb.preset) continue;
     const hasConvos = allConvos.some((c) => c.lorebook === lb.slug);
     if (!hasConvos) {
       await saveLorebookMeta(lb.slug, { ...lb.meta, template: true });
@@ -38,8 +38,6 @@ async function migrateOrphanLorebooks(): Promise<void> {
 }
 
 export async function startServer(port: number) {
-  await ensureDefaultLorebook();
-  await seedTemplates();
   await migrateOrphanLorebooks();
 
   const server = serve({
@@ -311,7 +309,8 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
     try {
       const meta = await loadLorebookMeta(slug);
       if (!meta) return Response.json({ error: "Not found" }, { status: 404 });
-      return Response.json({ slug, name: meta.name, template: !!meta.template });
+      const preset = await isReadOnlyPreset(slug);
+      return Response.json({ slug, name: meta.name, template: !!meta.template, preset });
     } catch {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
@@ -338,6 +337,9 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
   if (url.pathname === "/api/lorebooks" && req.method === "DELETE") {
     const slug = url.searchParams.get("slug");
     if (!slug) return html(`<div class="feedback error">Missing slug</div>`, 400);
+    if (await isReadOnlyPreset(slug)) {
+      return html(`<div class="feedback error">Cannot delete a preset lorebook</div>`, 403);
+    }
     await deleteLorebook(slug);
     return html(
       `<div class="feedback success">Lorebook deleted.</div>`,
@@ -391,7 +393,8 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
   if (url.pathname === "/api/lorebook/tree" && req.method === "GET") {
     const lb = getLorebookSlug(url);
     const tree = await scanTree(lb);
-    return html(renderTree(tree, lb));
+    const readonly = await isReadOnlyPreset(lb);
+    return html(renderTree(tree, lb, readonly));
   }
 
   if (url.pathname === "/api/lorebook/entry" && req.method === "GET") {
@@ -399,11 +402,13 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
     const path = url.searchParams.get("path");
     if (!path) return html(`<div class="feedback error">Missing path parameter</div>`, 400);
     const entry = await loadEntry(lb, path);
-    return html(entryFormHtml(path, entry ?? DEFAULT_ENTRY, !entry, lb));
+    const readonly = await isReadOnlyPreset(lb);
+    return html(entryFormHtml(path, entry ?? DEFAULT_ENTRY, !entry, lb, readonly));
   }
 
   if (url.pathname === "/api/lorebook/entry" && req.method === "POST") {
     const lb = getLorebookSlug(url);
+    if (await isReadOnlyPreset(lb)) return html(`<div class="feedback error">Cannot modify a preset lorebook</div>`, 403);
     const path = url.searchParams.get("path");
     if (!path) return html(`<div class="feedback error">Missing path</div>`, 400);
     try {
@@ -423,6 +428,7 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
 
   if (url.pathname === "/api/lorebook/entry" && req.method === "PUT") {
     const lb = getLorebookSlug(url);
+    if (await isReadOnlyPreset(lb)) return html(`<div class="feedback error">Cannot modify a preset lorebook</div>`, 403);
     const path = url.searchParams.get("path");
     if (!path) return html(`<div class="feedback error">Missing path</div>`, 400);
     try {
@@ -442,6 +448,7 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
 
   if (url.pathname === "/api/lorebook/entry" && req.method === "DELETE") {
     const lb = getLorebookSlug(url);
+    if (await isReadOnlyPreset(lb)) return html(`<div class="feedback error">Cannot modify a preset lorebook</div>`, 403);
     const path = url.searchParams.get("path");
     if (!path) return html(`<div class="feedback error">Missing path</div>`, 400);
     await deleteEntry(lb, path);
@@ -454,6 +461,7 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
 
   if (url.pathname === "/api/lorebook/folder" && req.method === "POST") {
     const lb = getLorebookSlug(url);
+    if (await isReadOnlyPreset(lb)) return html(`<div class="feedback error">Cannot modify a preset lorebook</div>`, 403);
     const formData = await req.formData();
     const path = formData.get("path") as string | null;
     if (!path) return html(`<div class="feedback error">Missing path</div>`, 400);
@@ -467,6 +475,7 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
 
   if (url.pathname === "/api/lorebook/folder" && req.method === "DELETE") {
     const lb = getLorebookSlug(url);
+    if (await isReadOnlyPreset(lb)) return html(`<div class="feedback error">Cannot modify a preset lorebook</div>`, 403);
     const path = url.searchParams.get("path");
     if (!path) return html(`<div class="feedback error">Missing path</div>`, 400);
     await deleteFolder(lb, path);
@@ -547,14 +556,14 @@ function settingsFormHtml(s: Settings): string {
 // Lorebook HTML renderers
 // ---------------------------------------------------------------------------
 
-function renderTree(nodes: TreeNode[], lorebook: string): string {
+function renderTree(nodes: TreeNode[], lorebook: string, readonly = false): string {
   if (nodes.length === 0) {
-    return renderNewButton("", lorebook) + `<p class="tree-empty">No entries yet.</p>`;
+    return (readonly ? "" : renderNewButton("", lorebook)) + `<p class="tree-empty">No entries yet.</p>`;
   }
-  return renderNewButton("", lorebook) + renderTreeLevel(nodes, lorebook);
+  return (readonly ? "" : renderNewButton("", lorebook)) + renderTreeLevel(nodes, lorebook, readonly);
 }
 
-function renderTreeLevel(nodes: TreeNode[], lorebook: string): string {
+function renderTreeLevel(nodes: TreeNode[], lorebook: string, readonly = false): string {
   let out = '<ul class="tree-list">';
   for (const node of nodes) {
     if (node.isEntry) {
@@ -571,8 +580,8 @@ function renderTreeLevel(nodes: TreeNode[], lorebook: string): string {
       out += `<li class="tree-folder">
         <details open>
           <summary>${escapeHtml(folderName)}/</summary>
-          ${renderNewButton(folderPrefix, lorebook)}
-          ${renderTreeLevel(node.children, lorebook)}
+          ${readonly ? "" : renderNewButton(folderPrefix, lorebook)}
+          ${renderTreeLevel(node.children, lorebook, readonly)}
         </details>
       </li>`;
     } else if (!node.isEntry) {
@@ -581,12 +590,12 @@ function renderTreeLevel(nodes: TreeNode[], lorebook: string): string {
       out += `<li class="tree-folder">
         <details>
           <summary>${escapeHtml(node.name)}/</summary>
-          ${renderNewButton(folderPrefix, lorebook)}
+          ${readonly ? "" : renderNewButton(folderPrefix, lorebook)}
           <p class="tree-empty">Empty folder</p>
-          <button hx-delete="/api/lorebook/folder?path=${encodeURIComponent(node.path)}&lorebook=${encodeURIComponent(lorebook)}"
+          ${readonly ? "" : `<button hx-delete="/api/lorebook/folder?path=${encodeURIComponent(node.path)}&lorebook=${encodeURIComponent(lorebook)}"
                   hx-target="#lorebook-tree" hx-swap="innerHTML"
                   hx-confirm="Delete empty folder '${escapeHtml(node.name)}'?"
-                  class="btn-sm btn-danger">Delete folder</button>
+                  class="btn-sm btn-danger">Delete folder</button>`}
         </details>
       </li>`;
     }
@@ -599,7 +608,7 @@ function renderNewButton(prefix: string, lorebook: string): string {
   return `<button class="btn-sm btn-new-entry" data-prefix="${escapeHtml(prefix)}" data-lorebook="${escapeHtml(lorebook)}">+ New</button>`;
 }
 
-function renderLorebookPicker(lorebooks: { slug: string; meta: LorebookMeta }[]): string {
+function renderLorebookPicker(lorebooks: { slug: string; meta: LorebookMeta; preset: boolean }[]): string {
   const templates = lorebooks.filter((lb) => lb.meta.template);
   const adventures = lorebooks.filter((lb) => !lb.meta.template);
 
@@ -622,11 +631,12 @@ function renderLorebookPicker(lorebooks: { slug: string; meta: LorebookMeta }[])
   out += `<h2>Templates</h2>`;
   if (templates.length > 0) {
     for (const lb of templates) {
+      const presetAttr = lb.preset ? ` data-preset="true"` : "";
       out += `<div class="adventure-card adventure-card-template">
         <span class="adventure-card-name">${escapeHtml(lb.meta.name)}</span>
         <div class="adventure-card-actions">
-          <button class="btn-sm lorebook-edit-btn" data-slug="${escapeHtml(lb.slug)}" data-name="${escapeHtml(lb.meta.name)}">Edit</button>
-          <button class="btn-sm btn-danger lorebook-delete-btn" data-slug="${escapeHtml(lb.slug)}" data-name="${escapeHtml(lb.meta.name)}">Delete</button>
+          <button class="btn-sm lorebook-edit-btn" data-slug="${escapeHtml(lb.slug)}" data-name="${escapeHtml(lb.meta.name)}"${presetAttr}>Edit</button>
+          ${lb.preset ? "" : `<button class="btn-sm btn-danger lorebook-delete-btn" data-slug="${escapeHtml(lb.slug)}" data-name="${escapeHtml(lb.meta.name)}">Delete</button>`}
         </div>
       </div>`;
     }
@@ -639,43 +649,44 @@ function renderLorebookPicker(lorebooks: { slug: string; meta: LorebookMeta }[])
   return out;
 }
 
-function entryFormHtml(path: string, entry: LorebookEntry, isNew: boolean, lorebook: string): string {
+function entryFormHtml(path: string, entry: LorebookEntry, isNew: boolean, lorebook: string, readonly = false): string {
   const method = isNew ? "hx-post" : "hx-put";
   const verb = isNew ? "Create" : "Save";
   const lbParam = `&lorebook=${encodeURIComponent(lorebook)}`;
+  const dis = readonly ? " disabled" : "";
 
-  return `<h2>${escapeHtml(path)}</h2>
+  return `<h2>${escapeHtml(path)}${readonly ? " <small>(Preset — Read Only)</small>" : ""}</h2>
 <form ${method}="/api/lorebook/entry?path=${encodeURIComponent(path)}${lbParam}"
       hx-target="#lorebook-editor" hx-swap="innerHTML" hx-ext="json-enc">
 
   <label for="lb-name">Name</label>
-  <input id="lb-name" name="name" type="text" value="${escapeHtml(entry.name)}" required />
+  <input id="lb-name" name="name" type="text" value="${escapeHtml(entry.name)}" required${dis} />
 
   <label for="lb-content">Content</label>
-  <textarea id="lb-content" name="content" rows="8">${escapeHtml(entry.content)}</textarea>
+  <textarea id="lb-content" name="content" rows="8"${dis}>${escapeHtml(entry.content)}</textarea>
 
   <label for="lb-keywords">Keywords <span class="hint">(comma-separated)</span></label>
   <input id="lb-keywords" name="keywords" type="text"
-         value="${escapeHtml(entry.keywords.join(", "))}" />
+         value="${escapeHtml(entry.keywords.join(", "))}"${dis} />
 
   <label for="lb-regex">Regex pattern <span class="hint">(leave empty for none)</span></label>
-  <input id="lb-regex" name="regex" type="text" value="${escapeHtml(entry.regex)}" />
+  <input id="lb-regex" name="regex" type="text" value="${escapeHtml(entry.regex)}"${dis} />
 
   <label for="lb-priority">Priority: <strong>${entry.priority}</strong></label>
-  <input id="lb-priority" name="priority" type="number" value="${entry.priority}" />
+  <input id="lb-priority" name="priority" type="number" value="${entry.priority}"${dis} />
 
   <label>
-    <input name="enabled" type="checkbox" ${entry.enabled ? "checked" : ""} />
+    <input name="enabled" type="checkbox" ${entry.enabled ? "checked" : ""}${dis} />
     Enabled
   </label>
 
-  <div class="editor-actions">
+  ${readonly ? "" : `<div class="editor-actions">
     <button type="submit">${verb}</button>
     ${isNew ? "" : `<button type="button" class="btn-danger"
       hx-delete="/api/lorebook/entry?path=${encodeURIComponent(path)}${lbParam}"
       hx-target="#lorebook-editor" hx-swap="innerHTML"
       hx-confirm="Delete entry '${escapeHtml(entry.name)}'?">Delete</button>`}
-  </div>
+  </div>`}
 </form>`;
 }
 
@@ -712,7 +723,7 @@ function renderChatMessages(messages: ChatMessage[]): string {
   return out;
 }
 
-function renderAdventurePicker(lorebooks: { slug: string; meta: LorebookMeta }[], allConvos: ChatMeta[]): string {
+function renderAdventurePicker(lorebooks: { slug: string; meta: LorebookMeta; preset: boolean }[], allConvos: ChatMeta[]): string {
   const templates = lorebooks.filter((lb) => lb.meta.template);
 
   // Only show user lorebooks that have been started (have at least one conversation)

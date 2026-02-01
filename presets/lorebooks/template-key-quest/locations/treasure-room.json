@@ -1,0 +1,8 @@
+{
+  "name": "The Treasure Room",
+  "content": "Behind the locked iron door lies a small stone chamber. In the center, on a pedestal, sits a golden chest. Inside the chest: a pouch of 200 gold coins, a silver dagger with a sapphire pommel, and a rolled-up map leading to further adventures.",
+  "keywords": ["treasure room", "treasure", "golden chest", "chest"],
+  "regex": "",
+  "priority": 20,
+  "enabled": true
+}

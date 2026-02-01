@@ -1,0 +1,8 @@
+{
+  "name": "Marta the Innkeeper",
+  "content": "A cheerful halfling woman who runs The Sleeping Fox inn. She knows every rumor in the village. When asked about a locked room, she whispers: \"There's a door in the old cellar beneath the inn that no one has opened in years. They say treasure lies behind it.\"",
+  "keywords": ["innkeeper", "marta", "inn", "sleeping fox"],
+  "regex": "",
+  "priority": 10,
+  "enabled": true
+}
