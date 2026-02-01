@@ -17,15 +17,19 @@
 
 ```
 src/
-  server.ts        # Entry point — Bun.serve(), routing, API handlers
+  server.ts        # Entry point — Bun.serve(), static files, startup
+  routes.ts        # API route handlers
+  renderers.ts     # HTML rendering functions
   chat.ts          # Chat persistence — types, JSONL read/write, CRUD
   settings.ts      # Settings persistence
   lorebook.ts      # Lorebook system
   public/          # Static assets served by the backend
-    index.html     # Tabbed SPA (Chat, Lorebook, Settings)
+    index.html     # HTML structure + dialogs
+    app.js         # Client-side JavaScript (tabs, routing, event handlers)
+    styles.css     # Base layout + utility CSS
+    components.css # Feature component CSS (adventure, lorebook, chat)
     lorebook.html  # Standalone lorebook page
     settings.html  # Standalone settings page
-    styles.css
 presets/
   lorebooks/       # Built-in read-only template lorebooks (checked into git)
     default/
@@ -204,6 +208,7 @@ Hash-based client-side routing. The browser back/forward buttons work, and URLs 
 - Default port is **3001** (override via `PORT` env var).
 - The `data/` directory is gitignored and stores runtime data (settings, etc.).
 - The `presets/` directory is checked into git and stores read-only built-in templates.
+- **File size guideline:** Source files should target <500 lines. Prefer meaningful splits over forced ones — natural code groupings matter more than hitting a number.
 
 ## Progress Tracking
 
