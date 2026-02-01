@@ -223,6 +223,7 @@ Hash-based client-side routing. The browser back/forward buttons work, and URLs 
 ## Conventions
 
 - After completing a unit of work, provide a commit message the user can use.
+- **Commit messages** use semantic prefixes: `feat(topic):`, `fix(topic):`, `chore(topic):`, `refactor(topic):`, `test(topic):`, `docs(topic):`.
 - API routes live under `/api/` and return **HTML fragments** (not JSON) for HTMX to swap in.
   - Exception: `GET /api/settings` returns JSON for programmatic access (API key masked).
 - All user-supplied strings must be escaped with `escapeHtml()` before embedding in HTML responses.
