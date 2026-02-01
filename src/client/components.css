@@ -439,50 +439,7 @@
   }
 }
 
-/* Drag & drop tree reordering */
-
-.drag-hold-ring {
-  position: absolute;
-  width: 28px;
-  height: 28px;
-  z-index: 100;
-  pointer-events: none;
-  transform: translate(-50%, -50%);
-}
-
-.drag-hold-ring circle {
-  fill: none;
-  stroke: #e2b04a;
-  stroke-width: 2.5;
-  stroke-dasharray: 75.4;
-  stroke-dashoffset: 75.4;
-  stroke-linecap: round;
-  transform: rotate(-90deg);
-  transform-origin: center;
-}
-
-.drag-hold-ring.active circle {
-  animation: drag-ring-fill 1s linear forwards;
-}
-
-@keyframes drag-ring-fill {
-  to { stroke-dashoffset: 0; }
-}
-
-.drag-ghost {
-  position: fixed;
-  z-index: 200;
-  pointer-events: none;
-  background: #16213e;
-  color: #e0e0e0;
-  border: 2px solid #e2b04a;
-  border-radius: 4px;
-  padding: 0.25rem 0.6rem;
-  font-size: 0.85rem;
-  white-space: nowrap;
-  opacity: 0.92;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-}
+/* Drag & drop tree reordering (HTML5 native) */
 
 .tree-entry.dragging {
   opacity: 0.35;
@@ -506,13 +463,26 @@
   border-radius: 4px;
 }
 
-.drag-target-ghost {
-  list-style: none;
-  color: #e2b04a;
-  font-style: italic;
-  font-size: 0.85rem;
-  padding: 0.2rem 0.5rem;
-  border-left: 2px solid #e2b04a;
-  margin: 0.15rem 0;
-  opacity: 0.7;
+/* Tree path display */
+
+.tree-path {
+  display: block;
+  font-size: 0.7rem;
+  color: #666;
+  line-height: 1.2;
+}
+
+/* Form field drop zones */
+
+.drop-zone {
+  border-radius: 4px;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.drop-zone-active {
+  box-shadow: 0 0 0 2px rgba(226, 176, 74, 0.5);
+}
+
+.drop-zone input {
+  width: 100%;
 }

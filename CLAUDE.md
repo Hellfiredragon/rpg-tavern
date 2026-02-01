@@ -49,9 +49,8 @@ src/
       lorebook/
         LorebookPicker.tsx  # Lorebook card list (templates + adventures)
         LorebookEditor.tsx  # Two-column editor — tree + entry form
-        TreeBrowser.tsx     # Recursive tree rendering with folder expand
-        EntryForm.tsx       # Entry create/edit form
-        useDragTree.ts      # Hold-to-drag hook for tree entry moving
+        TreeBrowser.tsx     # Recursive tree rendering with folder expand + HTML5 drag
+        EntryForm.tsx       # Entry create/edit form with drop zone inputs
     pages/
       AdventurePage.tsx  # Adventure route — picker or play based on :slug
       LorebookPage.tsx   # Lorebook route — picker or editor based on :slug
@@ -234,7 +233,7 @@ All routes return JSON. Error responses use `{ error: "message" }` with appropri
     - `POST /api/lorebook/folder?lorebook=` — JSON `{ path }` → `{ ok: true }`
     - `DELETE /api/lorebook/folder?path=&lorebook=` → `{ ok: true }`
     - `PUT /api/lorebook/entry/move?lorebook=` — JSON `{ path, destination }` → `{ ok: true, newPath }`
-- **Drag & Drop:** Hold-to-drag interaction for moving entries between folders in the tree browser. Hold mousedown 1s (circular progress ring), then drag to a folder or root. Implemented in `useDragTree.ts` as a React hook with document-level event listeners managed by `useEffect`. Read-only preset lorebooks are excluded.
+- **Drag & Drop:** HTML5 native `draggable` on tree entry links. Two drop target types: (1) tree folders/root — moves the entry via `PUT /api/lorebook/entry/move`, (2) form fields (`homeLocation`, `characters`) — sets/appends the dragged path as the field value. Uses `application/lorebook-path` custom MIME type in `dataTransfer`. A `useRef` tracks the currently-dragged path for `dragOver` validation (since `getData()` is unavailable during `dragover`). Read-only preset lorebooks disable dragging. Entry paths are displayed below names in the tree.
 - **Matching:** `findMatchingEntries(lorebook, text)` — returns enabled entries matching via keywords or regex, sorted by priority desc
 - **Locations:** `listLocationEntries(lorebook)` — returns entries whose path starts with `locations/`, sorted by name. Used by the adventure system for the location dropdown.
 - **Character–Location Relationships:** Entry type is inferred from folder path (`locations/*` = location, `characters/*` = character). The base `LorebookEntry` has optional type-specific fields:

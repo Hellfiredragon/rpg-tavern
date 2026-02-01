@@ -1,6 +1,39 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import * as api from "../../api";
 import type { LorebookEntry } from "../../types";
+
+const MIME = "application/lorebook-path";
+
+function useDropZone(onDrop: (path: string) => void) {
+  const [active, setActive] = useState(false);
+
+  const handlers = {
+    onDragOver: (e: React.DragEvent) => {
+      if (!e.dataTransfer.types.includes(MIME)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    },
+    onDragEnter: (e: React.DragEvent) => {
+      if (!e.dataTransfer.types.includes(MIME)) return;
+      e.preventDefault();
+      setActive(true);
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      const container = e.currentTarget as HTMLElement;
+      if (!container.contains(e.relatedTarget as Node)) {
+        setActive(false);
+      }
+    },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      setActive(false);
+      const path = e.dataTransfer.getData(MIME);
+      if (path) onDrop(path);
+    },
+  };
+
+  return { active, handlers };
+}
 
 type Props = {
   lorebook: string;
@@ -63,6 +96,18 @@ export function EntryForm({ lorebook, path, readonly, onSaved, onDeleted }: Prop
   const isLocation = path.startsWith("locations/");
   const charactersStr = Array.isArray(entry.characters) ? entry.characters.join(", ") : "";
 
+  const homeLocationDrop = useDropZone(useCallback((droppedPath: string) => {
+    setEntry((prev) => ({ ...prev, homeLocation: droppedPath }));
+  }, []));
+
+  const charactersDrop = useDropZone(useCallback((droppedPath: string) => {
+    setEntry((prev) => {
+      const existing = Array.isArray(prev.characters) ? prev.characters : [];
+      if (existing.includes(droppedPath)) return prev;
+      return { ...prev, characters: [...existing, droppedPath] };
+    });
+  }, []));
+
   return (
     <>
       <h2>{path}{readonly ? " (Preset — Read Only)" : ""}</h2>
@@ -90,17 +135,21 @@ export function EntryForm({ lorebook, path, readonly, onSaved, onDeleted }: Prop
 
         {isCharacter && (
           <>
-            <label htmlFor="lb-home-location">Home Location <span className="hint">(location path, e.g. locations/village-square)</span></label>
-            <input id="lb-home-location" type="text" value={entry.homeLocation ?? ""} disabled={readonly}
-              onChange={(e) => setEntry({ ...entry, homeLocation: e.target.value.trim() || undefined })} />
+            <label htmlFor="lb-home-location">Home Location <span className="hint">(location path, e.g. locations/village-square — or drag from tree)</span></label>
+            <div className={`drop-zone${homeLocationDrop.active ? " drop-zone-active" : ""}`} {...(readonly ? {} : homeLocationDrop.handlers)}>
+              <input id="lb-home-location" type="text" value={entry.homeLocation ?? ""} disabled={readonly}
+                onChange={(e) => setEntry({ ...entry, homeLocation: e.target.value.trim() || undefined })} />
+            </div>
           </>
         )}
 
         {isLocation && (
           <>
-            <label htmlFor="lb-characters">Characters <span className="hint">(comma-separated character paths)</span></label>
-            <input id="lb-characters" type="text" value={charactersStr} disabled={readonly}
-              onChange={(e) => setEntry({ ...entry, characters: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} />
+            <label htmlFor="lb-characters">Characters <span className="hint">(comma-separated character paths — or drag from tree)</span></label>
+            <div className={`drop-zone${charactersDrop.active ? " drop-zone-active" : ""}`} {...(readonly ? {} : charactersDrop.handlers)}>
+              <input id="lb-characters" type="text" value={charactersStr} disabled={readonly}
+                onChange={(e) => setEntry({ ...entry, characters: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} />
+            </div>
           </>
         )}
 
