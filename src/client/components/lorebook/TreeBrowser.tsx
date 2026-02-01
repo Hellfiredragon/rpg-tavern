@@ -159,9 +159,8 @@ function EntryLink({ node, readonly, onSelect, onDragStart, onDragEnd }: {
 }) {
   return (
     <a
-      href="#"
       draggable={!readonly}
-      onClick={(e) => { e.preventDefault(); onSelect(node.path); }}
+      onClick={() => onSelect(node.path)}
       onDragStart={readonly ? undefined : (e) => onDragStart(e, node.path)}
       onDragEnd={readonly ? undefined : onDragEnd}
     >

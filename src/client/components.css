@@ -214,6 +214,16 @@
   padding: 0.25rem 0.5rem;
   display: block;
   border-radius: 3px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tree-entry a[draggable="true"] {
+  cursor: grab;
+}
+
+.tree-entry a[draggable="true"]:active {
+  cursor: grabbing;
 }
 
 .tree-entry a:hover {

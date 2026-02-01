@@ -4,17 +4,22 @@ import type { LorebookEntry } from "../../types";
 
 const MIME = "application/lorebook-path";
 
+function hasType(types: DataTransfer["types"], mime: string) {
+  // DOMStringList (Firefox dragover) has .contains(); frozen Array has .includes()
+  return "includes" in types ? types.includes(mime) : (types as unknown as DOMStringList).contains(mime);
+}
+
 function useDropZone(onDrop: (path: string) => void) {
   const [active, setActive] = useState(false);
 
   const handlers = {
     onDragOver: (e: React.DragEvent) => {
-      if (!e.dataTransfer.types.includes(MIME)) return;
+      if (!hasType(e.dataTransfer.types, MIME)) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = "copy";
     },
     onDragEnter: (e: React.DragEvent) => {
-      if (!e.dataTransfer.types.includes(MIME)) return;
+      if (!hasType(e.dataTransfer.types, MIME)) return;
       e.preventDefault();
       setActive(true);
     },
