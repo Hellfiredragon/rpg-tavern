@@ -51,7 +51,15 @@ export async function startServer(port: number) {
 
       // SPA fallback — all non-API, non-asset paths return index.html
       const fallback = file(join(DIST_DIR, "index.html"));
-      return new Response(fallback);
+      if (await fallback.exists()) {
+        return new Response(fallback);
+      }
+
+      // index.html missing (e.g. mid-build) — return a page that auto-retries
+      return new Response(
+        '<html><body><script>setTimeout(()=>location.reload(),1000)</script></body></html>',
+        { headers: { "Content-Type": "text/html" } },
+      );
     },
   });
   return server;

@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 trap 'kill 0' EXIT
 
-bun vite build
-
 PORT="${PORT:-13013}"
 export PORT
 WSL_IP=$(hostname -I | awk '{print $1}')
