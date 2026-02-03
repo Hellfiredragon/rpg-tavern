@@ -49,10 +49,6 @@ export function LorebookEditor({ slug, name, readonly, entryPath, onBack }: Prop
     setTreeKey((k) => k + 1);
   };
 
-  const handleEntryMoved = () => {
-    setTreeKey((k) => k + 1);
-  };
-
   return (
     <div id="lorebook-edit">
       <div className="lorebook-header-bar">
@@ -67,7 +63,6 @@ export function LorebookEditor({ slug, name, readonly, entryPath, onBack }: Prop
               lorebook={slug}
               readonly={readonly}
               onNew={(prefix) => { setNewDialog({ prefix }); setNewName(""); }}
-              onMoved={handleEntryMoved}
             />
           </div>
         </div>

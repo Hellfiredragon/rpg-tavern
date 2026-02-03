@@ -1,238 +1,117 @@
-import { useRef } from "react";
-import { Link } from "react-router-dom";
-import { moveEntry } from "../../api";
+import { useRef, useEffect } from "react";
+import { NavLink } from "react-router-dom";
 import type { TreeNode } from "../../types";
+
+const MIME = "application/lorebook-path";
 
 type Props = {
   nodes: TreeNode[];
   lorebook: string;
   readonly: boolean;
   onNew: (prefix: string) => void;
-  onMoved: () => void;
 };
 
-const MIME = "application/lorebook-path";
-
-function parentFolder(path: string) {
-  const i = path.lastIndexOf("/");
-  return i > 0 ? path.slice(0, i) : "";
-}
-
-export function TreeBrowser({ nodes, lorebook, readonly, onNew, onMoved }: Props) {
-  const draggedPathRef = useRef("");
-
-  function handleDragStart(e: React.DragEvent, path: string) {
-    draggedPathRef.current = path;
-    e.dataTransfer.setData("text/plain", path);
-    e.dataTransfer.setData(MIME, path);
-    e.dataTransfer.effectAllowed = "copyMove";
-    (e.currentTarget as HTMLElement).closest(".tree-entry")?.classList.add("dragging");
-  }
-
-  function handleDragEnd(e: React.DragEvent) {
-    draggedPathRef.current = "";
-    (e.currentTarget as HTMLElement).closest(".tree-entry")?.classList.remove("dragging");
-  }
-
-  function canDropOnFolder(folderPath: string) {
-    const dragged = draggedPathRef.current;
-    if (!dragged) return false;
-    if (dragged === folderPath) return false;
-    if (parentFolder(dragged) === folderPath) return false;
-    return true;
-  }
-
-  function handleFolderDragOver(e: React.DragEvent, folderPath: string) {
-    if (!canDropOnFolder(folderPath)) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-  }
-
-  function handleFolderDragEnter(e: React.DragEvent, folderPath: string) {
-    if (!canDropOnFolder(folderPath)) return;
-    e.preventDefault();
-    (e.currentTarget as HTMLElement).closest(".tree-folder")?.classList.add("drag-over");
-  }
-
-  function handleFolderDragLeave(e: React.DragEvent) {
-    const folder = (e.currentTarget as HTMLElement).closest(".tree-folder");
-    if (folder && !folder.contains(e.relatedTarget as Node)) {
-      folder.classList.remove("drag-over");
-    }
-  }
-
-  function handleFolderDrop(e: React.DragEvent, folderPath: string) {
-    e.preventDefault();
-    (e.currentTarget as HTMLElement).closest(".tree-folder")?.classList.remove("drag-over");
-    const path = e.dataTransfer.getData(MIME);
-    if (!path || !canDropOnFolder(folderPath)) return;
-    moveEntry(lorebook, path, folderPath).then(() => onMoved()).catch(() => {});
-  }
-
-  function canDropOnRoot() {
-    const dragged = draggedPathRef.current;
-    if (!dragged) return false;
-    if (parentFolder(dragged) === "") return false;
-    return true;
-  }
-
-  function handleRootDragOver(e: React.DragEvent) {
-    if (!canDropOnRoot()) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-  }
-
-  function handleRootDragEnter(e: React.DragEvent) {
-    if (!canDropOnRoot()) return;
-    e.preventDefault();
-    (e.currentTarget as HTMLElement).classList.add("drag-over-root");
-  }
-
-  function handleRootDragLeave(e: React.DragEvent) {
-    const root = e.currentTarget as HTMLElement;
-    if (!root.contains(e.relatedTarget as Node)) {
-      root.classList.remove("drag-over-root");
-    }
-  }
-
-  function handleRootDrop(e: React.DragEvent) {
-    e.preventDefault();
-    (e.currentTarget as HTMLElement).classList.remove("drag-over-root");
-    const path = e.dataTransfer.getData(MIME);
-    if (!path || !canDropOnRoot()) return;
-    moveEntry(lorebook, path, "").then(() => onMoved()).catch(() => {});
-  }
-
-  const rootDropProps = readonly ? {} : {
-    onDragOver: handleRootDragOver,
-    onDragEnter: handleRootDragEnter,
-    onDragLeave: handleRootDragLeave,
-    onDrop: handleRootDrop,
-  };
-
+export function TreeBrowser({ nodes, lorebook, readonly, onNew }: Props) {
   return (
-    <div className="tree-root" data-lorebook={lorebook} {...rootDropProps}>
+    <div className="tree-root" data-lorebook={lorebook}>
       {!readonly && (
-        <button className="btn-sm btn-new-entry" data-prefix="" data-lorebook={lorebook}
-          onClick={() => onNew("")}>+ New</button>
+        <button className="btn-sm btn-new-entry" onClick={() => onNew("")}>+ New</button>
       )}
       {nodes.length === 0 ? (
         <p className="tree-empty">No entries yet.</p>
       ) : (
-        <TreeLevel
-          nodes={nodes}
-          lorebook={lorebook}
-          readonly={readonly}
-          onNew={onNew}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          onFolderDragOver={handleFolderDragOver}
-          onFolderDragEnter={handleFolderDragEnter}
-          onFolderDragLeave={handleFolderDragLeave}
-          onFolderDrop={handleFolderDrop}
-        />
+        <TreeLevel nodes={nodes} lorebook={lorebook} readonly={readonly} onNew={onNew} />
       )}
     </div>
   );
 }
 
-type TreeLevelProps = {
+function EntryLink({ path, name, lorebook, readonly }: {
+  path: string;
+  name: string;
+  lorebook: string;
+  readonly: boolean;
+}) {
+  const ref = useRef<HTMLAnchorElement>(null);
+  const href = `/lorebook/${encodeURIComponent(lorebook)}/${path}`;
+
+  useEffect(() => {
+    if (readonly) return;
+    const el = ref.current;
+    if (!el) return;
+    function onDragStart(e: DragEvent) {
+      if (!e.dataTransfer) return;
+      e.dataTransfer.setData("text/plain", path);
+      e.dataTransfer.setData(MIME, path);
+      e.dataTransfer.effectAllowed = "copyMove";
+    }
+    el.addEventListener("dragstart", onDragStart);
+    return () => el.removeEventListener("dragstart", onDragStart);
+  }, [path, readonly]);
+
+  return (
+    <NavLink
+      ref={ref}
+      className={({ isActive }) => "tree-link" + (isActive ? " tree-link-active" : "")}
+      to={href}
+      replace
+    >
+      {name}
+      <span className="tree-path">{path}</span>
+    </NavLink>
+  );
+}
+
+function TreeLevel({ nodes, lorebook, readonly, onNew }: {
   nodes: TreeNode[];
   lorebook: string;
   readonly: boolean;
   onNew: (prefix: string) => void;
-  onDragStart: (e: React.DragEvent, path: string) => void;
-  onDragEnd: (e: React.DragEvent) => void;
-  onFolderDragOver: (e: React.DragEvent, folderPath: string) => void;
-  onFolderDragEnter: (e: React.DragEvent, folderPath: string) => void;
-  onFolderDragLeave: (e: React.DragEvent) => void;
-  onFolderDrop: (e: React.DragEvent, folderPath: string) => void;
-};
-
-function EntryLink({ node, lorebook, readonly, onDragStart, onDragEnd }: {
-  node: TreeNode;
-  lorebook: string;
-  readonly: boolean;
-  onDragStart: (e: React.DragEvent, path: string) => void;
-  onDragEnd: (e: React.DragEvent) => void;
 }) {
-  return (
-    <Link
-      className="tree-link"
-      to={`/lorebook/${encodeURIComponent(lorebook)}/${node.path}`}
-      replace
-      draggable={!readonly}
-      onDragStart={readonly ? undefined : (e) => onDragStart(e, node.path)}
-      onDragEnd={readonly ? undefined : onDragEnd}
-    >
-      {node.name}
-      <span className="tree-path">{node.path}</span>
-    </Link>
-  );
-}
-
-function TreeLevel({ nodes, lorebook, readonly, onNew, onDragStart, onDragEnd, onFolderDragOver, onFolderDragEnter, onFolderDragLeave, onFolderDrop }: TreeLevelProps) {
-  const dragProps = { onDragStart, onDragEnd };
-  const folderDropProps = { onFolderDragOver, onFolderDragEnter, onFolderDragLeave, onFolderDrop };
-
   return (
     <ul className="tree-list">
       {nodes.map((node) => {
+        // Leaf entry — no children
         if (node.isEntry && node.children.length === 0) {
           return (
-            <li className="tree-entry" data-path={node.path} key={node.path}>
-              <EntryLink node={node} lorebook={lorebook} readonly={readonly} {...dragProps} />
+            <li className="tree-entry" key={node.path}>
+              <EntryLink path={node.path} name={node.name} lorebook={lorebook} readonly={readonly} />
             </li>
           );
         }
 
+        // Folder with children (may also be an entry itself)
         if (node.children.length > 0) {
           const folderPrefix = node.path + "/";
-          const summaryDropHandlers = readonly ? {} : {
-            onDragOver: (e: React.DragEvent) => folderDropProps.onFolderDragOver(e, node.path),
-            onDragEnter: (e: React.DragEvent) => folderDropProps.onFolderDragEnter(e, node.path),
-            onDragLeave: (e: React.DragEvent) => folderDropProps.onFolderDragLeave(e),
-            onDrop: (e: React.DragEvent) => folderDropProps.onFolderDrop(e, node.path),
-          };
           return (
-            <li className="tree-folder" data-path={node.path} key={node.path}>
+            <li className="tree-folder" key={node.path}>
               <details open>
-                <summary {...summaryDropHandlers}>
-                  {node.isEntry ? node.path.split("/").pop() : node.name}/
-                </summary>
+                <summary>{node.isEntry ? node.path.split("/").pop() : node.name}/</summary>
                 {node.isEntry && (
                   <ul className="tree-list">
-                    <li className="tree-entry" data-path={node.path}>
-                      <EntryLink node={node} lorebook={lorebook} readonly={readonly} {...dragProps} />
+                    <li className="tree-entry">
+                      <EntryLink path={node.path} name={node.name} lorebook={lorebook} readonly={readonly} />
                     </li>
                   </ul>
                 )}
                 {!readonly && (
-                  <button className="btn-sm btn-new-entry" data-prefix={folderPrefix} data-lorebook={lorebook}
-                    onClick={() => onNew(folderPrefix)}>+ New</button>
+                  <button className="btn-sm btn-new-entry" onClick={() => onNew(folderPrefix)}>+ New</button>
                 )}
-                <TreeLevel nodes={node.children} lorebook={lorebook} readonly={readonly} onNew={onNew}
-                  {...dragProps} {...folderDropProps} />
+                <TreeLevel nodes={node.children} lorebook={lorebook} readonly={readonly} onNew={onNew} />
               </details>
             </li>
           );
         }
 
+        // Empty folder
         if (!node.isEntry) {
           const folderPrefix = node.path + "/";
-          const summaryDropHandlers = readonly ? {} : {
-            onDragOver: (e: React.DragEvent) => folderDropProps.onFolderDragOver(e, node.path),
-            onDragEnter: (e: React.DragEvent) => folderDropProps.onFolderDragEnter(e, node.path),
-            onDragLeave: (e: React.DragEvent) => folderDropProps.onFolderDragLeave(e),
-            onDrop: (e: React.DragEvent) => folderDropProps.onFolderDrop(e, node.path),
-          };
           return (
-            <li className="tree-folder" data-path={node.path} key={node.path}>
+            <li className="tree-folder" key={node.path}>
               <details>
-                <summary {...summaryDropHandlers}>{node.name}/</summary>
+                <summary>{node.name}/</summary>
                 {!readonly && (
-                  <button className="btn-sm btn-new-entry" data-prefix={folderPrefix} data-lorebook={lorebook}
-                    onClick={() => onNew(folderPrefix)}>+ New</button>
+                  <button className="btn-sm btn-new-entry" onClick={() => onNew(folderPrefix)}>+ New</button>
                 )}
                 <p className="tree-empty">Empty folder</p>
               </details>

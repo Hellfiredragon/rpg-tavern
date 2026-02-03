@@ -215,18 +215,14 @@
   display: block;
   border-radius: 3px;
   cursor: pointer;
-  user-select: none;
-}
-
-.tree-entry .tree-link[draggable="true"] {
-  cursor: grab;
-}
-
-.tree-entry .tree-link[draggable="true"]:active {
-  cursor: grabbing;
 }
 
 .tree-entry .tree-link:hover {
+  background: #1a1a2e;
+  color: #e2b04a;
+}
+
+.tree-entry .tree-link-active {
   background: #1a1a2e;
   color: #e2b04a;
 }
@@ -447,30 +443,6 @@
   .active-entries-panel {
     display: none;
   }
-}
-
-/* Drag & drop tree reordering (HTML5 native) */
-
-.tree-entry.dragging {
-  opacity: 0.35;
-}
-
-.tree-entry.dragging .tree-link {
-  pointer-events: none;
-}
-
-.tree-folder.drag-over > details > summary {
-  background: rgba(226, 176, 74, 0.12);
-  outline: 1px dashed #e2b04a;
-  outline-offset: 2px;
-  border-radius: 3px;
-}
-
-.tree-root.drag-over-root {
-  background: rgba(226, 176, 74, 0.08);
-  outline: 1px dashed #e2b04a;
-  outline-offset: -2px;
-  border-radius: 4px;
 }
 
 /* Tree path display */
