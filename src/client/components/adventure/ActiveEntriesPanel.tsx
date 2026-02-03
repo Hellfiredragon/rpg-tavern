@@ -4,10 +4,16 @@ import type { ActiveEntry } from "../../types";
 
 type Props = {
   chatId: string;
+  lorebook: string;
   refreshKey: number;
 };
 
-export function ActiveEntriesPanel({ chatId, refreshKey }: Props) {
+function pathToLabel(path: string): string {
+  const filename = path.split("/").pop() || path;
+  return filename.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export function ActiveEntriesPanel({ chatId, lorebook, refreshKey }: Props) {
   const [traits, setTraits] = useState<string[]>([]);
   const [entries, setEntries] = useState<ActiveEntry[]>([]);
   const [newTrait, setNewTrait] = useState("");
@@ -35,6 +41,12 @@ export function ActiveEntriesPanel({ chatId, refreshKey }: Props) {
     setEntries(data.entries);
   };
 
+  const handleGoalToggle = async (entry: ActiveEntry) => {
+    const data = await api.toggleGoal(lorebook, entry.path, !entry.completed, chatId);
+    setTraits(data.traits);
+    setEntries(data.entries);
+  };
+
   // Group entries by category
   const groups = new Map<string, ActiveEntry[]>();
   for (const e of entries) {
@@ -43,7 +55,7 @@ export function ActiveEntriesPanel({ chatId, refreshKey }: Props) {
     groups.set(e.category, list);
   }
 
-  const order = ["locations", "characters", "items"];
+  const order = ["locations", "characters", "items", "goals"];
   const sortedKeys = [...groups.keys()].sort((a, b) => {
     const ai = order.indexOf(a);
     const bi = order.indexOf(b);
@@ -79,11 +91,42 @@ export function ActiveEntriesPanel({ chatId, refreshKey }: Props) {
           <div className="active-entries-group" key={key}>
             <h4>{key}</h4>
             {groups.get(key)!.map((e) => {
+              const isGoal = e.category === "goals";
+              const isCharacter = e.category === "characters";
+              const isItem = e.category === "items";
               const preview = e.content.length > 80 ? e.content.slice(0, 80) + "..." : e.content;
               return (
                 <div className="active-entry-item" key={e.path}>
-                  <span className="active-entry-name">{e.name}</span>
-                  <span className="active-entry-preview">{preview}</span>
+                  {isGoal ? (
+                    <label className="active-entry-goal">
+                      <input type="checkbox" checked={!!e.completed}
+                        onChange={() => handleGoalToggle(e)} />
+                      <span className={`active-entry-name${e.completed ? " goal-completed" : ""}`}>
+                        {e.name}
+                      </span>
+                    </label>
+                  ) : (
+                    <span className="active-entry-name">{e.name}</span>
+                  )}
+                  {isCharacter && e.state && e.state.length > 0 && (
+                    <div className="active-entry-state">
+                      {e.state.map((s) => (
+                        <span className="state-tag" key={s}>{s}</span>
+                      ))}
+                    </div>
+                  )}
+                  {isCharacter && e.currentLocation && (
+                    <span className="active-entry-location">at {pathToLabel(e.currentLocation)}</span>
+                  )}
+                  {isItem && e.location && (
+                    <span className="active-entry-location">
+                      {e.location === "player" ? "carried" : `at ${pathToLabel(e.location)}`}
+                    </span>
+                  )}
+                  {isGoal && e.requirements && e.requirements.length > 0 && (
+                    <span className="active-entry-preview">{e.requirements.join("; ")}</span>
+                  )}
+                  {!isGoal && <span className="active-entry-preview">{preview}</span>}
                 </div>
               );
             })}

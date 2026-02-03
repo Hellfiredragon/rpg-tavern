@@ -5,5 +5,6 @@
   "regex": "",
   "priority": 15,
   "enabled": true,
-  "contexts": ["characters/blacksmith"]
+  "contexts": ["characters/blacksmith"],
+  "location": "characters/blacksmith"
 }

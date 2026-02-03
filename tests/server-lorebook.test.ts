@@ -80,12 +80,8 @@ describe("POST /api/lorebooks/make-template", () => {
 // GET /api/lorebooks — unified model
 // ---------------------------------------------------------------------------
 
-describe("GET /api/lorebooks — unified model", () => {
-  test("returns both templates and adventures as JSON", async () => {
-    // Create an adventure (non-template) by copying
-    await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "non-tpl-adv", name: "Non-Tpl Adventure" });
-    await jsonPost("/api/chats", { lorebook: "non-tpl-adv" });
-
+describe("GET /api/lorebooks — templates only", () => {
+  test("returns templates as JSON (no adventures)", async () => {
     const res = await api("/api/lorebooks");
     const data = await res.json();
 
@@ -93,17 +89,15 @@ describe("GET /api/lorebooks — unified model", () => {
     expect(data.templates.some((t: { name: string }) => t.name === "Key Quest")).toBe(true);
     expect(data.templates.some((t: { name: string }) => t.name === "Default Lorebook")).toBe(true);
 
-    // Adventures section
-    expect(data.adventures.some((a: { name: string }) => a.name === "Non-Tpl Adventure")).toBe(true);
+    // No adventures key
+    expect(data.adventures).toBeUndefined();
   });
 
-  test("returns templates and adventures arrays", async () => {
+  test("returns templates array", async () => {
     const res = await api("/api/lorebooks");
     const data = await res.json();
     expect(data.templates).toBeDefined();
-    expect(data.adventures).toBeDefined();
     expect(Array.isArray(data.templates)).toBe(true);
-    expect(Array.isArray(data.adventures)).toBe(true);
   });
 });
 

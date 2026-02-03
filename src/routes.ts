@@ -5,13 +5,12 @@ import {
   listLorebooks, createLorebook, deleteLorebook,
   copyLorebook, listLocationEntries, loadLorebookMeta,
   saveLorebookMeta, isReadOnlyPreset, findActiveEntries,
-  loadAllEntries,
+  loadAllEntries, getEntryType,
   type LorebookEntry,
 } from "./lorebook";
 import {
   createConversation, listConversations, loadConversation,
   appendMessage, deleteConversation, changeLocation, updateTraits,
-  updateSummonedCharacters,
   type ChatMessage,
 } from "./chat";
 
@@ -101,39 +100,27 @@ function detectSummon(message: string): string | null {
   return null;
 }
 
-/** Match a summoned character name against lorebook character entries, checking location allowance. */
+/** Match a summoned character name against lorebook character entries. */
 async function resolveCharacterSummon(
   lorebook: string,
   characterName: string,
-  currentLocation: string,
-): Promise<{ path: string; name: string; allowed: boolean } | null> {
+): Promise<{ path: string; name: string } | null> {
   const allEntries = await loadAllEntries(lorebook);
   const lower = characterName.toLowerCase();
 
-  // Find matching character entry
-  let match: { path: string; name: string } | null = null;
   for (const entry of allEntries) {
     if (!entry.path.startsWith("characters/")) continue;
     // Exact name match
     if (entry.name.toLowerCase() === lower) {
-      match = { path: entry.path, name: entry.name };
-      break;
+      return { path: entry.path, name: entry.name };
     }
     // Keyword match
     if (entry.keywords.some((kw) => kw.toLowerCase() === lower || lower.includes(kw.toLowerCase()))) {
-      match = { path: entry.path, name: entry.name };
-      break;
+      return { path: entry.path, name: entry.name };
     }
   }
 
-  if (!match) return null;
-
-  // Check if the character is allowed at the current location
-  if (!currentLocation) return { ...match, allowed: false };
-  const locationEntry = allEntries.find((e) => e.path === currentLocation);
-  if (!locationEntry) return { ...match, allowed: false };
-  const allowedChars = locationEntry.characters ?? [];
-  return { ...match, allowed: allowedChars.includes(match.path) };
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -211,12 +198,13 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
         const summonName = detectSummon(message);
         const conv = await loadConversation(chatId);
         if (summonName && conv && conv.meta.currentLocation) {
-          const result = await resolveCharacterSummon(lorebook, summonName, conv.meta.currentLocation);
-          if (result && result.allowed) {
-            const summoned = [...(conv.meta.summonedCharacters || [])];
-            if (!summoned.includes(result.path)) {
-              summoned.push(result.path);
-              await updateSummonedCharacters(chatId, summoned);
+          const result = await resolveCharacterSummon(lorebook, summonName);
+          if (result) {
+            // Update the character entry's currentLocation to the player's location
+            const charEntry = await loadEntry(lorebook, result.path);
+            if (charEntry) {
+              charEntry.currentLocation = conv.meta.currentLocation;
+              await saveEntry(lorebook, result.path, charEntry);
             }
             const narration = `${result.name} arrives at your location.`;
             const systemMsg: ChatMessage = { role: "system", content: narration, timestamp: new Date().toISOString() };
@@ -227,7 +215,7 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
             await appendMessage(chatId, assistantMsg);
             newMessages.push(assistantMsg);
           } else {
-            // Character not found or not allowed — normal response
+            // Character not found — normal response
             const assistantMsg: ChatMessage = { role: "assistant", content: "Hello World", timestamp: new Date().toISOString() };
             await appendMessage(chatId, assistantMsg);
             newMessages.push(assistantMsg);
@@ -368,7 +356,6 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
       text,
       currentLocation: conv.meta.currentLocation,
       traits: conv.meta.traits,
-      summonedCharacters: conv.meta.summonedCharacters,
     });
     return json({ traits: conv.meta.traits, entries });
   }
@@ -393,11 +380,46 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
         text,
         currentLocation: conv.meta.currentLocation,
         traits: conv.meta.traits,
-        summonedCharacters: conv.meta.summonedCharacters,
       });
       return json({ traits: conv.meta.traits, entries });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Traits update error";
+      return err(msg);
+    }
+  }
+
+  if (url.pathname === "/api/adventures/goal" && req.method === "PUT") {
+    try {
+      const body = await req.json();
+      const lb = typeof body.lorebook === "string" ? body.lorebook.trim() : "";
+      const path = typeof body.path === "string" ? body.path.trim() : "";
+      const completed = body.completed === true;
+      if (!lb || !path) return err("Missing lorebook or path");
+
+      const entry = await loadEntry(lb, path);
+      if (!entry) return err("Goal entry not found", 404);
+
+      entry.completed = completed;
+      await saveEntry(lb, path, entry);
+
+      // Return updated active entries (need a chatId to compute context)
+      const chatId = typeof body.chatId === "string" ? body.chatId.trim() : "";
+      if (chatId) {
+        const conv = await loadConversation(chatId);
+        if (conv) {
+          const recentMessages = conv.messages.slice(-20);
+          const text = recentMessages.map((m) => m.content).join(" ");
+          const entries = await findActiveEntries(lb, {
+            text,
+            currentLocation: conv.meta.currentLocation,
+            traits: conv.meta.traits,
+          });
+          return json({ traits: conv.meta.traits, entries });
+        }
+      }
+      return json({ ok: true });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Goal update error";
       return err(msg);
     }
   }
@@ -430,9 +452,7 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
   if (url.pathname === "/api/lorebooks" && req.method === "GET") {
     const lorebooks = await listLorebooks();
     const templates = lorebooks.filter((lb) => lb.meta.template);
-    const adventures = lorebooks.filter((lb) => !lb.meta.template);
     return json({
-      adventures: adventures.map((lb) => ({ slug: lb.slug, name: lb.meta.name, preset: lb.preset })),
       templates: templates.map((lb) => ({ slug: lb.slug, name: lb.meta.name, preset: lb.preset })),
     });
   }

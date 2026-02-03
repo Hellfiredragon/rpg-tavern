@@ -15,10 +15,30 @@ export type LorebookEntry = {
   enabled: boolean;
   contexts: string[]; // entry paths or "trait:" refs — all must be active for entry to activate
   // Location-specific (entries in locations/)
-  characters?: string[];    // character paths that can appear here
+  characters?: string[];    // character paths that can appear here (template hint)
   // Character-specific (entries in characters/)
-  homeLocation?: string;    // default location path
+  homeLocation?: string;    // starting location path
+  currentLocation?: string; // where the character is NOW (dynamic in adventures)
+  state?: string[];         // status tags, e.g. ["friendly", "injured", "has-given-key"]
+  goals?: string[];         // refs to goal entry paths, e.g. ["goals/find-key"]
+  // Item-specific (entries in items/)
+  location?: string;        // where the item is (location path, character path, or "player")
+  // Goal-specific (entries in goals/)
+  requirements?: string[];  // what must happen — freeform strings for LLM context
+  completed?: boolean;      // whether the goal is done (default false)
 };
+
+/** Entry type inferred from folder path prefix. */
+export type EntryType = "character" | "location" | "item" | "goal" | "other";
+
+/** Determine entry type from its relative path. */
+export function getEntryType(path: string): EntryType {
+  if (path.startsWith("characters/")) return "character";
+  if (path.startsWith("locations/")) return "location";
+  if (path.startsWith("items/")) return "item";
+  if (path.startsWith("goals/")) return "goal";
+  return "other";
+}
 
 /** Metadata stored in _lorebook.json for each lorebook */
 export type LorebookMeta = { name: string; template?: boolean };
@@ -445,7 +465,6 @@ export type ActivationContext = {
   text: string;                // recent chat text to match keywords against
   currentLocation: string;     // entry path, e.g. "locations/village-square"
   traits: string[];            // player traits, e.g. ["warrior", "stealthy"]
-  summonedCharacters: string[]; // character paths summoned to current location
 };
 
 export type ActiveEntry = {
@@ -453,13 +472,13 @@ export type ActiveEntry = {
   name: string;
   content: string;
   category: string; // first path segment or "other"
+  // Type-specific fields for UI display
+  state?: string[];           // character state tags
+  currentLocation?: string;   // character's current location path
+  location?: string;          // item's current location
+  completed?: boolean;        // goal completion status
+  requirements?: string[];    // goal requirements
 };
-
-/** Helper: check if path is a location entry. */
-function isLocationEntry(path: string): boolean { return path.startsWith("locations/"); }
-
-/** Helper: check if path is a character entry. */
-function isCharacterEntry(path: string): boolean { return path.startsWith("characters/"); }
 
 /** Helper: check keyword/regex match against text. */
 function matchesText(entry: MatchedEntry, text: string, textLower: string): boolean {
@@ -476,15 +495,13 @@ function matchesText(entry: MatchedEntry, text: string, textLower: string): bool
  * Find all lorebook entries that should be active given the current context.
  *
  * Algorithm:
- * 1. Seed: current location entry is always active
- * 2. Auto-activate home characters: characters whose homeLocation matches the
- *    current location AND are in the location's characters list
- * 3. Activate summoned characters: characters in summonedCharacters that are
- *    in the location's characters list
- * 4. Fixed-point iteration for remaining entries (items, generic):
- *    - Check context gates (path refs in active set, trait refs in traits)
- *    - Check keyword/regex match against text
- *    - Characters NOT in the location's characters list never activate
+ * 1. Seed: current location entry (from ChatMeta.currentLocation)
+ * 2. Characters: activate if entry.currentLocation === playerLocation
+ *    (fall back to homeLocation if currentLocation is unset)
+ * 3. Items: activate if entry.location === playerLocation OR "player"
+ *    OR matches an active character path
+ * 4. Goals: activate if !completed (incomplete goals are always shown)
+ * 5. Other entries: keyword/regex/context matching (existing fixed-point logic)
  */
 export async function findActiveEntries(
   lorebook: string, context: ActivationContext
@@ -500,42 +517,50 @@ export async function findActiveEntries(
   }
 
   // Step 1: Seed — current location is always active
-  const locationEntry = context.currentLocation ? entryMap.get(context.currentLocation) : undefined;
-  if (locationEntry) {
+  if (context.currentLocation && entryMap.has(context.currentLocation)) {
     activeSet.add(context.currentLocation);
   }
 
-  // Build the allowed characters set from the location's characters list
-  const allowedCharacters = new Set<string>(locationEntry?.characters ?? []);
-
-  // Step 2: Auto-activate home characters
+  // Step 2: Characters — activate if their currentLocation (or homeLocation fallback) matches
   for (const [path, entry] of entryMap) {
-    if (!isCharacterEntry(path)) continue;
-    if (!allowedCharacters.has(path)) continue;
-    if (entry.homeLocation === context.currentLocation) {
+    if (getEntryType(path) !== "character") continue;
+    const charLoc = entry.currentLocation || entry.homeLocation;
+    if (charLoc && charLoc === context.currentLocation) {
       activeSet.add(path);
     }
   }
 
-  // Step 3: Activate summoned characters
-  for (const charPath of context.summonedCharacters) {
-    if (allowedCharacters.has(charPath) && entryMap.has(charPath)) {
-      activeSet.add(charPath);
+  // Step 3: Items — activate if location matches playerLocation, "player", or an active character
+  for (const [path, entry] of entryMap) {
+    if (getEntryType(path) !== "item") continue;
+    if (!entry.location) continue;
+    if (entry.location === context.currentLocation || entry.location === "player") {
+      activeSet.add(path);
+    } else if (activeSet.has(entry.location)) {
+      activeSet.add(path);
     }
   }
 
-  // Step 4: Fixed-point iteration for items and other entries
+  // Step 4: Goals — incomplete goals are always shown
+  for (const [path, entry] of entryMap) {
+    if (getEntryType(path) !== "goal") continue;
+    if (!entry.completed) {
+      activeSet.add(path);
+    }
+  }
+
+  // Step 5: Fixed-point iteration for other entries (keyword/regex/context matching)
   let changed = true;
   while (changed) {
     changed = false;
     for (const [path, entry] of entryMap) {
       if (activeSet.has(path)) continue;
+      const type = getEntryType(path);
 
       // Location entries are exclusive — only the current location can be active
-      if (isLocationEntry(path)) continue;
-
-      // Characters NOT in the location's characters list never activate via keywords
-      if (isCharacterEntry(path) && !allowedCharacters.has(path)) continue;
+      if (type === "location") continue;
+      // Characters, items, and goals already handled above
+      if (type === "character" || type === "item" || type === "goal") continue;
 
       // Check context gates
       const contextsOk = entry.contexts.length === 0 || entry.contexts.every((ctx) => {
@@ -554,14 +579,36 @@ export async function findActiveEntries(
     }
   }
 
-  // Build result
+  // Re-check items after fixed-point (new active characters may have items)
+  for (const [path, entry] of entryMap) {
+    if (activeSet.has(path)) continue;
+    if (getEntryType(path) !== "item") continue;
+    if (entry.location && activeSet.has(entry.location)) {
+      activeSet.add(path);
+    }
+  }
+
+  // Build result with type-specific fields
   const result: ActiveEntry[] = [];
   for (const path of activeSet) {
     const entry = entryMap.get(path);
     if (!entry) continue;
     const slashIdx = path.indexOf("/");
     const category = slashIdx > 0 ? path.slice(0, slashIdx) : "other";
-    result.push({ path, name: entry.name, content: entry.content, category });
+    const active: ActiveEntry = { path, name: entry.name, content: entry.content, category };
+    const type = getEntryType(path);
+    if (type === "character") {
+      if (entry.state && entry.state.length > 0) active.state = entry.state;
+      if (entry.currentLocation) active.currentLocation = entry.currentLocation;
+    }
+    if (type === "item" && entry.location) {
+      active.location = entry.location;
+    }
+    if (type === "goal") {
+      active.completed = !!entry.completed;
+      if (entry.requirements) active.requirements = entry.requirements;
+    }
+    result.push(active);
   }
 
   result.sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
@@ -747,8 +794,50 @@ export function validateEntry(body: unknown): LorebookEntry {
   // homeLocation — character-specific
   const homeLocation = typeof obj.homeLocation === "string" ? obj.homeLocation.trim() || undefined : undefined;
 
+  // currentLocation — character-specific (dynamic)
+  const currentLocation = typeof obj.currentLocation === "string" ? obj.currentLocation.trim() || undefined : undefined;
+
+  // state — character-specific, accept comma-separated string or array
+  let state: string[] | undefined;
+  const rawState = obj.state;
+  if (typeof rawState === "string") {
+    state = rawState.split(",").map((s) => s.trim()).filter(Boolean);
+  } else if (Array.isArray(rawState)) {
+    state = rawState.filter((s) => typeof s === "string").map((s) => s.trim()).filter(Boolean);
+  }
+
+  // goals — character-specific, accept comma-separated string or array
+  let goals: string[] | undefined;
+  const rawGoals = obj.goals;
+  if (typeof rawGoals === "string") {
+    goals = rawGoals.split(",").map((s) => s.trim()).filter(Boolean);
+  } else if (Array.isArray(rawGoals)) {
+    goals = rawGoals.filter((g) => typeof g === "string").map((s) => s.trim()).filter(Boolean);
+  }
+
+  // location — item-specific
+  const location = typeof obj.location === "string" ? obj.location.trim() || undefined : undefined;
+
+  // requirements — goal-specific, accept comma-separated string or array
+  let requirements: string[] | undefined;
+  const rawReqs = obj.requirements;
+  if (typeof rawReqs === "string") {
+    requirements = rawReqs.split(",").map((s) => s.trim()).filter(Boolean);
+  } else if (Array.isArray(rawReqs)) {
+    requirements = rawReqs.filter((r) => typeof r === "string").map((s) => s.trim()).filter(Boolean);
+  }
+
+  // completed — goal-specific
+  const completed = obj.completed === true ? true : undefined;
+
   const entry: LorebookEntry = { name, content, keywords, regex, priority, enabled, contexts };
   if (characters !== undefined) entry.characters = characters;
   if (homeLocation !== undefined) entry.homeLocation = homeLocation;
+  if (currentLocation !== undefined) entry.currentLocation = currentLocation;
+  if (state !== undefined) entry.state = state;
+  if (goals !== undefined) entry.goals = goals;
+  if (location !== undefined) entry.location = location;
+  if (requirements !== undefined) entry.requirements = requirements;
+  if (completed !== undefined) entry.completed = completed;
   return entry;
 }

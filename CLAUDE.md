@@ -102,7 +102,7 @@ The Chat tab has been redesigned into an **Adventure** tab. Users pick an advent
 ### Chat module (`src/chat.ts`)
 
 - **Types:**
-  - `ChatMeta` — `{ id, title, createdAt, updatedAt, lorebook, currentLocation, traits, summonedCharacters }`
+  - `ChatMeta` — `{ id, title, createdAt, updatedAt, lorebook, currentLocation, traits, summonedCharacters }` (summonedCharacters is deprecated — character location now tracked on entries)
   - `ChatMessage` — `{ role: "user"|"assistant"|"system", content, timestamp }`
   - System messages are narration (e.g. location transitions), rendered centered/italic
 - **Storage:** `data/chats/<id>.jsonl` — one file per conversation in JSONL format
@@ -111,17 +111,16 @@ The Chat tab has been redesigned into an **Adventure** tab. Users pick an advent
   - ID format: `<timestamp>-<3-char-hex>` (e.g. `1738262400000-a3f`)
   - Title: auto-set from first user message, truncated to 50 chars
   - Old JSONL files missing `lorebook`/`currentLocation`/`traits`/`summonedCharacters` default to `""`/`""`/`[]`/`[]` on load
-- **Functions:** `generateChatId()`, `createConversation(opts?)`, `listConversations(lorebook?)`, `loadConversation()`, `appendMessage()`, `deleteConversation()`, `changeLocation()`, `updateTraits()`, `updateSummonedCharacters()`
+- **Functions:** `generateChatId()`, `createConversation(opts?)`, `listConversations(lorebook?)`, `loadConversation()`, `appendMessage()`, `deleteConversation()`, `changeLocation()`, `updateTraits()`
   - `createConversation` accepts `{ id?, lorebook?, currentLocation?, traits?, summonedCharacters? }`
   - `listConversations` accepts optional lorebook filter
   - `changeLocation(id, locationPath, narration)` — updates meta.currentLocation, clears summonedCharacters, appends system message atomically
   - `updateTraits(id, traits)` — rewrites meta line with updated traits array
-  - `updateSummonedCharacters(id, characters)` — rewrites meta line with updated summonedCharacters array
 
 ### Adventure UI
 
 - **Picker** (`AdventurePicker`): Shows adventure cards with Continue/Save as Template/Delete buttons + template cards with Start button
-- **Play** (`AdventurePlay`): Location bar (back button, adventure name, location dropdown) + chat messages + input + active entries panel (right sidebar)
+- **Play** (`AdventurePlay`): Location bar (back button, adventure name, location dropdown, Play/Edit toggle) + chat messages + input + active entries panel (right sidebar). Edit mode renders `LorebookEditor` inline for direct lorebook editing during play.
 - **Template start flow:** Dialog to name the copy → `POST /api/lorebooks/copy` → `POST /api/chats` → navigate to `/adventure/:slug`
 - **Save as Template flow:** Dialog to name the template → `POST /api/lorebooks/make-template` → refreshes picker
 - **Location change:** Dropdown change → `PUT /api/adventures/location` → system narration message appended to chat
@@ -137,6 +136,7 @@ All routes return JSON. Error responses use `{ error: "message" }` with appropri
 - `PUT /api/adventures/location` — JSON `{ chatId, location }` → `{ location, narration }`
 - `GET /api/adventures/active-entries?chatId=` → `{ traits, entries }`
 - `PUT /api/adventures/traits` — JSON `{ chatId, traits }` → `{ traits, entries }`
+- `PUT /api/adventures/goal` — JSON `{ lorebook, path, completed, chatId? }` → `{ traits, entries }` or `{ ok: true }`
 - `GET /api/chats?lorebook=` → `ChatMeta[]`
 - `POST /api/chats` — JSON `{ lorebook?, location? }` → `{ chatId }`
 - `GET /api/chats/messages?id=` → `{ meta, messages }`
@@ -148,9 +148,9 @@ All routes return JSON. Error responses use `{ error: "message" }` with appropri
   - Returns `{ chatId, messages: [user, system, assistant], location, isNew }`
 - **Summon detection (dummy LLM):** `POST /api/chat` also parses summon intent (e.g. "call Marta", "summon the blacksmith"). If detected and a lorebook + current location exist:
   - Matches character name against character entries (name + keywords, case-insensitive)
-  - Checks if the character is in the current location's `characters` list
-  - If allowed, adds to `ChatMeta.summonedCharacters` and appends system narration
-  - If not allowed or not found, falls through to normal response
+  - Updates the character entry's `currentLocation` field to the player's current location via `saveEntry()`
+  - Appends system narration about the character arriving
+  - If character not found, falls through to normal response
 - **Current behavior:** When no location/summon is detected, assistant responds with "Hello World" (placeholder for future LLM integration). When a location change is detected, assistant responds with "You arrive at \<location\>." When a summon is detected, assistant responds with "\<character\> has joined you."
 
 ## Settings
@@ -194,6 +194,8 @@ All routes return JSON. Error responses use `{ error: "message" }` with appropri
           old-sage.json
           blacksmith.json
           innkeeper.json
+        goals/
+          find-key.json
         items/
           iron-key.json
         locations/
@@ -208,17 +210,17 @@ All routes return JSON. Error responses use `{ error: "message" }` with appropri
   - `copyLorebook(source, dest, name)` can copy FROM a preset (source resolves via both dirs) but always writes TO the data dir
   - `listLorebooks()` returns `{ slug, meta, preset: boolean }[]` — scans data dir first, then presets (skipping slugs already in data dir)
   - UI: preset template cards show View button (read-only editor) + Copy button (creates editable user template); no Delete button. Tree/entry forms are rendered in read-only mode for presets.
-  - **Key Quest template** (`template-key-quest`): A story where the player asks three NPCs who has the key and where to open a locked room to get the treasure. Contains 7 entries (3 characters, 1 item, 3 locations).
+  - **Key Quest template** (`template-key-quest`): A story where the player asks three NPCs who has the key and where to open a locked room to get the treasure. Contains 8 entries (3 characters, 1 item, 3 locations, 1 goal).
 - **Templates:** Lorebooks with `"template": true` in metadata. Shown as cards in the Lorebook tab picker with Edit buttons, plus a "+ Template" button. User-created templates also get a Delete button.
 - **Migration:** On startup, `migrateOrphanLorebooks()` converts non-template, non-preset lorebooks with no conversations into templates.
 - **All CRUD functions** take `lorebook: string` as their first argument (the lorebook slug)
 - **Functions:** `saveLorebookMeta(slug, meta)` — writes updated `_lorebook.json` for an existing lorebook
-- **UI:** Lorebook tab — two-step layout mirroring the Adventure tab:
-  - **Picker** (`LorebookPicker`): Card-based list of lorebooks. Adventures (non-template) get an Edit button. User templates get Edit + Delete buttons. Preset templates get View + Copy buttons. Includes "+ Template" button.
-  - **Editor** (`LorebookEditor`): Two-column grid — `TreeBrowser` sidebar + `EntryForm` editor. Manages selected entry path, new entry/folder dialogs.
+- **UI:** Lorebook tab — two-step layout showing templates only:
+  - **Picker** (`LorebookPicker`): Card-based list of templates. User templates get Edit + Delete buttons. Preset templates get View + Copy buttons. Includes "+ Template" button.
+  - **Editor** (`LorebookEditor`): Two-column grid — `TreeBrowser` sidebar + `EntryForm` editor. Manages selected entry path, new entry/folder dialogs. Also used inline in adventure play view (Edit mode).
 - **API routes:**
   - Lorebook management (under `/api/lorebooks`):
-    - `GET /api/lorebooks` → `{ adventures: [{slug, name, preset}], templates: [{slug, name, preset}] }`
+    - `GET /api/lorebooks` → `{ templates: [{slug, name, preset}] }` (templates only, no adventures)
     - `GET /api/lorebooks/meta?slug=` → `{ slug, name, template, preset }` (404 if not found)
     - `POST /api/lorebooks` — JSON `{ slug, name }` → `{ ok: true }`
     - `POST /api/lorebooks/copy` — JSON `{ source, slug, name }` → `{ ok: true }`
@@ -236,25 +238,39 @@ All routes return JSON. Error responses use `{ error: "message" }` with appropri
 - **Drag & Drop:** HTML5 native `draggable` on tree entry links. Two drop target types: (1) tree folders/root — moves the entry via `PUT /api/lorebook/entry/move`, (2) form fields (`homeLocation`, `characters`) — sets/appends the dragged path as the field value. Uses `application/lorebook-path` custom MIME type in `dataTransfer`. A `useRef` tracks the currently-dragged path for `dragOver` validation (since `getData()` is unavailable during `dragover`). Read-only preset lorebooks disable dragging. Entry paths are displayed below names in the tree.
 - **Matching:** `findMatchingEntries(lorebook, text)` — returns enabled entries matching via keywords or regex, sorted by priority desc
 - **Locations:** `listLocationEntries(lorebook)` — returns entries whose path starts with `locations/`, sorted by name. Used by the adventure system for the location dropdown.
-- **Character–Location Relationships:** Entry type is inferred from folder path (`locations/*` = location, `characters/*` = character). The base `LorebookEntry` has optional type-specific fields:
-  - **`LorebookEntry.characters`** — `string[]` (optional, location-specific): character paths that can appear at this location
-  - **`LorebookEntry.homeLocation`** — `string` (optional, character-specific): location path where this character auto-appears
-  - **`LorebookEntry.contexts`** — `string[]` field: entry paths or trait refs (e.g. `trait:warrior`). AND logic. Empty = always context-eligible. Used for quest-gating items/generic entries (e.g. iron-key requires blacksmith active).
-  - Characters no longer use `contexts` for location gating — that's handled by `characters` list on locations + `homeLocation`.
+- **Entry types:** `getEntryType(path)` returns `"character" | "location" | "item" | "goal" | "other"` based on folder prefix. The base `LorebookEntry` has optional type-specific fields:
+  - **Location-specific** (`locations/*`):
+    - **`characters`** — `string[]`: character paths that can appear here (template hint for the `characters` list)
+  - **Character-specific** (`characters/*`):
+    - **`homeLocation`** — `string`: starting location path
+    - **`currentLocation`** — `string`: where the character is NOW (dynamic in adventures, falls back to homeLocation)
+    - **`state`** — `string[]`: status tags, e.g. `["friendly", "injured", "has-given-key"]`
+    - **`goals`** — `string[]`: refs to goal entry paths, e.g. `["goals/find-key"]`
+  - **Item-specific** (`items/*`):
+    - **`location`** — `string`: where the item is (location path, character path, or `"player"`)
+  - **Goal-specific** (`goals/*`):
+    - **`requirements`** — `string[]`: freeform descriptions for LLM context
+    - **`completed`** — `boolean`: whether the goal is done (default false)
+  - **All entries:**
+    - **`contexts`** — `string[]`: entry paths or `trait:` refs. AND logic. Empty = always context-eligible. Used for "other" entries via fixed-point iteration.
 - **Context-Aware Activation:** `findActiveEntries(lorebook, context)` — returns entries that should be active given the current context:
-  - **`ActivationContext`** — `{ text, currentLocation, traits, summonedCharacters }` — recent chat text, current location path, player traits, and summoned character paths
+  - **`ActivationContext`** — `{ text, currentLocation, traits }` — recent chat text, current location path, player traits
+  - **`ActiveEntry`** — includes type-specific fields: `state`, `currentLocation`, `location`, `completed`, `requirements`
   - **Algorithm:**
-    1. Seed active set with current location entry
-    2. Auto-activate home characters: characters whose `homeLocation` matches current location AND are in the location's `characters` list
-    3. Activate summoned characters: paths in `summonedCharacters` that are in the location's `characters` list
-    4. Fixed-point iteration for items/generic entries: check context gates + keyword/regex match
-    5. Characters NOT in the location's `characters` list never activate (even via keywords), unless summoned
-    6. Location entries are exclusive — only the current location is active
-  - **Summoned characters:** Stored in `ChatMeta.summonedCharacters`. Detected via `POST /api/chat` summon patterns ("call X", "summon X"). Cleared on location change.
-  - **Chained activation:** Current location → home characters auto-activate → items whose context is satisfied → more items. Chains never end at a location entry.
+    1. **Seed:** current location entry is always active
+    2. **Characters:** activate if `entry.currentLocation === playerLocation` (fall back to `homeLocation` if `currentLocation` is unset)
+    3. **Items:** activate if `entry.location === playerLocation` OR `entry.location === "player"` OR `entry.location` matches an active character path
+    4. **Goals:** activate if `!completed` (incomplete goals are always shown)
+    5. **Other entries:** keyword/regex/context matching (fixed-point iteration)
+    6. Re-check items after fixed-point (new active characters may have items)
+    7. Location entries are exclusive — only the current location is active
+  - **Character summoning:** Detected via `POST /api/chat` summon patterns ("call X", "summon X"). Instead of ChatMeta tracking, the character entry's `currentLocation` is updated via `saveEntry()`.
+  - **Chained activation:** Location → characters at that location → items held by active characters → goals (always). Chains never end at a location entry.
   - **Player traits:** Stored in `ChatMeta.traits`. Referenced as `trait:<name>` in contexts. Managed via the active entries panel UI.
-  - **UI:** `ActiveEntriesPanel` — right-side panel in adventure play view shows active entries grouped by category + trait management (pills with add/remove). `EntryForm` shows `homeLocation` field for characters and `characters` list field for locations.
-  - **Key Quest example:** village-square has characters [sage, blacksmith, innkeeper]. sage/blacksmith/innkeeper have homeLocation: village-square → auto-appear at village-square. cellar has characters [innkeeper] → Marta can be summoned there. iron-key requires blacksmith active. treasure-room has no characters.
+  - **Goal system:** Goals in `goals/` folder. Incomplete goals always appear in active entries. Completion toggled via `PUT /api/adventures/goal`. Completed goals disappear from active list.
+  - **UI:** `ActiveEntriesPanel` — right-side panel in adventure play view shows active entries grouped by category (locations, characters, items, goals) + trait management. Goals have completion checkboxes. Characters show state tags and current location. Items show their location.
+  - **EntryForm** — type-specific fields: characters get homeLocation/currentLocation/state/goals drop zones; locations get characters drop zone; items get location drop zone; goals get requirements input + completed checkbox.
+  - **Key Quest example:** village-square has 3 characters. All characters have `currentLocation: locations/village-square`. iron-key has `location: characters/blacksmith`. find-key goal has requirements and `completed: false`.
 - **Integration:** Called by adventure system for location data and active lore context; future chat system will inject lore context into LLM prompts
 
 ### Context Activation — Improvement Ideas

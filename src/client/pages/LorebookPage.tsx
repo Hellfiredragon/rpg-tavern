@@ -10,7 +10,6 @@ export function LorebookPage() {
   const { slug, "*": entryPath } = useParams<{ slug: string; "*": string }>();
   const navigate = useNavigate();
 
-  const [adventures, setAdventures] = useState<Template[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
 
   // Editor state
@@ -23,7 +22,6 @@ export function LorebookPage() {
 
   const loadPicker = useCallback(async () => {
     const data = await api.fetchLorebooks();
-    setAdventures(data.adventures);
     setTemplates(data.templates);
   }, []);
 
@@ -78,7 +76,6 @@ export function LorebookPage() {
   return (
     <>
       <LorebookPicker
-        adventures={adventures}
         templates={templates}
         onEdit={(lb) => {
           setEditorMeta({ slug: lb.slug, name: lb.name, preset: false });

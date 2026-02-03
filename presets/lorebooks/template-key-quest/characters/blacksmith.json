@@ -6,5 +6,8 @@
   "priority": 10,
   "enabled": true,
   "contexts": [],
-  "homeLocation": "locations/village-square"
+  "homeLocation": "locations/village-square",
+  "currentLocation": "locations/village-square",
+  "state": [],
+  "goals": ["goals/find-key"]
 }

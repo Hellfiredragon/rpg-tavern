@@ -40,6 +40,11 @@ export type ActiveEntry = {
   name: string;
   content: string;
   category: string;
+  state?: string[];
+  currentLocation?: string;
+  location?: string;
+  completed?: boolean;
+  requirements?: string[];
 };
 
 export type TreeNode = {
@@ -59,6 +64,12 @@ export type LorebookEntry = {
   contexts: string[];
   characters?: string[];
   homeLocation?: string;
+  currentLocation?: string;
+  state?: string[];
+  goals?: string[];
+  location?: string;
+  requirements?: string[];
+  completed?: boolean;
 };
 
 export type Settings = {

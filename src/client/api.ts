@@ -60,6 +60,10 @@ export function updateTraits(chatId: string, traits: string[]): Promise<{ traits
   return apiPut("/api/adventures/traits", { chatId, traits });
 }
 
+export function toggleGoal(lorebook: string, path: string, completed: boolean, chatId: string): Promise<{ traits: string[]; entries: ActiveEntry[] }> {
+  return apiPut("/api/adventures/goal", { lorebook, path, completed, chatId });
+}
+
 // --- Chats ---
 
 export function createChat(lorebook: string, location?: string): Promise<{ chatId: string }> {
@@ -76,7 +80,7 @@ export function sendMessage(message: string, chatId: string, lorebook: string): 
 
 // --- Lorebooks ---
 
-export function fetchLorebooks(): Promise<{ adventures: Template[]; templates: Template[] }> {
+export function fetchLorebooks(): Promise<{ templates: Template[] }> {
   return apiFetch("/api/lorebooks");
 }
 

@@ -332,27 +332,26 @@ describe("lorebook API routes", () => {
     expect(res.status).toBe(400);
   });
 
-  test("GET /api/lorebooks returns templates and adventures", async () => {
+  test("GET /api/lorebooks returns templates only", async () => {
     const res = await fetch(`${BASE}/api/lorebooks`);
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.templates).toBeDefined();
-    expect(data.adventures).toBeDefined();
+    expect(data.adventures).toBeUndefined();
     expect(data.templates.some((t: { name: string }) => t.name === "Key Quest")).toBe(true);
     expect(data.templates.some((t: { name: string }) => t.name === "Default Lorebook")).toBe(true);
   });
 
-  test("GET /api/lorebooks shows both templates and adventures", async () => {
+  test("GET /api/lorebooks shows only templates, not adventures", async () => {
     await createLorebook("my-adventure", "My Adventure"); // non-template
     await createLorebook("user-tpl", "User Template", true); // user-created template
     const res = await fetch(`${BASE}/api/lorebooks`);
     const data = await res.json();
     // Templates section
     expect(data.templates.some((t: { slug: string }) => t.slug === "template-key-quest")).toBe(true);
-    // Adventures section
-    expect(data.adventures.some((a: { slug: string }) => a.slug === "my-adventure")).toBe(true);
-    expect(data.adventures.find((a: { slug: string }) => a.slug === "my-adventure").name).toBe("My Adventure");
-    // User template
+    // Non-template adventures should not appear
+    expect(data.templates.some((t: { slug: string }) => t.slug === "my-adventure")).toBe(false);
+    // User template should appear
     expect(data.templates.some((t: { slug: string }) => t.slug === "user-tpl")).toBe(true);
   });
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { ActiveEntriesPanel } from "./ActiveEntriesPanel";
+import { LorebookEditor } from "../lorebook/LorebookEditor";
 import * as api from "../../api";
 import type { ChatMessage, LocationEntry } from "../../types";
 
@@ -19,6 +20,7 @@ export function AdventurePlay({ lorebook, chatId: initialChatId, name, location:
   const [currentLocation, setCurrentLocation] = useState(initialLocation);
   const [input, setInput] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [mode, setMode] = useState<"play" | "edit">("play");
   const messagesRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = useCallback(() => {
@@ -87,26 +89,42 @@ export function AdventurePlay({ lorebook, chatId: initialChatId, name, location:
             <option key={loc.path} value={loc.path}>{loc.name}</option>
           ))}
         </select>
+        <button
+          className={`btn-sm btn-mode-toggle${mode === "edit" ? " btn-mode-active" : ""}`}
+          onClick={() => setMode((m) => m === "play" ? "edit" : "play")}
+        >
+          {mode === "play" ? "Edit" : "Play"}
+        </button>
       </div>
-      <div className="adventure-body">
-        <div className="chat-container">
-          <div className="chat-messages" ref={messagesRef}>
-            {messages.length === 0 ? (
-              <p className="editor-placeholder">Your adventure begins...</p>
-            ) : (
-              messages.map((msg, i) => (
-                <div key={i} className={`chat-msg chat-msg-${msg.role}`}>{msg.content}</div>
-              ))
-            )}
+      {mode === "play" ? (
+        <div className="adventure-body">
+          <div className="chat-container">
+            <div className="chat-messages" ref={messagesRef}>
+              {messages.length === 0 ? (
+                <p className="editor-placeholder">Your adventure begins...</p>
+              ) : (
+                messages.map((msg, i) => (
+                  <div key={i} className={`chat-msg chat-msg-${msg.role}`}>{msg.content}</div>
+                ))
+              )}
+            </div>
+            <form className="chat-input-area" onSubmit={handleSend}>
+              <input type="text" placeholder="What do you do?" autoComplete="off" required
+                value={input} onChange={(e) => setInput(e.target.value)} />
+              <button type="submit">Send</button>
+            </form>
           </div>
-          <form className="chat-input-area" onSubmit={handleSend}>
-            <input type="text" placeholder="What do you do?" autoComplete="off" required
-              value={input} onChange={(e) => setInput(e.target.value)} />
-            <button type="submit">Send</button>
-          </form>
+          <ActiveEntriesPanel chatId={chatId} lorebook={lorebook} refreshKey={refreshKey} />
         </div>
-        <ActiveEntriesPanel chatId={chatId} refreshKey={refreshKey} />
-      </div>
+      ) : (
+        <LorebookEditor
+          slug={lorebook}
+          name={name}
+          readonly={false}
+          entryPath={null}
+          onBack={() => setMode("play")}
+        />
+      )}
     </div>
   );
 }

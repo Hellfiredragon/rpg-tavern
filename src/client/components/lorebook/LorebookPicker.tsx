@@ -1,7 +1,6 @@
 import type { Template } from "../../types";
 
 type Props = {
-  adventures: Template[];
   templates: Template[];
   onEdit: (lb: Template) => void;
   onView: (lb: Template) => void;
@@ -10,23 +9,9 @@ type Props = {
   onNewTemplate: () => void;
 };
 
-export function LorebookPicker({ adventures, templates, onEdit, onView, onCopy, onDelete, onNewTemplate }: Props) {
+export function LorebookPicker({ templates, onEdit, onView, onCopy, onDelete, onNewTemplate }: Props) {
   return (
     <div id="lorebook-picker">
-      {adventures.length > 0 && (
-        <>
-          <h2>Your Adventures</h2>
-          {adventures.map((lb) => (
-            <div className="adventure-card" key={lb.slug}>
-              <span className="adventure-card-name">{lb.name}</span>
-              <div className="adventure-card-actions">
-                <button className="btn-sm" onClick={() => onEdit(lb)}>Edit</button>
-              </div>
-            </div>
-          ))}
-        </>
-      )}
-
       <h2>Templates</h2>
       {templates.length > 0 ? (
         templates.map((lb) => (

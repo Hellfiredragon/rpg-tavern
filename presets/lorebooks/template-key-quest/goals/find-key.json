@@ -1,0 +1,11 @@
+{
+  "name": "Find the Iron Key",
+  "content": "The player must find the iron key to unlock the cellar door. The Old Sage knows the blacksmith has it.",
+  "keywords": ["quest", "find key", "iron key quest"],
+  "regex": "",
+  "priority": 5,
+  "enabled": true,
+  "contexts": [],
+  "requirements": ["Learn about the key from the Old Sage", "Obtain the iron key from the blacksmith"],
+  "completed": false
+}

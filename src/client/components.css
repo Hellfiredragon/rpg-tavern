@@ -539,3 +539,72 @@
   0% { transform: scale(0.7); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
 }
+
+/* Play/Edit mode toggle */
+
+.btn-mode-toggle {
+  margin-left: auto;
+}
+
+.btn-mode-active {
+  background: #e2b04a;
+  color: #1a1a2e;
+}
+
+/* Goal entries in active panel */
+
+.active-entry-goal {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+}
+
+.active-entry-goal input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.goal-completed {
+  text-decoration: line-through;
+  color: #666;
+}
+
+/* Character state tags in active panel */
+
+.active-entry-state {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.15rem;
+}
+
+.state-tag {
+  display: inline-block;
+  background: #2a3a5e;
+  color: #e0e0e0;
+  padding: 0.1rem 0.4rem;
+  border-radius: 10px;
+  font-size: 0.7rem;
+}
+
+/* Entry location label in active panel */
+
+.active-entry-location {
+  display: block;
+  font-size: 0.7rem;
+  color: #888;
+  font-style: italic;
+}
+
+/* Entry form checkbox label */
+
+.entry-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.entry-checkbox-label input[type="checkbox"] {
+  margin: 0;
+}

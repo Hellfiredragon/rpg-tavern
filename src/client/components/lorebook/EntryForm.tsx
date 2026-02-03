@@ -64,6 +64,16 @@ function useDropZone(onDrop: (path: string) => void) {
   return { active, handlers };
 }
 
+type EntryType = "character" | "location" | "item" | "goal" | "other";
+
+function getEntryType(path: string): EntryType {
+  if (path.startsWith("characters/")) return "character";
+  if (path.startsWith("locations/")) return "location";
+  if (path.startsWith("items/")) return "item";
+  if (path.startsWith("goals/")) return "goal";
+  return "other";
+}
+
 type Props = {
   lorebook: string;
   path: string;
@@ -121,11 +131,14 @@ export function EntryForm({ lorebook, path, readonly, onSaved, onDeleted }: Prop
 
   const keywordsStr = Array.isArray(entry.keywords) ? entry.keywords.join(", ") : String(entry.keywords);
   const contextsStr = Array.isArray(entry.contexts) ? entry.contexts.join(", ") : String(entry.contexts);
-  const isCharacter = path.startsWith("characters/");
-  const isLocation = path.startsWith("locations/");
+  const entryType = getEntryType(path);
 
   const homeLocationDrop = useDropZone(useCallback((droppedPath: string) => {
     setEntry((prev) => ({ ...prev, homeLocation: droppedPath }));
+  }, []));
+
+  const currentLocationDrop = useDropZone(useCallback((droppedPath: string) => {
+    setEntry((prev) => ({ ...prev, currentLocation: droppedPath }));
   }, []));
 
   const charactersDrop = useDropZone(useCallback((droppedPath: string) => {
@@ -135,6 +148,21 @@ export function EntryForm({ lorebook, path, readonly, onSaved, onDeleted }: Prop
       return { ...prev, characters: [...existing, droppedPath] };
     });
   }, []));
+
+  const goalsDrop = useDropZone(useCallback((droppedPath: string) => {
+    setEntry((prev) => {
+      const existing = Array.isArray(prev.goals) ? prev.goals : [];
+      if (existing.includes(droppedPath)) return prev;
+      return { ...prev, goals: [...existing, droppedPath] };
+    });
+  }, []));
+
+  const itemLocationDrop = useDropZone(useCallback((droppedPath: string) => {
+    setEntry((prev) => ({ ...prev, location: droppedPath }));
+  }, []));
+
+  const stateStr = Array.isArray(entry.state) ? entry.state.join(", ") : (entry.state ?? "");
+  const requirementsStr = Array.isArray(entry.requirements) ? entry.requirements.join(", ") : (entry.requirements ?? "");
 
   return (
     <>
@@ -161,7 +189,8 @@ export function EntryForm({ lorebook, path, readonly, onSaved, onDeleted }: Prop
         <input id="lb-contexts" type="text" value={contextsStr} disabled={readonly}
           onChange={(e) => setEntry({ ...entry, contexts: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} />
 
-        {isCharacter && (
+        {/* Character-specific fields */}
+        {entryType === "character" && (
           <>
             <label>Home Location <span className="hint">(drag a location from the tree)</span></label>
             <div className={`drop-zone-field${homeLocationDrop.active ? " drop-zone-active" : ""}`}
@@ -173,10 +202,44 @@ export function EntryForm({ lorebook, path, readonly, onSaved, onDeleted }: Prop
                 <span className="drop-zone-placeholder">Drop a location here</span>
               )}
             </div>
+
+            <label>Current Location <span className="hint">(drag a location — dynamic in adventures)</span></label>
+            <div className={`drop-zone-field${currentLocationDrop.active ? " drop-zone-active" : ""}`}
+              {...(readonly ? {} : currentLocationDrop.handlers)}>
+              {entry.currentLocation ? (
+                <PathBadge path={entry.currentLocation} readonly={readonly}
+                  onRemove={() => setEntry((prev) => ({ ...prev, currentLocation: undefined }))} />
+              ) : (
+                <span className="drop-zone-placeholder">Drop a location here</span>
+              )}
+            </div>
+
+            <label htmlFor="lb-state">State <span className="hint">(comma-separated tags, e.g. friendly, injured)</span></label>
+            <input id="lb-state" type="text" value={stateStr} disabled={readonly}
+              onChange={(e) => setEntry({ ...entry, state: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} />
+
+            <label>Goals <span className="hint">(drag goal entries from the tree)</span></label>
+            <div className={`drop-zone-field${goalsDrop.active ? " drop-zone-active" : ""}`}
+              {...(readonly ? {} : goalsDrop.handlers)}>
+              {Array.isArray(entry.goals) && entry.goals.length > 0 && (
+                <div className="drop-badge-list">
+                  {entry.goals.map((g) => (
+                    <PathBadge key={g} path={g} readonly={readonly}
+                      onRemove={() => setEntry((prev) => ({
+                        ...prev, goals: (prev.goals || []).filter((x) => x !== g),
+                      }))} />
+                  ))}
+                </div>
+              )}
+              <span className="drop-zone-placeholder">
+                {!entry.goals || entry.goals.length === 0 ? "Drop goals here" : "+ Drop more"}
+              </span>
+            </div>
           </>
         )}
 
-        {isLocation && (
+        {/* Location-specific fields */}
+        {entryType === "location" && (
           <>
             <label>Characters <span className="hint">(drag characters from the tree)</span></label>
             <div className={`drop-zone-field${charactersDrop.active ? " drop-zone-active" : ""}`}
@@ -195,6 +258,37 @@ export function EntryForm({ lorebook, path, readonly, onSaved, onDeleted }: Prop
                 {!entry.characters || entry.characters.length === 0 ? "Drop characters here" : "+ Drop more"}
               </span>
             </div>
+          </>
+        )}
+
+        {/* Item-specific fields */}
+        {entryType === "item" && (
+          <>
+            <label>Location <span className="hint">(drag a location, character, or type "player")</span></label>
+            <div className={`drop-zone-field${itemLocationDrop.active ? " drop-zone-active" : ""}`}
+              {...(readonly ? {} : itemLocationDrop.handlers)}>
+              {entry.location ? (
+                <PathBadge path={entry.location} readonly={readonly}
+                  onRemove={() => setEntry((prev) => ({ ...prev, location: undefined }))} />
+              ) : (
+                <span className="drop-zone-placeholder">Drop a location or character here</span>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Goal-specific fields */}
+        {entryType === "goal" && (
+          <>
+            <label htmlFor="lb-requirements">Requirements <span className="hint">(comma-separated descriptions)</span></label>
+            <input id="lb-requirements" type="text" value={requirementsStr} disabled={readonly}
+              onChange={(e) => setEntry({ ...entry, requirements: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} />
+
+            <label className="entry-checkbox-label">
+              <input type="checkbox" checked={!!entry.completed} disabled={readonly}
+                onChange={(e) => setEntry({ ...entry, completed: e.target.checked })} />
+              Completed
+            </label>
           </>
         )}
 
