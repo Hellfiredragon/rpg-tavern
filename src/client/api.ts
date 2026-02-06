@@ -138,6 +138,12 @@ export function moveEntry(lorebook: string, path: string, destination: string): 
   return apiPut(`/api/lorebook/entry/move?lorebook=${encodeURIComponent(lorebook)}`, { path, destination });
 }
 
+// --- Cancel generation ---
+
+export function cancelChat(chatId: string): Promise<{ ok: true }> {
+  return apiPost("/api/chat/cancel", { chatId });
+}
+
 // --- Message deletion ---
 
 export function deleteMessage(chatId: string, messageId: string): Promise<{ ok: true }> {

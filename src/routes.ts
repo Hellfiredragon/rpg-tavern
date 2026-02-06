@@ -15,7 +15,7 @@ import {
   updateTraits, generateMessageId,
   type ChatMessage,
 } from "./chat";
-import { createPipelineRun, removePipelineRun, getPipelineRun } from "./events";
+import { createPipelineRun, removePipelineRun, getPipelineRun, cancelPipelineRun } from "./events";
 import { executePipeline } from "./pipeline";
 import { initRepo } from "./git";
 import { revertCommits } from "./git";
@@ -139,14 +139,18 @@ function hasBackends(): boolean {
 // ---------------------------------------------------------------------------
 
 function createSSEResponse(chatId: string, lorebook: string, userMessage: ChatMessage): Response {
-  const bus = createPipelineRun(chatId);
+  const { bus, abort } = createPipelineRun(chatId);
 
   const stream = new ReadableStream({
     start(controller) {
       const encoder = new TextEncoder();
 
       const write = (event: string, data: unknown) => {
-        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        try {
+          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        } catch {
+          // stream already closed
+        }
       };
 
       const unsubscribe = bus.subscribe((evt) => {
@@ -157,14 +161,16 @@ function createSSEResponse(chatId: string, lorebook: string, userMessage: ChatMe
       (async () => {
         try {
           const settings = await loadSettings();
-          const result = await executePipeline(chatId, lorebook, userMessage, settings.pipeline, bus);
+          await executePipeline(chatId, lorebook, userMessage, settings.pipeline, bus, abort.signal);
         } catch (err) {
-          const errMsg = err instanceof Error ? err.message : "Pipeline failed";
-          write("pipeline_error", { type: "pipeline_error", error: errMsg });
+          if (!abort.signal.aborted) {
+            const errMsg = err instanceof Error ? err.message : "Pipeline failed";
+            write("pipeline_error", { type: "pipeline_error", error: errMsg });
+          }
         } finally {
           unsubscribe();
           removePipelineRun(chatId);
-          controller.close();
+          try { controller.close(); } catch { /* already closed */ }
         }
       })();
     },
@@ -286,9 +292,9 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
 
         // Synchronous fallback — run pipeline and return JSON
         const settings = await loadSettings();
-        const bus = createPipelineRun(chatId);
+        const { bus, abort } = createPipelineRun(chatId);
         try {
-          const result = await executePipeline(chatId, lorebook, userMsg, settings.pipeline, bus);
+          const result = await executePipeline(chatId, lorebook, userMsg, settings.pipeline, bus, abort.signal);
           return json({
             chatId,
             messages: [userMsg, ...result.messages],
@@ -399,6 +405,20 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Chat error";
       return err(msg);
+    }
+  }
+
+  // --- Cancel in-flight generation ---
+
+  if (url.pathname === "/api/chat/cancel" && req.method === "POST") {
+    try {
+      const body = await req.json();
+      const chatId = typeof body.chatId === "string" ? body.chatId : "";
+      if (!chatId) return err("Missing chatId");
+      cancelPipelineRun(chatId);
+      return json({ ok: true });
+    } catch {
+      return json({ ok: true });
     }
   }
 

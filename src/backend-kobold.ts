@@ -2,6 +2,7 @@ import type {
   BackendConfig, CompletionRequest, CompletionResponse,
   LLMBackend, ToolCall,
 } from "./backends";
+import { classifyHTTPError, LLMError } from "./backends";
 
 // ---------------------------------------------------------------------------
 // Prompt formatting — flatten chat messages into a single text prompt
@@ -82,15 +83,22 @@ export function createKoboldBackend(config: BackendConfig): LLMBackend {
         body.stop_sequence = req.stopSequences;
       }
 
-      const res = await fetch(`${baseUrl}/api/v1/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      let res: Response;
+      try {
+        res = await fetch(`${baseUrl}/api/v1/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal: req.signal,
+        });
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") throw e;
+        throw new LLMError(`Cannot reach backend at ${baseUrl}: ${e instanceof Error ? e.message : e}`, "network");
+      }
 
       if (!res.ok) {
         const errText = await res.text().catch(() => res.statusText);
-        throw new Error(`KoboldCpp error ${res.status}: ${errText}`);
+        throw classifyHTTPError(res.status, errText);
       }
 
       const data = await res.json() as { results: Array<{ text: string }> };
@@ -120,15 +128,22 @@ export function createKoboldBackend(config: BackendConfig): LLMBackend {
         body.stop_sequence = req.stopSequences;
       }
 
-      const res = await fetch(`${baseUrl}/api/extra/generate/stream`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      let res: Response;
+      try {
+        res = await fetch(`${baseUrl}/api/extra/generate/stream`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal: req.signal,
+        });
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") throw e;
+        throw new LLMError(`Cannot reach backend at ${baseUrl}: ${e instanceof Error ? e.message : e}`, "network");
+      }
 
       if (!res.ok) {
         const errText = await res.text().catch(() => res.statusText);
-        throw new Error(`KoboldCpp stream error ${res.status}: ${errText}`);
+        throw classifyHTTPError(res.status, errText);
       }
 
       let fullText = "";

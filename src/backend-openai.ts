@@ -2,6 +2,7 @@ import type {
   BackendConfig, CompletionRequest, CompletionResponse,
   LLMBackend, ToolCall, ToolDefinition,
 } from "./backends";
+import { classifyHTTPError, LLMError } from "./backends";
 
 // ---------------------------------------------------------------------------
 // OpenAI API types
@@ -102,15 +103,22 @@ export function createOpenAIBackend(config: BackendConfig): LLMBackend {
       if (req.stopSequences?.length) body.stop = req.stopSequences;
       if (req.tools?.length) body.tools = toOAITools(req.tools);
 
-      const res = await fetch(`${baseUrl}/v1/chat/completions`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(body),
-      });
+      let res: Response;
+      try {
+        res = await fetch(`${baseUrl}/v1/chat/completions`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body),
+          signal: req.signal,
+        });
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") throw e;
+        throw new LLMError(`Cannot reach backend at ${baseUrl}: ${e instanceof Error ? e.message : e}`, "network");
+      }
 
       if (!res.ok) {
         const errText = await res.text().catch(() => res.statusText);
-        throw new Error(`OpenAI error ${res.status}: ${errText}`);
+        throw classifyHTTPError(res.status, errText);
       }
 
       const data = await res.json() as { choices: OAIChoice[] };
@@ -136,15 +144,22 @@ export function createOpenAIBackend(config: BackendConfig): LLMBackend {
       if (req.stopSequences?.length) body.stop = req.stopSequences;
       if (req.tools?.length) body.tools = toOAITools(req.tools);
 
-      const res = await fetch(`${baseUrl}/v1/chat/completions`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(body),
-      });
+      let res: Response;
+      try {
+        res = await fetch(`${baseUrl}/v1/chat/completions`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body),
+          signal: req.signal,
+        });
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") throw e;
+        throw new LLMError(`Cannot reach backend at ${baseUrl}: ${e instanceof Error ? e.message : e}`, "network");
+      }
 
       if (!res.ok) {
         const errText = await res.text().catch(() => res.statusText);
-        throw new Error(`OpenAI stream error ${res.status}: ${errText}`);
+        throw classifyHTTPError(res.status, errText);
       }
 
       let fullContent = "";

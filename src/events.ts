@@ -12,7 +12,8 @@ export type PipelineEvent =
   | { type: "extractor_background"; status: "started" | "completed" | "failed"; error?: string }
   | { type: "extractor_tool_call"; tool: string; args: Record<string, unknown> }
   | { type: "pipeline_complete"; messages: ChatMessage[]; location?: string }
-  | { type: "pipeline_error"; error: string; role?: PipelineRole };
+  | { type: "pipeline_error"; error: string; role?: PipelineRole; category?: string }
+  | { type: "pipeline_cancelled" };
 
 // ---------------------------------------------------------------------------
 // EventBus
@@ -43,19 +44,28 @@ export class EventBus {
 // Active pipeline registry — keyed by chatId
 // ---------------------------------------------------------------------------
 
-const activePipelines = new Map<string, EventBus>();
+type PipelineRun = { bus: EventBus; abort: AbortController };
 
-export function createPipelineRun(chatId: string): EventBus {
+const activePipelines = new Map<string, PipelineRun>();
+
+export function createPipelineRun(chatId: string): PipelineRun {
   if (activePipelines.has(chatId)) {
     throw new Error("Pipeline already active for this chat");
   }
-  const bus = new EventBus();
-  activePipelines.set(chatId, bus);
-  return bus;
+  const run: PipelineRun = { bus: new EventBus(), abort: new AbortController() };
+  activePipelines.set(chatId, run);
+  return run;
 }
 
-export function getPipelineRun(chatId: string): EventBus | undefined {
+export function getPipelineRun(chatId: string): PipelineRun | undefined {
   return activePipelines.get(chatId);
+}
+
+export function cancelPipelineRun(chatId: string): boolean {
+  const run = activePipelines.get(chatId);
+  if (!run) return false;
+  run.abort.abort();
+  return true;
 }
 
 export function removePipelineRun(chatId: string): void {

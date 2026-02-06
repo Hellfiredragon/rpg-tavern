@@ -150,6 +150,15 @@
   font-size: 0.9rem;
 }
 
+/* Error messages in chat */
+
+.chat-msg-error {
+  color: #cf6e6e;
+  background: rgba(58, 27, 27, 0.5);
+  border-left: 3px solid #cf6e6e;
+  padding-left: 0.5rem;
+}
+
 .chat-input-area {
   display: flex;
   flex-direction: row;
@@ -163,6 +172,13 @@
 
 .chat-input-area button {
   flex-shrink: 0;
+}
+
+.btn-stop {
+  background: #cf6e6e;
+  color: #1a1a2e;
+  border: 1px solid #cf6e6e;
+  font-weight: 600;
 }
 
 /* Lorebook layout */

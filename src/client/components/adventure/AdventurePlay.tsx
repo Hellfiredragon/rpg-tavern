@@ -27,6 +27,7 @@ export function AdventurePlay({ lorebook, chatId: initialChatId, name, location:
   const [streaming, setStreaming] = useState(false);
   const [extractorRunning, setExtractorRunning] = useState(false);
   const messagesRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const scrollToBottom = useCallback(() => {
     if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
@@ -71,6 +72,16 @@ export function AdventurePlay({ lorebook, chatId: initialChatId, name, location:
     }
   };
 
+  // Cancel in-flight generation
+  const handleCancel = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    api.cancelChat(chatId).catch(() => {}); // fire-and-forget server-side cancel
+    // Remove empty streaming placeholders
+    setMessages((prev) => prev.filter((m) => !m.id?.startsWith("streaming-") || m.content));
+    setStreaming(false);
+  };
+
   // Send message — uses SSE if backends are configured, falls back to JSON
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,6 +94,8 @@ export function AdventurePlay({ lorebook, chatId: initialChatId, name, location:
     setMessages((prev) => [...prev, userMsg]);
     setTimeout(scrollToBottom, 0);
 
+    const ac = new AbortController();
+    abortRef.current = ac;
     setStreaming(true);
 
     try {
@@ -149,6 +162,11 @@ export function AdventurePlay({ lorebook, chatId: initialChatId, name, location:
               setRefreshKey((k) => k + 1);
               break;
             }
+            case "pipeline_cancelled": {
+              // Remove empty streaming placeholders, keep partial content
+              setMessages((prev) => prev.filter((m) => !m.id?.startsWith("streaming-") || m.content));
+              break;
+            }
             case "pipeline_error": {
               const errorMsg: ChatMessage = {
                 role: "system",
@@ -161,8 +179,10 @@ export function AdventurePlay({ lorebook, chatId: initialChatId, name, location:
               break;
             }
           }
-        });
-      } catch (sseErr) {
+        }, ac.signal);
+      } catch (sseErr: unknown) {
+        // Abort is expected when user clicks Stop
+        if (sseErr instanceof DOMException && sseErr.name === "AbortError") return;
         // SSE might fail if no backends configured — fall back to JSON
         if (!sseSucceeded) {
           const data = await api.sendMessage(msg, chatId, lorebook);
@@ -177,6 +197,7 @@ export function AdventurePlay({ lorebook, chatId: initialChatId, name, location:
         }
       }
     } finally {
+      abortRef.current = null;
       setStreaming(false);
     }
   };
@@ -212,7 +233,7 @@ export function AdventurePlay({ lorebook, chatId: initialChatId, name, location:
                 <p className="editor-placeholder">Your adventure begins...</p>
               ) : (
                 messages.map((msg, i) => (
-                  <div key={msg.id || i} className={`chat-msg chat-msg-${msg.role}${msg.source ? ` chat-msg-source-${msg.source}` : ""}`}>
+                  <div key={msg.id || i} className={`chat-msg chat-msg-${msg.role}${msg.source ? ` chat-msg-source-${msg.source}` : ""}${msg.content.startsWith("[Error:") ? " chat-msg-error" : ""}`}>
                     {msg.source && msg.source !== "system" && msg.role === "assistant" && (
                       <span className={`chat-msg-source-badge chat-msg-source-${msg.source}`}>{msg.source}</span>
                     )}
@@ -236,7 +257,11 @@ export function AdventurePlay({ lorebook, chatId: initialChatId, name, location:
             <form className="chat-input-area" onSubmit={handleSend}>
               <input type="text" placeholder="What do you do?" autoComplete="off" required
                 value={input} onChange={(e) => setInput(e.target.value)} disabled={streaming} />
-              <button type="submit" disabled={streaming}>{streaming ? "..." : "Send"}</button>
+              {streaming ? (
+                <button type="button" className="btn-stop" onClick={handleCancel}>Stop</button>
+              ) : (
+                <button type="submit">Send</button>
+              )}
             </form>
           </div>
           <div className="active-entries-wrapper">

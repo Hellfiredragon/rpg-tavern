@@ -15,8 +15,8 @@ fantasy theme with HTMX, template lorebooks, path traversal protection.
 - [x] Token-by-token response rendering in the chat UI (SSE events)
 - [x] Backend configuration UI in settings (add/remove backends, assign to pipeline steps)
 - [x] Concurrency control via per-backend slot semaphores
-- [ ] Abort/cancel in-flight generation (stop button)
-- [ ] Error handling (rate limits, invalid key, network failures) — basic error messages shown
+- [x] Abort/cancel in-flight generation (stop button)
+- [x] Error handling (rate limits, invalid key, network failures) — basic error messages shown
 
 ### 1.2 Chat History Persistence
 - [x] Save chat messages to disk (JSONL format, one file per conversation)

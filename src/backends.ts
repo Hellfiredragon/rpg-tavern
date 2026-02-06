@@ -1,4 +1,24 @@
 // ---------------------------------------------------------------------------
+// Error classification
+// ---------------------------------------------------------------------------
+
+export type LLMErrorCategory = "auth" | "rate_limit" | "server" | "network" | "unknown";
+
+export class LLMError extends Error {
+  constructor(message: string, public readonly category: LLMErrorCategory, public readonly status?: number) {
+    super(message);
+    this.name = "LLMError";
+  }
+}
+
+export function classifyHTTPError(status: number, body: string): LLMError {
+  if (status === 401 || status === 403) return new LLMError("Invalid API key or unauthorized.", "auth", status);
+  if (status === 429) return new LLMError("Rate limit exceeded. Wait a moment and try again.", "rate_limit", status);
+  if (status >= 500) return new LLMError(`Backend server error (${status}).`, "server", status);
+  return new LLMError(`Backend error ${status}: ${body.slice(0, 200)}`, "unknown", status);
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -33,6 +53,7 @@ export type CompletionRequest = {
   maxTokens?: number;
   tools?: ToolDefinition[];
   stopSequences?: string[];
+  signal?: AbortSignal;
 };
 
 export type CompletionResponse = {

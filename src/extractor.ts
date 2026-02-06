@@ -317,8 +317,12 @@ ${worldContext}
     const commits: string[] = [];
     if (resp.toolCalls && resp.toolCalls.length > 0) {
       for (const tc of resp.toolCalls) {
-        const sha = await executeTool(lorebook, chatId, tc, bus);
-        if (sha) commits.push(sha);
+        try {
+          const sha = await executeTool(lorebook, chatId, tc, bus);
+          if (sha) commits.push(sha);
+        } catch (toolErr) {
+          bus.emit({ type: "extractor_tool_call", tool: tc.name, args: { ...tc.arguments, _error: String(toolErr) } });
+        }
       }
     }
 

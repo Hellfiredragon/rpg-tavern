@@ -127,4 +127,5 @@ export type PipelineEvent =
   | { type: "extractor_background"; status: "started" | "completed" | "failed"; error?: string }
   | { type: "extractor_tool_call"; tool: string; args: Record<string, unknown> }
   | { type: "pipeline_complete"; messages: ChatMessage[]; location?: string }
-  | { type: "pipeline_error"; error: string; role?: PipelineRole };
+  | { type: "pipeline_error"; error: string; role?: PipelineRole; category?: string }
+  | { type: "pipeline_cancelled" };

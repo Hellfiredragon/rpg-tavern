@@ -5,11 +5,13 @@ export async function sendMessageSSE(
   chatId: string,
   lorebook: string,
   onEvent: (event: PipelineEvent) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, chatId, lorebook, stream: true }),
+    signal,
   });
 
   if (!res.ok) {

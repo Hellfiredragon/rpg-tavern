@@ -3,7 +3,7 @@ import {
   type ChatMessage,
 } from "./chat";
 import { loadSettings, type PipelineConfig, type PipelineRole } from "./settings";
-import { getBackend, getSemaphore, type CompletionRequest, type ToolCall } from "./backends";
+import { getBackend, getSemaphore, LLMError, type CompletionRequest, type ToolCall } from "./backends";
 import { findActiveEntries, loadEntry, type ActiveEntry, type ActivationContext } from "./lorebook";
 import { EventBus } from "./events";
 import { executeExtractorStep, EXTRACTOR_TOOLS } from "./extractor";
@@ -171,6 +171,7 @@ export async function executePipeline(
   userMessage: ChatMessage,
   config: PipelineConfig,
   bus: EventBus,
+  signal?: AbortSignal,
 ): Promise<{ messages: ChatMessage[]; location?: string }> {
   const resultMessages: ChatMessage[] = [];
   let narratorOutput: string | null = null;
@@ -209,6 +210,7 @@ export async function executePipeline(
     // Execute narrator and character steps sequentially
     for (const step of enabledSteps) {
       if (step.role === "extractor") continue; // handled separately
+      if (signal?.aborted) break;
 
       const backend = getBackend(step.backendId);
       const semaphore = getSemaphore(step.backendId);
@@ -246,6 +248,7 @@ export async function executePipeline(
           messages: reqMessages,
           temperature: settings.llm.temperature,
           maxTokens: 1024,
+          signal,
         };
 
         let content = "";
@@ -254,6 +257,10 @@ export async function executePipeline(
           const gen = backend.stream(completionReq);
           let result = await gen.next();
           while (!result.done) {
+            if (signal?.aborted) {
+              await gen.return(undefined as unknown as CompletionResponse);
+              break;
+            }
             const val = result.value;
             if (typeof val === "string") {
               content += val;
@@ -261,7 +268,9 @@ export async function executePipeline(
             }
             result = await gen.next();
           }
-          content = result.value.content || content;
+          if (!signal?.aborted && result.done) {
+            content = result.value.content || content;
+          }
         } else {
           const resp = await backend.complete(completionReq);
           content = resp.content;
@@ -285,15 +294,17 @@ export async function executePipeline(
         }
         bus.emit({ type: "step_complete", role: step.role, message: msg });
       } catch (err) {
+        if (signal?.aborted) break;
         const errMsg = err instanceof Error ? err.message : "Unknown error";
-        bus.emit({ type: "pipeline_error", error: errMsg, role: step.role });
+        const category = err instanceof LLMError ? err.category : undefined;
+        bus.emit({ type: "pipeline_error", error: errMsg, role: step.role, category });
 
         // Append error as system message
         const errorMsg: ChatMessage = {
           id: generateMessageId(),
           role: "system",
           source: "system",
-          content: `[${step.role} error: ${errMsg}]`,
+          content: `[Error: ${errMsg}]`,
           timestamp: new Date().toISOString(),
         };
         await appendMessage(chatId, errorMsg);
@@ -301,6 +312,12 @@ export async function executePipeline(
       } finally {
         release();
       }
+    }
+
+    // Check for cancellation before extractor
+    if (signal?.aborted) {
+      bus.emit({ type: "pipeline_cancelled" });
+      return { messages: resultMessages, location: currentLocation };
     }
 
     // Run extractor
@@ -333,7 +350,11 @@ export async function executePipeline(
       }
     }
 
-    bus.emit({ type: "pipeline_complete", messages: resultMessages, location: currentLocation });
+    if (signal?.aborted) {
+      bus.emit({ type: "pipeline_cancelled" });
+    } else {
+      bus.emit({ type: "pipeline_complete", messages: resultMessages, location: currentLocation });
+    }
     return { messages: resultMessages, location: currentLocation };
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : "Pipeline failed";
