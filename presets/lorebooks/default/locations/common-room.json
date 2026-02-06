@@ -1,0 +1,10 @@
+{
+  "name": "The Common Room",
+  "content": "The main hall of The Rusty Flagon tavern. A crackling hearth dominates one wall, casting warm light over rough-hewn tables and benches. The air smells of wood smoke and stew. Greta tends the bar along the back wall while Pip the bard plucks his lute in the corner. A door behind the bar leads to the storeroom.",
+  "keywords": ["common room", "tavern", "main hall", "hearth", "bar"],
+  "regex": "",
+  "priority": 5,
+  "enabled": true,
+  "contexts": [],
+  "characters": ["characters/greta", "characters/pip"]
+}

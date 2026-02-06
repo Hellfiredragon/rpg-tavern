@@ -1,0 +1,10 @@
+{
+  "name": "The Cellar",
+  "content": "A cold, damp cellar beneath the tavern, reached by a creaking trapdoor in the storeroom. Stone walls drip with moisture. Old wine racks stand mostly empty. In a shadowy alcove behind a loose stone, the stolen silver amulet has been hastily hidden.",
+  "keywords": ["cellar", "basement", "underground", "beneath the tavern"],
+  "regex": "",
+  "priority": 10,
+  "enabled": true,
+  "contexts": [],
+  "characters": []
+}

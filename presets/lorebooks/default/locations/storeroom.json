@@ -1,0 +1,10 @@
+{
+  "name": "The Storeroom",
+  "content": "A cluttered back room behind the bar, lined with barrels and crates of supplies. Recently ransacked — several crates are overturned and a locked chest has been pried open. Muddy boot prints lead from the chest toward a trapdoor in the floor that descends to the cellar.",
+  "keywords": ["storeroom", "store room", "back room", "supply room"],
+  "regex": "",
+  "priority": 5,
+  "enabled": true,
+  "contexts": [],
+  "characters": []
+}

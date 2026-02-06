@@ -1,4 +1,5 @@
 import { loadSettings, saveSettings, validateSettings, type Settings } from "./settings";
+import { initBackendsFromConfig, listBackendIds } from "./backends";
 import {
   scanTree, loadEntry, saveEntry, deleteEntry, moveEntry,
   createFolder, deleteFolder, validateEntry, DEFAULT_ENTRY,
@@ -10,9 +11,14 @@ import {
 } from "./lorebook";
 import {
   createConversation, listConversations, loadConversation,
-  appendMessage, deleteConversation, changeLocation, updateTraits,
+  appendMessage, deleteConversation, deleteMessage, changeLocation,
+  updateTraits, generateMessageId,
   type ChatMessage,
 } from "./chat";
+import { createPipelineRun, removePipelineRun, getPipelineRun } from "./events";
+import { executePipeline } from "./pipeline";
+import { initRepo } from "./git";
+import { revertCommits } from "./git";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -123,6 +129,56 @@ async function resolveCharacterSummon(
   return null;
 }
 
+/** Check if any LLM backends are configured. */
+function hasBackends(): boolean {
+  return listBackendIds().length > 0;
+}
+
+// ---------------------------------------------------------------------------
+// SSE helper
+// ---------------------------------------------------------------------------
+
+function createSSEResponse(chatId: string, lorebook: string, userMessage: ChatMessage): Response {
+  const bus = createPipelineRun(chatId);
+
+  const stream = new ReadableStream({
+    start(controller) {
+      const encoder = new TextEncoder();
+
+      const write = (event: string, data: unknown) => {
+        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+      };
+
+      const unsubscribe = bus.subscribe((evt) => {
+        write(evt.type, evt);
+      });
+
+      // Run pipeline asynchronously
+      (async () => {
+        try {
+          const settings = await loadSettings();
+          const result = await executePipeline(chatId, lorebook, userMessage, settings.pipeline, bus);
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : "Pipeline failed";
+          write("pipeline_error", { type: "pipeline_error", error: errMsg });
+        } finally {
+          unsubscribe();
+          removePipelineRun(chatId);
+          controller.close();
+        }
+      })();
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+    },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // API
 // ---------------------------------------------------------------------------
@@ -142,6 +198,10 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
       const lorebook = typeof body.lorebook === "string" ? body.lorebook : "";
       const location = typeof body.location === "string" ? body.location : "";
       const meta = await createConversation({ lorebook, currentLocation: location });
+      // Initialize git repo for the lorebook when creating an adventure
+      if (lorebook) {
+        try { await initRepo(lorebook); } catch { /* may already exist */ }
+      }
       return json({ chatId: meta.id });
     } catch {
       const meta = await createConversation();
@@ -157,6 +217,34 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
     return json({ meta: conv.meta, messages: conv.messages });
   }
 
+  // --- Message deletion ---
+
+  if (url.pathname === "/api/chats/message" && req.method === "DELETE") {
+    const chatId = url.searchParams.get("chatId") || "";
+    const messageId = url.searchParams.get("messageId") || "";
+    if (!chatId || !messageId) return err("Missing chatId or messageId");
+
+    try {
+      const deleted = await deleteMessage(chatId, messageId);
+      if (!deleted) return err("Message not found", 404);
+
+      // Revert git commits if the message had any
+      if (deleted.commits && deleted.commits.length > 0) {
+        const conv = await loadConversation(chatId);
+        if (conv?.meta.lorebook) {
+          await revertCommits(conv.meta.lorebook, deleted.commits);
+        }
+      }
+
+      return json({ ok: true });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Delete failed";
+      return err(msg);
+    }
+  }
+
+  // --- Chat send (with LLM pipeline or fallback) ---
+
   if (url.pathname === "/api/chat" && req.method === "POST") {
     try {
       const body = await req.json();
@@ -165,17 +253,54 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
 
       let chatId = typeof body.chatId === "string" ? body.chatId : "";
       const lorebook = typeof body.lorebook === "string" ? body.lorebook : "";
+      const useSSE = body.stream === true;
       let isNew = false;
 
       if (!chatId) {
         const meta = await createConversation({ lorebook });
         chatId = meta.id;
         isNew = true;
+        if (lorebook) {
+          try { await initRepo(lorebook); } catch { /* may already exist */ }
+        }
       }
 
-      const userMsg: ChatMessage = { role: "user", content: message, timestamp: new Date().toISOString() };
+      const userMsg: ChatMessage = {
+        id: generateMessageId(),
+        role: "user",
+        content: message,
+        timestamp: new Date().toISOString(),
+      };
       await appendMessage(chatId, userMsg);
 
+      // Check for active pipeline
+      if (getPipelineRun(chatId)) {
+        return err("Pipeline already active for this chat", 409);
+      }
+
+      // If backends are configured, use the LLM pipeline
+      if (hasBackends()) {
+        if (useSSE) {
+          return createSSEResponse(chatId, lorebook, userMsg);
+        }
+
+        // Synchronous fallback — run pipeline and return JSON
+        const settings = await loadSettings();
+        const bus = createPipelineRun(chatId);
+        try {
+          const result = await executePipeline(chatId, lorebook, userMsg, settings.pipeline, bus);
+          return json({
+            chatId,
+            messages: [userMsg, ...result.messages],
+            location: result.location ?? null,
+            isNew,
+          });
+        } finally {
+          removePipelineRun(chatId);
+        }
+      }
+
+      // No backends configured — use dummy LLM fallback
       const newMessages: ChatMessage[] = [userMsg];
       let location: string | null = null;
 
@@ -187,10 +312,21 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
         await changeLocation(chatId, loc.path, narration);
         location = loc.path;
 
-        const systemMsg: ChatMessage = { role: "system", content: narration, timestamp: new Date().toISOString() };
+        const systemMsg: ChatMessage = {
+          id: generateMessageId(),
+          role: "system",
+          source: "system",
+          content: narration,
+          timestamp: new Date().toISOString(),
+        };
         newMessages.push(systemMsg);
 
-        const assistantMsg: ChatMessage = { role: "assistant", content: `You arrive at ${loc.name}.`, timestamp: new Date().toISOString() };
+        const assistantMsg: ChatMessage = {
+          id: generateMessageId(),
+          role: "assistant",
+          content: `You arrive at ${loc.name}.`,
+          timestamp: new Date().toISOString(),
+        };
         await appendMessage(chatId, assistantMsg);
         newMessages.push(assistantMsg);
       } else if (lorebook) {
@@ -207,28 +343,54 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
               await saveEntry(lorebook, result.path, charEntry);
             }
             const narration = `${result.name} arrives at your location.`;
-            const systemMsg: ChatMessage = { role: "system", content: narration, timestamp: new Date().toISOString() };
+            const systemMsg: ChatMessage = {
+              id: generateMessageId(),
+              role: "system",
+              source: "system",
+              content: narration,
+              timestamp: new Date().toISOString(),
+            };
             await appendMessage(chatId, systemMsg);
             newMessages.push(systemMsg);
 
-            const assistantMsg: ChatMessage = { role: "assistant", content: `${result.name} has joined you.`, timestamp: new Date().toISOString() };
+            const assistantMsg: ChatMessage = {
+              id: generateMessageId(),
+              role: "assistant",
+              content: `${result.name} has joined you.`,
+              timestamp: new Date().toISOString(),
+            };
             await appendMessage(chatId, assistantMsg);
             newMessages.push(assistantMsg);
           } else {
             // Character not found — normal response
-            const assistantMsg: ChatMessage = { role: "assistant", content: "Hello World", timestamp: new Date().toISOString() };
+            const assistantMsg: ChatMessage = {
+              id: generateMessageId(),
+              role: "assistant",
+              content: "Hello World",
+              timestamp: new Date().toISOString(),
+            };
             await appendMessage(chatId, assistantMsg);
             newMessages.push(assistantMsg);
           }
         } else {
           // Placeholder response (future: LLM integration)
-          const assistantMsg: ChatMessage = { role: "assistant", content: "Hello World", timestamp: new Date().toISOString() };
+          const assistantMsg: ChatMessage = {
+            id: generateMessageId(),
+            role: "assistant",
+            content: "Hello World",
+            timestamp: new Date().toISOString(),
+          };
           await appendMessage(chatId, assistantMsg);
           newMessages.push(assistantMsg);
         }
       } else {
         // No lorebook — placeholder response
-        const assistantMsg: ChatMessage = { role: "assistant", content: "Hello World", timestamp: new Date().toISOString() };
+        const assistantMsg: ChatMessage = {
+          id: generateMessageId(),
+          role: "assistant",
+          content: "Hello World",
+          timestamp: new Date().toISOString(),
+        };
         await appendMessage(chatId, assistantMsg);
         newMessages.push(assistantMsg);
       }
@@ -431,6 +593,10 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
     const masked: Settings = {
       ...settings,
       llm: { ...settings.llm, apiKey: settings.llm.apiKey ? "••••••••" : "" },
+      backends: settings.backends.map((b) => ({
+        ...b,
+        apiKey: b.apiKey ? "••••••••" : "",
+      })),
     };
     return json(masked);
   }
@@ -438,8 +604,30 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
   if (url.pathname === "/api/settings" && req.method === "PUT") {
     try {
       const body = await req.json();
+
+      // Preserve actual API keys when masked placeholder is sent
+      const currentSettings = await loadSettings();
+      if (body.llm?.apiKey === "••••••••") {
+        body.llm.apiKey = currentSettings.llm.apiKey;
+      }
+      if (Array.isArray(body.backends)) {
+        for (let i = 0; i < body.backends.length; i++) {
+          if (body.backends[i]?.apiKey === "••••••••") {
+            // Find matching backend by id
+            const existing = currentSettings.backends.find((b) => b.id === body.backends[i].id);
+            if (existing) body.backends[i].apiKey = existing.apiKey;
+          }
+        }
+      }
+
       const settings = validateSettings(body);
       await saveSettings(settings);
+
+      // Re-initialize backends with new config
+      if (settings.backends.length > 0) {
+        initBackendsFromConfig(settings.backends);
+      }
+
       return json({ ok: true, settings });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Invalid settings";

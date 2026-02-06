@@ -1,4 +1,5 @@
-#!/usr/bin/env bash
+#!/bin/bash
+
 trap 'kill 0' EXIT
 
 PORT="${PORT:-13013}"

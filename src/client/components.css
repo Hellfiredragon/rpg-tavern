@@ -9,6 +9,8 @@
   border: 1px solid #444;
   border-radius: 6px;
   margin-bottom: 0.5rem;
+  cursor: pointer;
+  user-select: none;
 }
 
 .adventure-card:hover {
@@ -267,18 +269,6 @@
   font-size: 0.9rem;
   font-family: monospace;
   resize: vertical;
-}
-
-/* Lorebook picker */
-
-#lorebook-picker h2 {
-  color: #e2b04a;
-  font-size: 1.1rem;
-  margin: 1rem 0 0.5rem;
-}
-
-#lorebook-picker h2:first-child {
-  margin-top: 0;
 }
 
 /* Lorebook editor header bar */
@@ -607,4 +597,165 @@
 
 .entry-checkbox-label input[type="checkbox"] {
   margin: 0;
+}
+
+/* Source badges on chat messages */
+
+.chat-msg-source-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 8px;
+  margin-bottom: 0.35rem;
+}
+
+.chat-msg-source-narrator {
+  background: #2d3b5e;
+  color: #8ba8d8;
+}
+
+.chat-msg-source-character {
+  background: #3b2d5e;
+  color: #b88ad8;
+}
+
+.chat-msg-source-extractor {
+  background: #2d5e3b;
+  color: #8ad8a8;
+}
+
+/* Streaming cursor */
+
+.streaming-cursor::after {
+  content: "\25AE";
+  animation: cursor-blink 0.8s infinite;
+  color: #e2b04a;
+  margin-left: 2px;
+}
+
+@keyframes cursor-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* Message content */
+
+.chat-msg-content {
+  display: block;
+}
+
+/* Message delete button */
+
+.chat-msg {
+  position: relative;
+}
+
+.chat-msg-delete {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  background: none;
+  border: none;
+  color: #555;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.1rem 0.3rem;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.chat-msg:hover .chat-msg-delete {
+  opacity: 1;
+}
+
+.chat-msg-delete:hover {
+  color: #cf6e6e;
+}
+
+/* Active entries wrapper (holds extractor indicator + panel) */
+
+.active-entries-wrapper {
+  display: flex;
+  flex-direction: column;
+  width: 280px;
+  flex-shrink: 0;
+}
+
+/* Extractor indicator */
+
+.extractor-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0 0.5rem 1rem;
+  color: #8ad8a8;
+  font-size: 0.8rem;
+  border-left: 1px solid #333;
+  animation: fade-pulse 1.5s infinite;
+}
+
+.extractor-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #333;
+  border-top-color: #8ad8a8;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fade-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Backend config blocks in settings */
+
+.backend-config {
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+  background: #1a1a2e;
+}
+
+.backend-config-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.backend-config-header strong {
+  color: #e2b04a;
+}
+
+/* Pipeline step rows in settings */
+
+.pipeline-step {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #222;
+}
+
+.pipeline-step-role {
+  font-weight: 600;
+  color: #e2b04a;
+  text-transform: capitalize;
+  min-width: 80px;
+}
+
+.pipeline-step select {
+  flex: 1;
+  max-width: 250px;
 }

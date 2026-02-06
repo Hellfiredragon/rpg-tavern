@@ -1,0 +1,13 @@
+{
+  "name": "Greta the Barkeep",
+  "content": "A stout, no-nonsense woman who has run The Rusty Flagon for twenty years. She keeps a clean bar and a sharp tongue. Her silver amulet — a family heirloom passed down three generations — was stolen last night while she slept. She suspects someone broke in through the storeroom. She pleads with anyone who will listen: \"Please, find my amulet. It's all I have left of my mother.\"",
+  "keywords": ["greta", "barkeep", "bartender", "innkeeper"],
+  "regex": "",
+  "priority": 10,
+  "enabled": true,
+  "contexts": [],
+  "homeLocation": "locations/common-room",
+  "currentLocation": "locations/common-room",
+  "state": ["worried"],
+  "goals": ["goals/find-amulet"]
+}

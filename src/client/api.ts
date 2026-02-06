@@ -138,6 +138,12 @@ export function moveEntry(lorebook: string, path: string, destination: string): 
   return apiPut(`/api/lorebook/entry/move?lorebook=${encodeURIComponent(lorebook)}`, { path, destination });
 }
 
+// --- Message deletion ---
+
+export function deleteMessage(chatId: string, messageId: string): Promise<{ ok: true }> {
+  return apiDelete(`/api/chats/message?chatId=${encodeURIComponent(chatId)}&messageId=${encodeURIComponent(messageId)}`);
+}
+
 // --- Settings ---
 
 export function fetchSettings(): Promise<Settings> {

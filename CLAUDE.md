@@ -24,37 +24,45 @@
 
 ```
 src/
-  server.ts          # Entry point — Bun.serve(), static file serving, startup
-  routes.ts          # API route handlers (all return JSON)
-  chat.ts            # Chat persistence — types, JSONL read/write, CRUD
-  settings.ts        # Settings persistence + validation
+  server.ts          # Entry point — Bun.serve(), static file serving, startup migrations
+  routes.ts          # API route handlers (all return JSON), SSE pipeline integration
+  chat.ts            # Chat persistence — types, JSONL read/write, CRUD, message deletion
+  settings.ts        # Settings persistence + validation + backend/pipeline config
   lorebook.ts        # Lorebook system
+  backends.ts        # LLM backend abstraction — types, Semaphore, registry, factory
+  backend-kobold.ts  # KoboldCpp text completion implementation
+  backend-openai.ts  # OpenAI-compatible chat completion implementation
+  events.ts          # EventBus for pipeline events, active pipeline registry
+  pipeline.ts        # Multi-step pipeline executor, prompt construction for narrator/character
+  extractor.ts       # Extractor tool definitions, tool execution, git-backed lorebook mutations
+  git.ts             # isomorphic-git wrapper — init, commit, revert for lorebook versioning
   client/            # React frontend (built by Vite)
     index.html       # Vite entry point
     main.tsx         # React root — createRoot + BrowserRouter + App
     App.tsx          # Route definitions + Layout wrapper
     api.ts           # Typed fetch wrappers for all API endpoints
-    types.ts         # TypeScript interfaces for API responses
+    types.ts         # TypeScript interfaces for API responses + pipeline events
     styles.css       # Base layout + utility CSS
-    components.css   # Feature component CSS (adventure, lorebook, chat)
+    components.css   # Feature component CSS (adventure, lorebook, chat, pipeline)
+    hooks/
+      useSSE.ts        # SSE stream reader for pipeline events
     components/
-      Layout.tsx       # App shell — header, TabNav, Outlet
-      TabNav.tsx       # Navigation tabs (Adventure, Lorebook, Settings)
+      Layout.tsx       # App shell — header, gear icon, Outlet
       shared/
         Dialog.tsx     # Reusable <dialog> wrapper with showModal/close
       adventure/
-        AdventurePicker.tsx    # Adventure/template card list
-        AdventurePlay.tsx      # Chat + location bar + active entries
-        ActiveEntriesPanel.tsx # Right sidebar — active lore entries + traits
+        AdventurePicker.tsx     # Unified adventure + template card list
+        AdventurePlay.tsx       # Chat + SSE streaming + source badges + msg delete
+        TemplateView.tsx        # Template detail — location bar + LorebookEditor
+        ActiveEntriesPanel.tsx  # Right sidebar — active lore entries + traits
+        ExtractorIndicator.tsx  # Spinner shown when extractor is running
       lorebook/
-        LorebookPicker.tsx  # Lorebook card list (templates + adventures)
         LorebookEditor.tsx  # Two-column editor — tree + entry form
         TreeBrowser.tsx     # Recursive tree rendering with folder expand + HTML5 drag
         EntryForm.tsx       # Entry create/edit form with drop zone inputs
     pages/
-      AdventurePage.tsx  # Adventure route — picker or play based on :slug
-      LorebookPage.tsx   # Lorebook route — picker or editor based on :slug
-      SettingsPage.tsx   # Settings form
+      AdventurePage.tsx  # Unified route — picker, adventure play, or template view
+      SettingsPage.tsx   # Settings form + backend config + pipeline config
 vite.config.ts       # Vite config — React plugin, proxy, build output
 tsconfig.json        # Server TypeScript config (excludes src/client)
 tsconfig.client.json # Client TypeScript config (React JSX, DOM libs)
@@ -67,9 +75,9 @@ presets/
 
 ## UI
 
-- **Layout:** Single-page app using 90% of the page width (max 1400px), with a tab bar at the top
-- **Tabs:** Adventure | Lorebook | Settings — `<NavLink>` components with active class
-- **Dialogs:** "+ New" (entry/folder), "+ Template", "Save as Template", and adventure start/delete use `<Dialog>` component wrapping `<dialog>` with `showModal()`/`close()` via ref + useEffect
+- **Layout:** Single-page app using 90% of the page width (max 1400px), with a header containing the app title and a gear icon link to settings
+- **Navigation:** No tabs. Adventures are the sole main view. Settings accessed via gear icon in header (shows back arrow when on settings page).
+- **Dialogs:** "+ New" (entry/folder), "+ Template", "Copy Template", "Save as Template", and adventure start/delete use `<Dialog>` component wrapping `<dialog>` with `showModal()`/`close()` via ref + useEffect
 - **Components:** Functional components with hooks (`useState`, `useEffect`, `useParams`, `useNavigate`)
 
 ## Routing
@@ -81,17 +89,16 @@ Path-based client-side routing via react-router-dom. Browser back/forward button
 | Path | View |
 |------|------|
 | `/` | Redirects to `/adventure` |
-| `/adventure` | Adventure tab, picker |
-| `/adventure/:slug` | Adventure tab, playing that adventure (resumed via `/api/adventures/resume`) |
-| `/lorebook` | Lorebook tab, picker |
-| `/lorebook/:slug` | Lorebook tab, editing that lorebook (restored via `/api/lorebooks/meta`) |
-| `/settings` | Settings tab |
+| `/adventure` | Unified picker (adventures + templates) |
+| `/adventure/:slug` | Detail view — auto-detects adventure vs template |
+| `/adventure/:slug/*` | Detail view with deep-linked entry in editor |
+| `/settings` | Settings page (via gear icon) |
 
 ### Implementation
 
 - `App.tsx` defines all `<Route>` elements inside a `<Layout>` wrapper
-- `Layout.tsx` renders header + `<TabNav>` + `<Outlet>`
-- Page components read `useParams().slug` to determine picker vs detail view
+- `Layout.tsx` renders header + gear icon + `<Outlet>` (no tabs)
+- `AdventurePage` reads `useParams().slug` and fetches lorebook meta to determine mode: picker (no slug), adventure (non-template), or template (template=true)
 - Navigation uses `useNavigate()` for programmatic routing
 - Server returns `index.html` for all non-API, non-asset paths (SPA fallback)
 
@@ -103,7 +110,10 @@ The Chat tab has been redesigned into an **Adventure** tab. Users pick an advent
 
 - **Types:**
   - `ChatMeta` — `{ id, title, createdAt, updatedAt, lorebook, currentLocation, traits, summonedCharacters }` (summonedCharacters is deprecated — character location now tracked on entries)
-  - `ChatMessage` — `{ role: "user"|"assistant"|"system", content, timestamp }`
+  - `ChatMessage` — `{ id?, role: "user"|"assistant"|"system", source?: "narrator"|"character"|"extractor"|"system", content, timestamp, commits?: string[] }`
+    - `id` — unique message ID (`msg-<timestamp>-<3hex>`). Legacy messages without IDs get `msg-legacy-<lineIndex>` on load.
+    - `source` — which pipeline step generated the message. Used for source badges in the UI.
+    - `commits` — git SHAs from extractor lorebook mutations. Used for revert-on-delete.
   - System messages are narration (e.g. location transitions), rendered centered/italic
 - **Storage:** `data/chats/<id>.jsonl` — one file per conversation in JSONL format
   - Line 1: `ChatMeta`
@@ -111,7 +121,7 @@ The Chat tab has been redesigned into an **Adventure** tab. Users pick an advent
   - ID format: `<timestamp>-<3-char-hex>` (e.g. `1738262400000-a3f`)
   - Title: auto-set from first user message, truncated to 50 chars
   - Old JSONL files missing `lorebook`/`currentLocation`/`traits`/`summonedCharacters` default to `""`/`""`/`[]`/`[]` on load
-- **Functions:** `generateChatId()`, `createConversation(opts?)`, `listConversations(lorebook?)`, `loadConversation()`, `appendMessage()`, `deleteConversation()`, `changeLocation()`, `updateTraits()`
+- **Functions:** `generateChatId()`, `generateMessageId()`, `createConversation(opts?)`, `listConversations(lorebook?)`, `loadConversation()`, `appendMessage()`, `deleteConversation()`, `deleteMessage()`, `changeLocation()`, `updateTraits()`
   - `createConversation` accepts `{ id?, lorebook?, currentLocation?, traits?, summonedCharacters? }`
   - `listConversations` accepts optional lorebook filter
   - `changeLocation(id, locationPath, narration)` — updates meta.currentLocation, clears summonedCharacters, appends system message atomically
@@ -119,10 +129,13 @@ The Chat tab has been redesigned into an **Adventure** tab. Users pick an advent
 
 ### Adventure UI
 
-- **Picker** (`AdventurePicker`): Shows adventure cards with Continue/Save as Template/Delete buttons + template cards with Start button
-- **Play** (`AdventurePlay`): Location bar (back button, adventure name, location dropdown, Play/Edit toggle) + chat messages + input + active entries panel (right sidebar). Edit mode renders `LorebookEditor` inline for direct lorebook editing during play.
+- **Picker** (`AdventurePicker`): Unified view showing adventure cards (Continue/Save as Template/Delete) + template cards (Start/View or Edit/Copy or Delete). Includes "+ Template" button for creating new templates.
+- **Play** (`AdventurePlay`): Location bar (back button, adventure name, location dropdown, Play/Edit toggle) + chat messages + input + active entries panel (right sidebar). Edit mode renders `LorebookEditor` inline (hideHeader) with deep-linked entry path support.
+- **Template View** (`TemplateView`): Location bar (back button, template name, Start Adventure button) + `LorebookEditor` inline. Used for viewing/editing templates from the adventure URL.
 - **Template start flow:** Dialog to name the copy → `POST /api/lorebooks/copy` → `POST /api/chats` → navigate to `/adventure/:slug`
 - **Save as Template flow:** Dialog to name the template → `POST /api/lorebooks/make-template` → refreshes picker
+- **New Template flow:** Dialog to name → `POST /api/lorebooks` → navigate to `/adventure/:slug` (template view)
+- **Copy Template flow:** Dialog to name → `POST /api/lorebooks/make-template` → navigate to `/adventure/:slug`
 - **Location change:** Dropdown change → `PUT /api/adventures/location` → system narration message appended to chat
 
 ### API routes
@@ -140,32 +153,81 @@ All routes return JSON. Error responses use `{ error: "message" }` with appropri
 - `GET /api/chats?lorebook=` → `ChatMeta[]`
 - `POST /api/chats` — JSON `{ lorebook?, location? }` → `{ chatId }`
 - `GET /api/chats/messages?id=` → `{ meta, messages }`
-- `POST /api/chat` — JSON `{ message, chatId?, lorebook? }` → `{ chatId, messages, location, isNew }`
-- **Location detection (dummy LLM):** `POST /api/chat` parses movement intent from user messages (e.g. "go to X", "enter X", "walk to X"). If a destination is detected and a lorebook is attached:
-  - Matches against existing location entries (case-insensitive, partial matching)
-  - If no match, creates a new lorebook entry under `locations/<slugified-name>.json` with a generated description
-  - Calls `changeLocation()` to update the conversation, clear summoned characters, and append system narration
-  - Returns `{ chatId, messages: [user, system, assistant], location, isNew }`
-- **Summon detection (dummy LLM):** `POST /api/chat` also parses summon intent (e.g. "call Marta", "summon the blacksmith"). If detected and a lorebook + current location exist:
-  - Matches character name against character entries (name + keywords, case-insensitive)
-  - Updates the character entry's `currentLocation` field to the player's current location via `saveEntry()`
-  - Appends system narration about the character arriving
-  - If character not found, falls through to normal response
-- **Current behavior:** When no location/summon is detected, assistant responds with "Hello World" (placeholder for future LLM integration). When a location change is detected, assistant responds with "You arrive at \<location\>." When a summon is detected, assistant responds with "\<character\> has joined you."
+- `POST /api/chat` — JSON `{ message, chatId?, lorebook?, stream? }` → SSE stream (if `stream: true`) or JSON `{ chatId, messages, location, isNew }`
+- `DELETE /api/chats/message?chatId=&messageId=` → `{ ok: true }` — deletes message and reverts any associated git commits
+- **LLM Pipeline (when backends configured):** `POST /api/chat` with `stream: true` returns an SSE stream with events:
+  - `step_start` — pipeline step beginning (narrator/character/extractor)
+  - `step_token` — streaming token from current step
+  - `step_complete` — step finished with final message
+  - `extractor_background` — extractor running asynchronously (started/completed/failed)
+  - `extractor_tool_call` — extractor executing a lorebook mutation tool
+  - `pipeline_complete` — all steps done, includes final messages and location
+  - `pipeline_error` — error in pipeline step
+- **Dummy LLM fallback (no backends):** When no backends are configured, falls back to regex-based dummy responses:
+  - Location detection: parses movement intent ("go to X", "enter X"), resolves/creates location entries
+  - Summon detection: parses summon intent ("call X", "summon X"), updates character locations
+  - Default response: "Hello World" placeholder
 
 ## Settings
 
 - **Module:** `src/settings.ts` — `Settings` type, `DEFAULT_SETTINGS`, `loadSettings()`, `saveSettings()`, `validateSettings()`
+- **Settings type:** `{ general, llm, backends: BackendConfig[], pipeline: PipelineConfig }`
+- **BackendConfig:** `{ id, name, type: "koboldcpp"|"openai", url, apiKey, model, streaming, maxConcurrent }`
+- **PipelineConfig:** `{ steps: [{ role: "narrator"|"character"|"extractor", backendId, enabled }] }`
 - **Persistence:** `data/settings.json` (project root) — created on first save, gitignored (contains API keys)
-- **UI:** `SettingsPage.tsx` — controlled form with feedback messages
+- **Migration:** Old settings without `backends`/`pipeline` get defaults. If `backends` empty but `llm.apiKey` set, auto-migrates to one OpenAI backend.
+- **UI:** `SettingsPage.tsx` — General settings, legacy LLM section, Backends list (add/remove/configure), Pipeline step assignment
 - **API routes:**
-  - `GET /api/settings` → Settings JSON (API key masked)
-  - `PUT /api/settings` → `{ ok: true, settings }` or `{ error }` on 400
+  - `GET /api/settings` → Settings JSON (API keys masked with `••••••••`)
+  - `PUT /api/settings` → `{ ok: true, settings }` or `{ error }` on 400 — preserves real API keys when masked placeholder is sent, re-initializes backends
+
+## LLM Pipeline
+
+Multi-step pipeline: **Narrator** (story continuation) → **Character** (in-character dialog) → **Extractor** (tool-based lore extraction).
+
+### Backend Abstraction (`src/backends.ts`)
+
+- **Types:** `BackendConfig`, `CompletionRequest`, `CompletionResponse`, `LLMBackend` interface
+- **Semaphore:** Queue-based concurrency limiter per backend (`maxConcurrent` slots)
+- **Registry:** `initBackendsFromConfig()`, `getBackend(id)`, `getSemaphore(id)`, `listBackendIds()`
+- **Implementations:**
+  - `backend-kobold.ts` — KoboldCpp text completion. Flattens messages into single prompt with role prefixes. Supports SSE streaming. Parses `<tool_calls>` tags for extractor.
+  - `backend-openai.ts` — OpenAI-compatible chat completion. Native function calling for tools. Assembles streamed tool call chunks.
+
+### Event System (`src/events.ts`)
+
+- `PipelineEvent` union type (step_start, step_token, step_complete, extractor_background, pipeline_complete, pipeline_error)
+- `EventBus` — publish/subscribe for pipeline events
+- Active pipeline registry: `createPipelineRun(chatId)`, `getPipelineRun(chatId)`, `removePipelineRun(chatId)`
+
+### Pipeline Executor (`src/pipeline.ts`)
+
+- `executePipeline(chatId, lorebook, userMessage, config, bus)` — runs enabled steps sequentially
+- **Narrator prompt:** World context (active entries, location, characters, items, goals, traits) + instruction to narrate without dialog + recent history
+- **Character prompt:** Character descriptions + narrator output + instruction to generate in-character dialog
+- **Extractor:** Runs via `executeExtractorStep()` — can be async (different backend) or sync (same backend)
+- **Concurrency:** Same backend = sequential via semaphore. Different backends = extractor can be detached.
+
+### Extractor (`src/extractor.ts`)
+
+- **Tool definitions:** `create_entry`, `update_entry`, `delete_entry`, `move_character`, `update_item_location`, `complete_goal`, `update_character_state`, `update_traits`
+- Each tool maps to lorebook CRUD + `commitChange()` for git versioning
+- Tool calls from the LLM are validated and executed sequentially
+- Commits are stored on the extractor's `ChatMessage.commits` for revert-on-delete
+
+### Git Layer (`src/git.ts`)
+
+- Uses `isomorphic-git` for lorebook versioning (adventure lorebooks only, not templates/presets)
+- `initRepo(slug)` — `git.init` + stage all + initial commit. No-op if `.git` exists.
+- `commitChange(slug, message)` — stage all + commit. Returns SHA or null if no changes.
+- `revertCommits(slug, SHAs)` — for each SHA, restore parent state for affected files + commit revert.
+- **Startup:** `initGitRepos()` initializes repos for existing non-template lorebooks
+- **Integration:** Called after `copyLorebook()` in adventure creation, after each extractor tool execution
 
 ## Unified Lorebook / Adventure Model
 
 - **Preset** = built-in lorebook in `presets/lorebooks/`. Always available, read-only. Cannot be modified or deleted.
-- **Template** = lorebook with `template: true`. Shown and editable in the **Lorebook tab**. Presets are templates. User-created templates can be edited and deleted.
+- **Template** = lorebook with `template: true`. Shown in the unified adventure picker. Presets are templates. User-created templates can be edited and deleted.
 - **Adventure** = non-template lorebook + conversations. Shown and playable in the **Adventure tab**.
 - Every non-template lorebook is an adventure (1:1). No orphan non-template lorebooks.
 - Adventures are created by copying a template (including presets, which creates a new non-template lorebook + conversation in `data/`).
@@ -211,13 +273,12 @@ All routes return JSON. Error responses use `{ error: "message" }` with appropri
   - `listLorebooks()` returns `{ slug, meta, preset: boolean }[]` — scans data dir first, then presets (skipping slugs already in data dir)
   - UI: preset template cards show View button (read-only editor) + Copy button (creates editable user template); no Delete button. Tree/entry forms are rendered in read-only mode for presets.
   - **Key Quest template** (`template-key-quest`): A story where the player asks three NPCs who has the key and where to open a locked room to get the treasure. Contains 8 entries (3 characters, 1 item, 3 locations, 1 goal).
-- **Templates:** Lorebooks with `"template": true` in metadata. Shown as cards in the Lorebook tab picker with Edit buttons, plus a "+ Template" button. User-created templates also get a Delete button.
+- **Templates:** Lorebooks with `"template": true` in metadata. Shown as cards in the unified adventure picker with Start/Edit buttons, plus a "+ Template" button. User-created templates also get a Delete button. Presets get View/Copy buttons.
 - **Migration:** On startup, `migrateOrphanLorebooks()` converts non-template, non-preset lorebooks with no conversations into templates.
 - **All CRUD functions** take `lorebook: string` as their first argument (the lorebook slug)
 - **Functions:** `saveLorebookMeta(slug, meta)` — writes updated `_lorebook.json` for an existing lorebook
-- **UI:** Lorebook tab — two-step layout showing templates only:
-  - **Picker** (`LorebookPicker`): Card-based list of templates. User templates get Edit + Delete buttons. Preset templates get View + Copy buttons. Includes "+ Template" button.
-  - **Editor** (`LorebookEditor`): Two-column grid — `TreeBrowser` sidebar + `EntryForm` editor. Manages selected entry path, new entry/folder dialogs. Also used inline in adventure play view (Edit mode).
+- **UI:** No separate Lorebook tab. Templates are managed from the unified adventure picker and viewed/edited via `/adventure/:slug` (TemplateView).
+  - **Editor** (`LorebookEditor`): Two-column grid — `TreeBrowser` sidebar + `EntryForm` editor. Manages selected entry path, new entry/folder dialogs. Supports `hideHeader` prop for inline use in AdventurePlay and TemplateView. Used inline in adventure play view (Edit mode) and template detail view.
 - **API routes:**
   - Lorebook management (under `/api/lorebooks`):
     - `GET /api/lorebooks` → `{ templates: [{slug, name, preset}] }` (templates only, no adventures)
@@ -314,7 +375,8 @@ All routes return JSON. Error responses use `{ error: "message" }` with appropri
 
 ### Current Status
 
-- **Phase:** Phase 1 — Core Chat MVP in progress
-- **Completed modules:** Lorebook (full CRUD + matching + templates + location listing + context-aware activation + character–location relationships), Settings (persistence + validation), Chat (persistence + adventure-centric multi-conversation CRUD + location changes + player traits + summoned characters), Adventure system (picker + play view + location bar + active entries panel + summon detection)
-- **Frontend:** Converted from HTMX + vanilla JS to React 18 + Vite + react-router-dom 7
-- **Next up:** Phase 1.1 — LLM streaming integration, Phase 1.3 — Character cards, Phase 1.4 — Prompt construction
+- **Phase:** Phase 1 — Core Chat MVP, LLM pipeline complete
+- **Completed modules:** Lorebook (full CRUD + matching + templates + context-aware activation), Settings (persistence + validation + backend/pipeline config), Chat (persistence + multi-conversation CRUD + message deletion with git revert), Adventure system (picker + play view + location bar + active entries), LLM Pipeline (multi-backend abstraction + narrator/character/extractor steps + SSE streaming + git-backed lorebook mutations)
+- **Frontend:** React 18 + Vite + react-router-dom 7. SSE streaming with token-by-token rendering, source badges, extractor indicator, message deletion.
+- **Dependencies:** `isomorphic-git` for lorebook versioning
+- **Next up:** Phase 1.3 — Character cards, Phase 2 — Message actions (edit, regenerate, swipe)

@@ -1,0 +1,10 @@
+{
+  "name": "Silver Amulet",
+  "content": "A delicate silver amulet on a fine chain, engraved with a pattern of oak leaves. It has been in Greta's family for three generations. It was stolen from the tavern last night and hidden in a shadowy alcove in the cellar behind a loose stone.",
+  "keywords": ["silver amulet", "amulet", "necklace", "heirloom"],
+  "regex": "",
+  "priority": 15,
+  "enabled": true,
+  "contexts": [],
+  "location": "locations/cellar"
+}

@@ -1,18 +1,21 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { ActiveEntriesPanel } from "./ActiveEntriesPanel";
+import { ExtractorIndicator } from "./ExtractorIndicator";
 import { LorebookEditor } from "../lorebook/LorebookEditor";
+import { sendMessageSSE } from "../../hooks/useSSE";
 import * as api from "../../api";
-import type { ChatMessage, LocationEntry } from "../../types";
+import type { ChatMessage, LocationEntry, PipelineEvent } from "../../types";
 
 type Props = {
   lorebook: string;
   chatId: string;
   name: string;
   location: string;
+  entryPath?: string | null;
 };
 
-export function AdventurePlay({ lorebook, chatId: initialChatId, name, location: initialLocation }: Props) {
+export function AdventurePlay({ lorebook, chatId: initialChatId, name, location: initialLocation, entryPath }: Props) {
   const navigate = useNavigate();
   const [chatId, setChatId] = useState(initialChatId);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -21,6 +24,8 @@ export function AdventurePlay({ lorebook, chatId: initialChatId, name, location:
   const [input, setInput] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [mode, setMode] = useState<"play" | "edit">("play");
+  const [streaming, setStreaming] = useState(false);
+  const [extractorRunning, setExtractorRunning] = useState(false);
   const messagesRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = useCallback(() => {
@@ -45,17 +50,32 @@ export function AdventurePlay({ lorebook, chatId: initialChatId, name, location:
     if (!loc) return;
     const data = await api.changeLocation(chatId, loc);
     setCurrentLocation(data.location);
-    const sysMsg: ChatMessage = { role: "system", content: data.narration, timestamp: new Date().toISOString() };
+    const sysMsg: ChatMessage = { role: "system", source: "system", content: data.narration, timestamp: new Date().toISOString() };
     setMessages((prev) => [...prev, sysMsg]);
     setRefreshKey((k) => k + 1);
     setTimeout(scrollToBottom, 0);
   };
 
-  // Send message
+  // Delete message
+  const handleDeleteMessage = async (msg: ChatMessage) => {
+    if (!msg.id) return;
+    const hasCommits = msg.commits && msg.commits.length > 0;
+    if (hasCommits && !confirm("This will revert lorebook changes made by this message. Continue?")) return;
+
+    try {
+      await api.deleteMessage(chatId, msg.id);
+      setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+      if (hasCommits) setRefreshKey((k) => k + 1);
+    } catch {
+      // ignore errors
+    }
+  };
+
+  // Send message — uses SSE if backends are configured, falls back to JSON
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     const msg = input.trim();
-    if (!msg) return;
+    if (!msg || streaming) return;
     setInput("");
 
     // Optimistic user message
@@ -63,19 +83,102 @@ export function AdventurePlay({ lorebook, chatId: initialChatId, name, location:
     setMessages((prev) => [...prev, userMsg]);
     setTimeout(scrollToBottom, 0);
 
-    const data = await api.sendMessage(msg, chatId, lorebook);
-    if (data.chatId !== chatId) setChatId(data.chatId);
+    setStreaming(true);
 
-    // Append server messages (skip the user message we already added)
-    const serverMsgs = data.messages.filter((m) => m.role !== "user");
-    setMessages((prev) => [...prev, ...serverMsgs]);
-
-    if (data.location) {
-      setCurrentLocation(data.location);
-      setRefreshKey((k) => k + 1);
+    try {
+      // Try SSE first
+      let sseSucceeded = false;
+      try {
+        await sendMessageSSE(msg, chatId, lorebook, (event: PipelineEvent) => {
+          sseSucceeded = true;
+          switch (event.type) {
+            case "step_start": {
+              // Add placeholder for this step
+              const placeholder: ChatMessage = {
+                id: `streaming-${event.role}`,
+                role: "assistant",
+                source: event.role === "extractor" ? "extractor" : event.role,
+                content: "",
+                timestamp: new Date().toISOString(),
+              };
+              setMessages((prev) => [...prev, placeholder]);
+              setTimeout(scrollToBottom, 0);
+              break;
+            }
+            case "step_token": {
+              // Append token to current streaming message
+              setMessages((prev) => {
+                const streamId = `streaming-${event.role}`;
+                const hasPlaceholder = prev.some((m: ChatMessage) => m.id === streamId);
+                if (hasPlaceholder) {
+                  return prev.map((m: ChatMessage) =>
+                    m.id === streamId ? { ...m, content: m.content + event.token } : m
+                  );
+                }
+                return prev;
+              });
+              setTimeout(scrollToBottom, 0);
+              break;
+            }
+            case "step_complete": {
+              // Replace placeholder with final message
+              const finalMsg = event.message;
+              if (!finalMsg.content) {
+                // Empty content — remove the placeholder
+                setMessages((prev) => prev.filter((m) => m.id !== `streaming-${event.role}`));
+              } else {
+                setMessages((prev) =>
+                  prev.map((m) => m.id === `streaming-${event.role}` ? finalMsg : m)
+                );
+              }
+              setTimeout(scrollToBottom, 0);
+              break;
+            }
+            case "extractor_background": {
+              if (event.status === "started") setExtractorRunning(true);
+              else {
+                setExtractorRunning(false);
+                setRefreshKey((k) => k + 1);
+              }
+              break;
+            }
+            case "pipeline_complete": {
+              if (event.location) {
+                setCurrentLocation(event.location);
+              }
+              setRefreshKey((k) => k + 1);
+              break;
+            }
+            case "pipeline_error": {
+              const errorMsg: ChatMessage = {
+                role: "system",
+                source: "system",
+                content: `[Error: ${event.error}]`,
+                timestamp: new Date().toISOString(),
+              };
+              setMessages((prev) => [...prev, errorMsg]);
+              setTimeout(scrollToBottom, 0);
+              break;
+            }
+          }
+        });
+      } catch (sseErr) {
+        // SSE might fail if no backends configured — fall back to JSON
+        if (!sseSucceeded) {
+          const data = await api.sendMessage(msg, chatId, lorebook);
+          if (data.chatId !== chatId) setChatId(data.chatId);
+          const serverMsgs = data.messages.filter((m) => m.role !== "user");
+          setMessages((prev) => [...prev, ...serverMsgs]);
+          if (data.location) {
+            setCurrentLocation(data.location);
+          }
+          setRefreshKey((k) => k + 1);
+          setTimeout(scrollToBottom, 0);
+        }
+      }
+    } finally {
+      setStreaming(false);
     }
-    setRefreshKey((k) => k + 1);
-    setTimeout(scrollToBottom, 0);
   };
 
   return (
@@ -91,7 +194,12 @@ export function AdventurePlay({ lorebook, chatId: initialChatId, name, location:
         </select>
         <button
           className={`btn-sm btn-mode-toggle${mode === "edit" ? " btn-mode-active" : ""}`}
-          onClick={() => setMode((m) => m === "play" ? "edit" : "play")}
+          onClick={() => {
+            setMode((m) => {
+              if (m === "edit") navigate(`/adventure/${encodeURIComponent(lorebook)}`, { replace: true });
+              return m === "play" ? "edit" : "play";
+            });
+          }}
         >
           {mode === "play" ? "Edit" : "Play"}
         </button>
@@ -104,25 +212,46 @@ export function AdventurePlay({ lorebook, chatId: initialChatId, name, location:
                 <p className="editor-placeholder">Your adventure begins...</p>
               ) : (
                 messages.map((msg, i) => (
-                  <div key={i} className={`chat-msg chat-msg-${msg.role}`}>{msg.content}</div>
+                  <div key={msg.id || i} className={`chat-msg chat-msg-${msg.role}${msg.source ? ` chat-msg-source-${msg.source}` : ""}`}>
+                    {msg.source && msg.source !== "system" && msg.role === "assistant" && (
+                      <span className={`chat-msg-source-badge chat-msg-source-${msg.source}`}>{msg.source}</span>
+                    )}
+                    <span className="chat-msg-content">
+                      {msg.content}
+                      {msg.id?.startsWith("streaming-") && <span className="streaming-cursor" />}
+                    </span>
+                    {msg.id && !msg.id.startsWith("streaming-") && msg.role !== "user" && (
+                      <button
+                        className="chat-msg-delete"
+                        title={msg.commits?.length ? "Delete & revert lorebook changes" : "Delete message"}
+                        onClick={() => handleDeleteMessage(msg)}
+                      >
+                        &times;
+                      </button>
+                    )}
+                  </div>
                 ))
               )}
             </div>
             <form className="chat-input-area" onSubmit={handleSend}>
               <input type="text" placeholder="What do you do?" autoComplete="off" required
-                value={input} onChange={(e) => setInput(e.target.value)} />
-              <button type="submit">Send</button>
+                value={input} onChange={(e) => setInput(e.target.value)} disabled={streaming} />
+              <button type="submit" disabled={streaming}>{streaming ? "..." : "Send"}</button>
             </form>
           </div>
-          <ActiveEntriesPanel chatId={chatId} lorebook={lorebook} refreshKey={refreshKey} />
+          <div className="active-entries-wrapper">
+            {extractorRunning && <ExtractorIndicator />}
+            <ActiveEntriesPanel chatId={chatId} lorebook={lorebook} refreshKey={refreshKey} />
+          </div>
         </div>
       ) : (
         <LorebookEditor
           slug={lorebook}
           name={name}
           readonly={false}
-          entryPath={null}
+          entryPath={entryPath || null}
           onBack={() => setMode("play")}
+          hideHeader
         />
       )}
     </div>

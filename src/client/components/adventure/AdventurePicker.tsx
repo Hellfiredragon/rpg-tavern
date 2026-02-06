@@ -7,6 +7,10 @@ type Props = {
   onStart: (tpl: Template) => void;
   onDelete: (adv: Adventure) => void;
   onSaveTemplate: (adv: Adventure) => void;
+  onEditTemplate: (tpl: Template) => void;
+  onCopyTemplate: (tpl: Template) => void;
+  onDeleteTemplate: (tpl: Template) => void;
+  onNewTemplate: () => void;
 };
 
 function formatRelativeDate(isoString: string): string {
@@ -23,14 +27,17 @@ function formatRelativeDate(isoString: string): string {
   return date.toLocaleDateString();
 }
 
-export function AdventurePicker({ adventures, templates, onContinue, onStart, onDelete, onSaveTemplate }: Props) {
+export function AdventurePicker({
+  adventures, templates, onContinue, onStart, onDelete, onSaveTemplate,
+  onEditTemplate, onCopyTemplate, onDeleteTemplate, onNewTemplate,
+}: Props) {
   return (
     <div id="adventure-picker">
       {adventures.length > 0 ? (
         <>
           <h2>Your Adventures</h2>
           {adventures.map((adv) => (
-            <div className="adventure-card" key={adv.slug}>
+            <div className="adventure-card" key={adv.slug} onDoubleClick={() => onContinue(adv)}>
               <div className="adventure-card-info">
                 <span className="adventure-card-name">{adv.name}</span>
                 <span className="adventure-card-meta">
@@ -55,15 +62,27 @@ export function AdventurePicker({ adventures, templates, onContinue, onStart, on
 
       {templates.length > 0 && (
         <>
-          <h2>Start New Adventure</h2>
+          <h2>Templates</h2>
           {templates.map((tpl) => (
-            <div className="adventure-card adventure-card-template" key={tpl.slug}>
+            <div className="adventure-card adventure-card-template" key={tpl.slug} onDoubleClick={() => tpl.preset ? onEditTemplate(tpl) : onEditTemplate(tpl)}>
               <span className="adventure-card-name">{tpl.name}</span>
-              <button className="btn-sm" onClick={() => onStart(tpl)}>Start</button>
+              <div className="adventure-card-actions">
+                <button className="btn-sm" onClick={() => onStart(tpl)}>Start</button>
+                <button className="btn-sm" onClick={() => onEditTemplate(tpl)}>
+                  {tpl.preset ? "View" : "Edit"}
+                </button>
+                {tpl.preset ? (
+                  <button className="btn-sm" onClick={() => onCopyTemplate(tpl)}>Copy</button>
+                ) : (
+                  <button className="btn-sm btn-danger" onClick={() => onDeleteTemplate(tpl)}>Delete</button>
+                )}
+              </div>
             </div>
           ))}
         </>
       )}
+
+      <button type="button" className="btn-sm" style={{ marginTop: "0.5rem" }} onClick={onNewTemplate}>+ Template</button>
     </div>
   );
 }

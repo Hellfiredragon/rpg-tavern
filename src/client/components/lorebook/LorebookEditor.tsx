@@ -12,9 +12,10 @@ type Props = {
   readonly: boolean;
   entryPath: string | null;
   onBack: () => void;
+  hideHeader?: boolean;
 };
 
-export function LorebookEditor({ slug, name, readonly, entryPath, onBack }: Props) {
+export function LorebookEditor({ slug, name, readonly, entryPath, onBack, hideHeader }: Props) {
   const navigate = useNavigate();
   const [nodes, setNodes] = useState<TreeNode[]>([]);
   const [newDialog, setNewDialog] = useState<{ prefix: string } | null>(null);
@@ -35,7 +36,7 @@ export function LorebookEditor({ slug, name, readonly, entryPath, onBack }: Prop
     const path = newDialog.prefix + n;
     setNewDialog(null);
     setNewName("");
-    navigate(`/lorebook/${encodeURIComponent(slug)}/${path}`, { replace: true });
+    navigate(`/adventure/${encodeURIComponent(slug)}/${path}`, { replace: true });
   };
 
   const handleCreateFolder = async () => {
@@ -51,10 +52,12 @@ export function LorebookEditor({ slug, name, readonly, entryPath, onBack }: Prop
 
   return (
     <div id="lorebook-edit">
-      <div className="lorebook-header-bar">
-        <button className="btn-sm" onClick={onBack}>&larr;</button>
-        <span>{name}{readonly ? " (Preset)" : ""}</span>
-      </div>
+      {!hideHeader && (
+        <div className="lorebook-header-bar">
+          <button className="btn-sm" onClick={onBack}>&larr;</button>
+          <span>{name}{readonly ? " (Preset)" : ""}</span>
+        </div>
+      )}
       <div className="lorebook-container">
         <div className="lorebook-sidebar">
           <div className="lorebook-tree">
@@ -74,7 +77,7 @@ export function LorebookEditor({ slug, name, readonly, entryPath, onBack }: Prop
               path={entryPath}
               readonly={readonly}
               onSaved={() => setTreeKey((k) => k + 1)}
-              onDeleted={() => { navigate(`/lorebook/${encodeURIComponent(slug)}`, { replace: true }); setTreeKey((k) => k + 1); }}
+              onDeleted={() => { navigate(`/adventure/${encodeURIComponent(slug)}`, { replace: true }); setTreeKey((k) => k + 1); }}
             />
           ) : (
             <p className="editor-placeholder">

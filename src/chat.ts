@@ -17,9 +17,12 @@ export type ChatMeta = {
 };
 
 export type ChatMessage = {
+  id?: string;                     // "msg-<timestamp>-<3hex>" (absent on legacy messages)
   role: "user" | "assistant" | "system";
+  source?: "narrator" | "character" | "extractor" | "system";
   content: string;
   timestamp: string;
+  commits?: string[];              // git SHAs from extractor lorebook mutations
 };
 
 // ---------------------------------------------------------------------------
@@ -37,6 +40,12 @@ export function generateChatId(): string {
   const ts = Date.now();
   const hex = Math.floor(Math.random() * 0xfff).toString(16).padStart(3, "0");
   return `${ts}-${hex}`;
+}
+
+export function generateMessageId(): string {
+  const ts = Date.now();
+  const hex = Math.floor(Math.random() * 0xfff).toString(16).padStart(3, "0");
+  return `msg-${ts}-${hex}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -127,6 +136,10 @@ export async function loadConversation(id: string): Promise<{ meta: ChatMeta; me
       try {
         const msg = JSON.parse(lines[i]) as ChatMessage;
         if (msg.role && msg.content !== undefined) {
+          // Assign legacy IDs to messages without them
+          if (!msg.id) {
+            msg.id = `msg-legacy-${i}`;
+          }
           messages.push(msg);
         }
       } catch {
@@ -144,6 +157,11 @@ export async function appendMessage(id: string, message: ChatMessage): Promise<C
   const filePath = chatFilePath(id);
   const f = Bun.file(filePath);
   if (!(await f.exists())) throw new Error("Conversation not found");
+
+  // Ensure message has an ID
+  if (!message.id) {
+    message.id = generateMessageId();
+  }
 
   const text = await f.text();
   const lines = text.split("\n").filter((l) => l.trim() !== "");
@@ -173,6 +191,40 @@ export async function appendMessage(id: string, message: ChatMessage): Promise<C
 export async function deleteConversation(id: string): Promise<void> {
   const filePath = chatFilePath(id);
   await unlink(filePath);
+}
+
+export async function deleteMessage(chatId: string, messageId: string): Promise<ChatMessage | null> {
+  const filePath = chatFilePath(chatId);
+  const f = Bun.file(filePath);
+  if (!(await f.exists())) throw new Error("Conversation not found");
+
+  const text = await f.text();
+  const lines = text.split("\n").filter((l) => l.trim() !== "");
+  if (lines.length === 0) throw new Error("Conversation not found");
+
+  let deleted: ChatMessage | null = null;
+  const newLines = [lines[0]]; // meta line
+
+  for (let i = 1; i < lines.length; i++) {
+    try {
+      const msg = JSON.parse(lines[i]) as ChatMessage;
+      // Match by id, or by legacy index
+      const msgId = msg.id || `msg-legacy-${i}`;
+      if (msgId === messageId && !deleted) {
+        deleted = msg;
+        continue; // skip this line
+      }
+    } catch {
+      // keep malformed lines as-is
+    }
+    newLines.push(lines[i]);
+  }
+
+  if (deleted) {
+    await Bun.write(filePath, newLines.join("\n") + "\n");
+  }
+
+  return deleted;
 }
 
 export async function updateTraits(id: string, traits: string[]): Promise<ChatMeta> {
@@ -211,7 +263,13 @@ export async function changeLocation(id: string, locationPath: string, narration
   meta.summonedCharacters = []; // clear summoned characters on location change
   meta.updatedAt = new Date().toISOString();
 
-  const systemMsg: ChatMessage = { role: "system", content: narration, timestamp: new Date().toISOString() };
+  const systemMsg: ChatMessage = {
+    id: generateMessageId(),
+    role: "system",
+    source: "system",
+    content: narration,
+    timestamp: new Date().toISOString(),
+  };
 
   const newLines = [JSON.stringify(meta)];
   for (let i = 1; i < lines.length; i++) {

@@ -9,11 +9,14 @@ fantasy theme with HTMX, template lorebooks, path traversal protection.
 ## Phase 1: Core Chat (MVP)
 
 ### 1.1 LLM Integration
-- [ ] Anthropic API client (streaming via SSE)
-- [ ] OpenAI API client (streaming via SSE)
-- [ ] Token-by-token response rendering in the chat UI
-- [ ] Error handling (rate limits, invalid key, network failures)
+- [x] OpenAI-compatible API client (streaming via SSE)
+- [x] KoboldCpp API client (text completion + streaming)
+- [x] Multi-backend abstraction with configurable pipeline (narrator → character → extractor)
+- [x] Token-by-token response rendering in the chat UI (SSE events)
+- [x] Backend configuration UI in settings (add/remove backends, assign to pipeline steps)
+- [x] Concurrency control via per-backend slot semaphores
 - [ ] Abort/cancel in-flight generation (stop button)
+- [ ] Error handling (rate limits, invalid key, network failures) — basic error messages shown
 
 ### 1.2 Chat History Persistence
 - [x] Save chat messages to disk (JSONL format, one file per conversation)
@@ -31,8 +34,10 @@ fantasy theme with HTMX, template lorebooks, path traversal protection.
 - [ ] Character-bound lorebook attachment
 
 ### 1.4 Prompt Construction
-- [ ] System prompt assembly (character description + personality + scenario)
-- [ ] Inject lorebook matches into prompt context
+- [x] System prompt assembly with world context (active lorebook entries, location, characters, items, goals, traits)
+- [x] Narrator prompt construction (story continuation, scene description)
+- [x] Character prompt construction (in-character dialog from NPCs at location)
+- [x] Extractor prompt construction with tool definitions for lorebook mutations
 - [ ] User persona description injection
 - [ ] Message history truncation to fit context window
 - [ ] Token counting (per-message and total)
@@ -43,7 +48,7 @@ fantasy theme with HTMX, template lorebooks, path traversal protection.
 
 ### 2.1 Message Actions
 - [ ] Edit any message (user or assistant) inline
-- [ ] Delete individual messages
+- [x] Delete individual messages (with git revert for extractor changes)
 - [ ] Regenerate last assistant response
 - [ ] Continue/extend last assistant response
 - [ ] Impersonate (AI writes a message as the user)
@@ -123,9 +128,9 @@ fantasy theme with HTMX, template lorebooks, path traversal protection.
 
 - [ ] Google Gemini API client
 - [ ] Ollama local model client
-- [ ] KoboldAI / KoboldCPP client
+- [x] KoboldAI / KoboldCPP client
 - [ ] llama.cpp direct client
-- [ ] Generic OpenAI-compatible endpoint (custom URL)
+- [x] Generic OpenAI-compatible endpoint (custom URL)
 - [ ] OpenRouter support
 - [ ] Connection profiles (save/switch API + model + template combos)
 - [ ] Model list auto-fetch from provider

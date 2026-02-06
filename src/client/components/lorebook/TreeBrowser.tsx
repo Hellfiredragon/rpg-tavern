@@ -33,7 +33,7 @@ function EntryLink({ path, name, lorebook, readonly }: {
   readonly: boolean;
 }) {
   const ref = useRef<HTMLAnchorElement>(null);
-  const href = `/lorebook/${encodeURIComponent(lorebook)}/${path}`;
+  const href = `/adventure/${encodeURIComponent(lorebook)}/${path}`;
 
   useEffect(() => {
     if (readonly) return;

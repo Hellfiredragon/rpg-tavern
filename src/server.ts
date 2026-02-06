@@ -2,6 +2,9 @@ import { serve, file } from "bun";
 import { join } from "path";
 import { listLorebooks, loadLorebookMeta, saveLorebookMeta } from "./lorebook";
 import { listConversations } from "./chat";
+import { loadSettings } from "./settings";
+import { initBackendsFromConfig } from "./backends";
+import { initRepo } from "./git";
 import { handleApi } from "./routes";
 
 const DIST_DIR = join(import.meta.dir, "..", "dist");
@@ -24,8 +27,39 @@ async function migrateOrphanLorebooks(): Promise<void> {
   }
 }
 
+/**
+ * Initialize git repos for existing non-template lorebooks (adventures).
+ */
+async function initGitRepos(): Promise<void> {
+  const lorebooks = await listLorebooks();
+  for (const lb of lorebooks) {
+    if (lb.meta.template || lb.preset) continue;
+    try {
+      await initRepo(lb.slug);
+    } catch (err) {
+      console.error(`Failed to init git repo for ${lb.slug}:`, err);
+    }
+  }
+}
+
+/**
+ * Load settings and initialize LLM backends.
+ */
+async function initLLMBackends(): Promise<void> {
+  try {
+    const settings = await loadSettings();
+    if (settings.backends.length > 0) {
+      initBackendsFromConfig(settings.backends);
+    }
+  } catch (err) {
+    console.error("Failed to initialize backends:", err);
+  }
+}
+
 export async function startServer(port: number) {
   await migrateOrphanLorebooks();
+  await initGitRepos();
+  await initLLMBackends();
 
   const server = serve({
     port,

@@ -10,9 +10,12 @@ export type ChatMeta = {
 };
 
 export type ChatMessage = {
+  id?: string;
   role: "user" | "assistant" | "system";
+  source?: "narrator" | "character" | "extractor" | "system";
   content: string;
   timestamp: string;
+  commits?: string[];
 };
 
 export type Adventure = {
@@ -72,6 +75,35 @@ export type LorebookEntry = {
   completed?: boolean;
 };
 
+// ---------------------------------------------------------------------------
+// Backend + Pipeline config
+// ---------------------------------------------------------------------------
+
+export type BackendType = "koboldcpp" | "openai";
+
+export type BackendConfig = {
+  id: string;
+  name: string;
+  type: BackendType;
+  url: string;
+  apiKey: string;
+  model: string;
+  streaming: boolean;
+  maxConcurrent: number;
+};
+
+export type PipelineRole = "narrator" | "character" | "extractor";
+
+export type PipelineStep = {
+  role: PipelineRole;
+  backendId: string;
+  enabled: boolean;
+};
+
+export type PipelineConfig = {
+  steps: PipelineStep[];
+};
+
 export type Settings = {
   general: { appName: string };
   llm: {
@@ -80,4 +112,19 @@ export type Settings = {
     model: string;
     temperature: number;
   };
+  backends: BackendConfig[];
+  pipeline: PipelineConfig;
 };
+
+// ---------------------------------------------------------------------------
+// Pipeline SSE events
+// ---------------------------------------------------------------------------
+
+export type PipelineEvent =
+  | { type: "step_start"; role: PipelineRole }
+  | { type: "step_token"; role: PipelineRole; token: string }
+  | { type: "step_complete"; role: PipelineRole; message: ChatMessage }
+  | { type: "extractor_background"; status: "started" | "completed" | "failed"; error?: string }
+  | { type: "extractor_tool_call"; tool: string; args: Record<string, unknown> }
+  | { type: "pipeline_complete"; messages: ChatMessage[]; location?: string }
+  | { type: "pipeline_error"; error: string; role?: PipelineRole };
