@@ -3,8 +3,8 @@ import * as api from "../api";
 import type { Settings, BackendConfig, PipelineStep, BackendType } from "../types";
 
 const defaults: Settings = {
-  general: { appName: "RPG Tavern" },
-  llm: { provider: "anthropic", apiKey: "", model: "claude-sonnet-4-20250514", temperature: 0.7 },
+  general: { appName: "RPG Tavern", temperature: 0.7 },
+  llm: { provider: "openai", apiKey: "", model: "", temperature: 0.7 },
   backends: [],
   pipeline: {
     steps: [
@@ -97,28 +97,9 @@ export function SettingsPage() {
           <label htmlFor="appName">App name</label>
           <input id="appName" type="text" value={settings.general.appName}
             onChange={(e) => setSettings({ ...settings, general: { ...settings.general, appName: e.target.value } })} />
-        </fieldset>
-
-        <fieldset>
-          <legend>LLM (legacy)</legend>
-          <label htmlFor="provider">Provider</label>
-          <select id="provider" value={settings.llm.provider}
-            onChange={(e) => setSettings({ ...settings, llm: { ...settings.llm, provider: e.target.value as "anthropic" | "openai" } })}>
-            <option value="anthropic">Anthropic</option>
-            <option value="openai">OpenAI</option>
-          </select>
-
-          <label htmlFor="apiKey">API Key</label>
-          <input id="apiKey" type="password" value={settings.llm.apiKey} placeholder="sk-..."
-            onChange={(e) => setSettings({ ...settings, llm: { ...settings.llm, apiKey: e.target.value } })} />
-
-          <label htmlFor="model">Model</label>
-          <input id="model" type="text" value={settings.llm.model}
-            onChange={(e) => setSettings({ ...settings, llm: { ...settings.llm, model: e.target.value } })} />
-
-          <label htmlFor="temperature">Temperature: <strong>{settings.llm.temperature}</strong></label>
-          <input id="temperature" type="range" min="0" max="2" step="0.1" value={settings.llm.temperature}
-            onChange={(e) => setSettings({ ...settings, llm: { ...settings.llm, temperature: Number(e.target.value) } })} />
+          <label htmlFor="temperature">Temperature: <strong>{settings.general.temperature ?? settings.llm.temperature}</strong></label>
+          <input id="temperature" type="range" min="0" max="2" step="0.1" value={settings.general.temperature ?? settings.llm.temperature}
+            onChange={(e) => setSettings({ ...settings, general: { ...settings.general, temperature: Number(e.target.value) } })} />
         </fieldset>
 
         <fieldset>
@@ -169,10 +150,17 @@ export function SettingsPage() {
 
         <fieldset>
           <legend>Pipeline</legend>
-          <p className="hint">Configure which backend handles each pipeline step. Leave backend empty to skip a step.</p>
+          <p className="hint">Assign a backend to each pipeline step. Each message runs: Narrator &rarr; Character &rarr; Extractor. Leave backend empty to skip a step.</p>
           {settings.pipeline.steps.map((step, idx) => (
             <div key={step.role} className="pipeline-step">
-              <label className="pipeline-step-role">{step.role}</label>
+              <div className="pipeline-step-info">
+                <label className="pipeline-step-role">{step.role}</label>
+                <span className="pipeline-step-desc">{
+                  step.role === "narrator" ? "Narrates the scene and consequences" :
+                  step.role === "character" ? "Generates dialog for NPCs present" :
+                  "Extracts world-state changes into the lorebook"
+                }</span>
+              </div>
               <select value={step.backendId}
                 onChange={(e) => updatePipelineStep(idx, { backendId: e.target.value })}>
                 <option value="">-- None --</option>

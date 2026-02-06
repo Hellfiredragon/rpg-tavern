@@ -246,7 +246,7 @@ export async function executePipeline(
         const settings = await loadSettings();
         const completionReq: CompletionRequest = {
           messages: reqMessages,
-          temperature: settings.llm.temperature,
+          temperature: settings.general.temperature,
           maxTokens: 1024,
           signal,
         };

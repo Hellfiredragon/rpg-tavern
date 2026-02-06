@@ -92,7 +92,8 @@ Path-based client-side routing via react-router-dom. Browser back/forward button
 | `/adventure` | Unified picker (adventures + templates) |
 | `/adventure/:slug` | Detail view — auto-detects adventure vs template |
 | `/adventure/:slug/*` | Detail view with deep-linked entry in editor |
-| `/settings` | Settings page (via gear icon) |
+| `/adventure/:slug/settings` | Settings page (preserves adventure context) |
+| `/settings` | Settings page (global, from picker) |
 
 ### Implementation
 
@@ -130,7 +131,7 @@ The Chat tab has been redesigned into an **Adventure** tab. Users pick an advent
 ### Adventure UI
 
 - **Picker** (`AdventurePicker`): Unified view showing adventure cards (Continue/Save as Template/Delete) + template cards (Start/View or Edit/Copy or Delete). Includes "+ Template" button for creating new templates.
-- **Play** (`AdventurePlay`): Location bar (back button, adventure name, location dropdown, Play/Edit toggle) + chat messages + input + active entries panel (right sidebar). Edit mode renders `LorebookEditor` inline (hideHeader) with deep-linked entry path support.
+- **Play** (`AdventurePlay`): Location bar (back button, adventure name, location dropdown, Play/Edit toggle) + character dialog partners bar (shows active characters at current location) + chat messages + input + active entries panel (right sidebar). Edit mode renders `LorebookEditor` inline (hideHeader) with deep-linked entry path support.
 - **Template View** (`TemplateView`): Location bar (back button, template name, Start Adventure button) + `LorebookEditor` inline. Used for viewing/editing templates from the adventure URL.
 - **Template start flow:** Dialog to name the copy → `POST /api/lorebooks/copy` → `POST /api/chats` → navigate to `/adventure/:slug`
 - **Save as Template flow:** Dialog to name the template → `POST /api/lorebooks/make-template` → refreshes picker
@@ -155,6 +156,7 @@ All routes return JSON. Error responses use `{ error: "message" }` with appropri
 - `GET /api/chats/messages?id=` → `{ meta, messages }`
 - `POST /api/chat` — JSON `{ message, chatId?, lorebook?, stream? }` → SSE stream (if `stream: true`) or JSON `{ chatId, messages, location, isNew }`
 - `DELETE /api/chats/message?chatId=&messageId=` → `{ ok: true }` — deletes message and reverts any associated git commits
+- `POST /api/chat/cancel` — JSON `{ chatId }` → `{ ok: true }` — cancels in-flight pipeline generation
 - **LLM Pipeline (when backends configured):** `POST /api/chat` with `stream: true` returns an SSE stream with events:
   - `step_start` — pipeline step beginning (narrator/character/extractor)
   - `step_token` — streaming token from current step
@@ -162,7 +164,8 @@ All routes return JSON. Error responses use `{ error: "message" }` with appropri
   - `extractor_background` — extractor running asynchronously (started/completed/failed)
   - `extractor_tool_call` — extractor executing a lorebook mutation tool
   - `pipeline_complete` — all steps done, includes final messages and location
-  - `pipeline_error` — error in pipeline step
+  - `pipeline_error` — error in pipeline step (includes `category` for classified errors: auth/rate_limit/server/network)
+  - `pipeline_cancelled` — pipeline was cancelled via abort/stop button
 - **Dummy LLM fallback (no backends):** When no backends are configured, falls back to regex-based dummy responses:
   - Location detection: parses movement intent ("go to X", "enter X"), resolves/creates location entries
   - Summon detection: parses summon intent ("call X", "summon X"), updates character locations
@@ -171,12 +174,13 @@ All routes return JSON. Error responses use `{ error: "message" }` with appropri
 ## Settings
 
 - **Module:** `src/settings.ts` — `Settings` type, `DEFAULT_SETTINGS`, `loadSettings()`, `saveSettings()`, `validateSettings()`
-- **Settings type:** `{ general, llm, backends: BackendConfig[], pipeline: PipelineConfig }`
+- **Settings type:** `{ general: { appName, temperature }, llm (legacy), backends: BackendConfig[], pipeline: PipelineConfig }`
 - **BackendConfig:** `{ id, name, type: "koboldcpp"|"openai", url, apiKey, model, streaming, maxConcurrent }`
 - **PipelineConfig:** `{ steps: [{ role: "narrator"|"character"|"extractor", backendId, enabled }] }`
 - **Persistence:** `data/settings.json` (project root) — created on first save, gitignored (contains API keys)
-- **Migration:** Old settings without `backends`/`pipeline` get defaults. If `backends` empty but `llm.apiKey` set, auto-migrates to one OpenAI backend.
-- **UI:** `SettingsPage.tsx` — General settings, legacy LLM section, Backends list (add/remove/configure), Pipeline step assignment
+- **Migration:** Old settings without `backends`/`pipeline` get defaults. If `backends` empty but `llm.apiKey` set, auto-migrates to one OpenAI backend. Temperature migrated from `llm.temperature` to `general.temperature`.
+- **UI:** `SettingsPage.tsx` — General settings (app name + temperature), Backends list (add/remove/configure), Pipeline step assignment with descriptions. Legacy LLM section removed from UI (kept in data model for backward compat).
+- **Adventure-scoped URL:** When on an adventure, gear icon links to `/adventure/:slug/settings`; back returns to the adventure. Global settings at `/settings`.
 - **API routes:**
   - `GET /api/settings` → Settings JSON (API keys masked with `••••••••`)
   - `PUT /api/settings` → `{ ok: true, settings }` or `{ error }` on 400 — preserves real API keys when masked placeholder is sent, re-initializes backends
@@ -187,7 +191,8 @@ Multi-step pipeline: **Narrator** (story continuation) → **Character** (in-cha
 
 ### Backend Abstraction (`src/backends.ts`)
 
-- **Types:** `BackendConfig`, `CompletionRequest`, `CompletionResponse`, `LLMBackend` interface
+- **Types:** `BackendConfig`, `CompletionRequest` (with `signal?: AbortSignal`), `CompletionResponse`, `LLMBackend` interface
+- **Error classification:** `LLMError` class with `category` field (`auth | rate_limit | server | network | unknown`), `classifyHTTPError()` helper. Both backends wrap fetch in try/catch for network errors and classify HTTP status codes.
 - **Semaphore:** Queue-based concurrency limiter per backend (`maxConcurrent` slots)
 - **Registry:** `initBackendsFromConfig()`, `getBackend(id)`, `getSemaphore(id)`, `listBackendIds()`
 - **Implementations:**
@@ -196,13 +201,13 @@ Multi-step pipeline: **Narrator** (story continuation) → **Character** (in-cha
 
 ### Event System (`src/events.ts`)
 
-- `PipelineEvent` union type (step_start, step_token, step_complete, extractor_background, pipeline_complete, pipeline_error)
+- `PipelineEvent` union type (step_start, step_token, step_complete, extractor_background, pipeline_complete, pipeline_error, pipeline_cancelled)
 - `EventBus` — publish/subscribe for pipeline events
-- Active pipeline registry: `createPipelineRun(chatId)`, `getPipelineRun(chatId)`, `removePipelineRun(chatId)`
+- Active pipeline registry: `createPipelineRun(chatId)` → `{ bus, abort }`, `getPipelineRun(chatId)`, `cancelPipelineRun(chatId)`, `removePipelineRun(chatId)`
 
 ### Pipeline Executor (`src/pipeline.ts`)
 
-- `executePipeline(chatId, lorebook, userMessage, config, bus)` — runs enabled steps sequentially
+- `executePipeline(chatId, lorebook, userMessage, config, bus, signal?)` — runs enabled steps sequentially, checks `signal.aborted` before each step and during streaming
 - **Narrator prompt:** World context (active entries, location, characters, items, goals, traits) + instruction to narrate without dialog + recent history
 - **Character prompt:** Character descriptions + narrator output + instruction to generate in-character dialog
 - **Extractor:** Runs via `executeExtractorStep()` — can be async (different backend) or sync (same backend)
@@ -375,8 +380,8 @@ Multi-step pipeline: **Narrator** (story continuation) → **Character** (in-cha
 
 ### Current Status
 
-- **Phase:** Phase 1 — Core Chat MVP, LLM pipeline complete
-- **Completed modules:** Lorebook (full CRUD + matching + templates + context-aware activation), Settings (persistence + validation + backend/pipeline config), Chat (persistence + multi-conversation CRUD + message deletion with git revert), Adventure system (picker + play view + location bar + active entries), LLM Pipeline (multi-backend abstraction + narrator/character/extractor steps + SSE streaming + git-backed lorebook mutations)
-- **Frontend:** React 18 + Vite + react-router-dom 7. SSE streaming with token-by-token rendering, source badges, extractor indicator, message deletion.
+- **Phase:** Phase 1 — Core Chat MVP, LLM pipeline complete (Phase 1.1 done)
+- **Completed modules:** Lorebook (full CRUD + matching + templates + context-aware activation), Settings (persistence + validation + backend/pipeline config, legacy LLM section removed), Chat (persistence + multi-conversation CRUD + message deletion with git revert), Adventure system (picker + play view + location bar + character dialog partners + active entries), LLM Pipeline (multi-backend abstraction + narrator/character/extractor steps + SSE streaming + git-backed lorebook mutations + abort/cancel + classified error handling)
+- **Frontend:** React 18 + Vite + react-router-dom 7. SSE streaming with token-by-token rendering, source badges, extractor indicator, message deletion, stop button, error display. Adventure-scoped settings URL.
 - **Dependencies:** `isomorphic-git` for lorebook versioning
 - **Next up:** Phase 1.3 — Character cards, Phase 2 — Message actions (edit, regenerate, swipe)

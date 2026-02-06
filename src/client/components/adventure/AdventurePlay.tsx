@@ -5,7 +5,7 @@ import { ExtractorIndicator } from "./ExtractorIndicator";
 import { LorebookEditor } from "../lorebook/LorebookEditor";
 import { sendMessageSSE } from "../../hooks/useSSE";
 import * as api from "../../api";
-import type { ChatMessage, LocationEntry, PipelineEvent } from "../../types";
+import type { ActiveEntry, ChatMessage, LocationEntry, PipelineEvent } from "../../types";
 
 type Props = {
   lorebook: string;
@@ -26,6 +26,7 @@ export function AdventurePlay({ lorebook, chatId: initialChatId, name, location:
   const [mode, setMode] = useState<"play" | "edit">("play");
   const [streaming, setStreaming] = useState(false);
   const [extractorRunning, setExtractorRunning] = useState(false);
+  const [activeCharacters, setActiveCharacters] = useState<ActiveEntry[]>([]);
   const messagesRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -45,6 +46,13 @@ export function AdventurePlay({ lorebook, chatId: initialChatId, name, location:
   useEffect(() => {
     api.fetchLocations(lorebook).then(setLocations);
   }, [lorebook, refreshKey]);
+
+  // Load active characters (dialog partners)
+  useEffect(() => {
+    api.fetchActiveEntries(chatId)
+      .then((data) => setActiveCharacters(data.entries.filter((e) => e.category === "characters")))
+      .catch(() => {});
+  }, [chatId, refreshKey]);
 
   // Location change via dropdown
   const handleLocationChange = async (loc: string) => {
@@ -225,6 +233,14 @@ export function AdventurePlay({ lorebook, chatId: initialChatId, name, location:
           {mode === "play" ? "Edit" : "Play"}
         </button>
       </div>
+      {mode === "play" && activeCharacters.length > 0 && (
+        <div className="adventure-characters-bar">
+          <span className="adventure-characters-label">Dialog:</span>
+          {activeCharacters.map((c) => (
+            <span key={c.path} className="adventure-character-tag">{c.name}</span>
+          ))}
+        </div>
+      )}
       {mode === "play" ? (
         <div className="adventure-body">
           <div className="chat-container">

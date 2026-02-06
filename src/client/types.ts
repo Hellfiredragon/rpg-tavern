@@ -105,7 +105,7 @@ export type PipelineConfig = {
 };
 
 export type Settings = {
-  general: { appName: string };
+  general: { appName: string; temperature?: number };
   llm: {
     provider: "anthropic" | "openai";
     apiKey: string;

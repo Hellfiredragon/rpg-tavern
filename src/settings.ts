@@ -33,6 +33,7 @@ export const DEFAULT_PIPELINE: PipelineConfig = {
 export type Settings = {
   general: {
     appName: string;
+    temperature: number;
   };
   llm: {
     provider: "anthropic" | "openai";
@@ -47,6 +48,7 @@ export type Settings = {
 export const DEFAULT_SETTINGS: Settings = {
   general: {
     appName: "RPG Tavern",
+    temperature: 0.7,
   },
   llm: {
     provider: "anthropic",
@@ -76,6 +78,10 @@ export async function loadSettings(): Promise<Settings> {
     if (!Array.isArray(settings.backends)) settings.backends = [];
     if (!settings.pipeline || !Array.isArray(settings.pipeline.steps)) {
       settings.pipeline = structuredClone(DEFAULT_PIPELINE);
+    }
+    // Migrate temperature from llm to general
+    if (settings.general.temperature === undefined) {
+      settings.general.temperature = settings.llm?.temperature ?? DEFAULT_SETTINGS.general.temperature;
     }
 
     // Auto-migrate: if backends empty but old llm.apiKey is set, create one OpenAI backend
@@ -176,9 +182,15 @@ export function validateSettings(body: unknown): Settings {
     pipeline = structuredClone(DEFAULT_PIPELINE);
   }
 
+  // General temperature (preferred) — fall back to llm temperature for migration
+  const generalTemp = typeof (general as Record<string, unknown>).temperature === "number"
+    ? Number((general as Record<string, unknown>).temperature)
+    : temperature;
+
   return {
     general: {
       appName: typeof general.appName === "string" ? general.appName.trim() || DEFAULT_SETTINGS.general.appName : DEFAULT_SETTINGS.general.appName,
+      temperature: isNaN(generalTemp) || generalTemp < 0 || generalTemp > 2 ? DEFAULT_SETTINGS.general.temperature : generalTemp,
     },
     llm: {
       provider,
