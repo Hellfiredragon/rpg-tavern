@@ -1,4 +1,5 @@
 .gitmessage
+.idea
 # Built frontend served by backend
 backend/static/
 
