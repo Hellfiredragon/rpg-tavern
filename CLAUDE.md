@@ -23,14 +23,14 @@ uv run main.py          # Start backend + frontend in watch mode (main dev workf
 ### Backend only
 
 ```bash
-uv run uvicorn backend.app:app --reload   # Start backend with hot-reload on :8000
-uv add <package>                           # Add a Python dependency
+uv run uvicorn backend.app:app --reload --port 13013   # Start backend with hot-reload
+uv add <package>                                        # Add a Python dependency
 ```
 
 ### Frontend only
 
 ```bash
-cd frontend && bun run dev       # Vite dev server on :5173 (proxies /api → :8000)
+cd frontend && bun run dev       # Vite dev server (proxies /api → backend)
 cd frontend && bun run build     # Build to backend/static/
 cd frontend && bun run lint      # ESLint
 ```
@@ -46,12 +46,18 @@ backend/              Python backend (FastAPI)
 
 frontend/             React + TypeScript (Vite)
   src/                React source code
-  vite.config.ts      Build output → ../backend/static, dev proxy /api → localhost:8000
+  vite.config.ts      Build output → ../backend/static, dev proxy /api → backend
+
+.env.example          Default config (copy to .env to override)
 ```
+
+### Configuration (.env)
+
+All ports/host are configured via `.env` at the project root (see `.env.example`). Vite reads it via `loadEnv()`, Python via `python-dotenv`. Key vars: `HOST`, `BACKEND_PORT`, `FRONTEND_PORT`.
 
 ### Dev proxy setup
 
-In development, the Vite dev server (`:5173`) proxies `/api/*` requests to the backend (`:8000`). In production, the backend serves everything — API routes and static frontend files — from a single port.
+In development, the Vite dev server proxies `/api/*` requests to the backend. In production, the backend serves everything — API routes and static frontend files — from a single port.
 
 ## Workflow
 
