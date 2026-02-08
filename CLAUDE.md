@@ -85,7 +85,8 @@ In development, the Vite dev server proxies `/api/*` requests to the backend. In
 
 ## Workflow
 
-- After completing a piece of work, write the commit message into `.gitmessage`
+- After completing a piece of work, write the commit message into `.gitmessage` — this includes doc-only changes (CLAUDE.md, ARCH-DESIGN.md, etc.)
 - **Commit messages** use semantic prefixes: `feat(topic):`, `fix(topic):`, `chore(topic):`, `refactor(topic):`, `test(topic):`, `docs(topic):`
 - Keep TODOS.md updated when completing items listed there
 - Update CLAUDE.md
+- Update `backend/demo.py` when data model or storage changes so `--demo` generates valid, representative demo data
