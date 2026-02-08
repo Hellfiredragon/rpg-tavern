@@ -25,16 +25,8 @@ import {
 const LOREBOOKS_DIR = resolve(join(import.meta.dir, "..", "data-test", "lorebooks"));
 
 async function cleanLorebooks() {
-  try {
-    await rm(LOREBOOKS_DIR, { recursive: true });
-  } catch {
-    // doesn't exist yet
-  }
+  try { await rm(LOREBOOKS_DIR, { recursive: true }); } catch {}
 }
-
-// ---------------------------------------------------------------------------
-// Matching engine
-// ---------------------------------------------------------------------------
 
 describe("findMatchingEntries", () => {
   beforeEach(async () => { await cleanLorebooks(); await createLorebook("default", "Default"); });
@@ -86,7 +78,6 @@ describe("findMatchingEntries", () => {
     await seedEntries();
     const matches = await findMatchingEntries("default", "I walk into the tavern and see Gabrielle");
     expect(matches.length).toBeGreaterThanOrEqual(2);
-    // priority: tavern=10, gabrielle=5 -> tavern first
     expect(matches[0].name).toBe("The Rusty Tankard");
     expect(matches[1].name).toBe("Gabrielle");
   });
@@ -120,7 +111,6 @@ describe("findMatchingEntries", () => {
       priority: 0,
       enabled: true,
     });
-    // Should not throw
     const matches = await findMatchingEntries("default", "some text");
     expect(matches).toEqual([]);
   });
@@ -164,10 +154,6 @@ describe("findMatchingEntries", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Lorebook management
-// ---------------------------------------------------------------------------
-
 describe("lorebook management", () => {
   beforeEach(cleanLorebooks);
   afterEach(cleanLorebooks);
@@ -182,7 +168,6 @@ describe("lorebook management", () => {
     await createLorebook("beta", "Beta World");
     await createLorebook("alpha", "Alpha World");
     const list = await listLorebooks();
-    // Should include alpha, beta, default (preset), template-key-quest (preset)
     const userSlugs = list.filter((l) => !l.preset).map((l) => l.slug);
     expect(userSlugs).toContain("alpha");
     expect(userSlugs).toContain("beta");
@@ -226,7 +211,6 @@ describe("lorebook management", () => {
     expect(heroA!.name).toBe("Hero A");
     expect(heroB!.name).toBe("Hero B");
 
-    // Deleting in one shouldn't affect the other
     await deleteEntry("world-a", "hero");
     expect(await loadEntry("world-a", "hero")).toBeNull();
     expect(await loadEntry("world-b", "hero")).not.toBeNull();
@@ -247,10 +231,6 @@ describe("lorebook management", () => {
     expect(treeB[0].name).toBe("Entry B");
   });
 });
-
-// ---------------------------------------------------------------------------
-// copyLorebook
-// ---------------------------------------------------------------------------
 
 describe("copyLorebook", () => {
   beforeEach(cleanLorebooks);
@@ -281,17 +261,14 @@ describe("copyLorebook", () => {
 
     await copyLorebook("source", "copy", "Copy");
 
-    // Modify source
     await saveEntry("source", "entry", { ...DEFAULT_ENTRY, name: "Modified", enabled: true });
 
-    // Copy should still have original
     const copied = await loadEntry("copy", "entry");
     expect(copied!.name).toBe("Original");
   });
 
   test("copied lorebook is not a template", async () => {
     await createLorebook("source", "Source");
-    // Manually set template flag on source
     const root = join(LOREBOOKS_DIR, "source");
     await Bun.write(join(root, "_lorebook.json"), JSON.stringify({ name: "Source", template: true }));
 
@@ -300,10 +277,6 @@ describe("copyLorebook", () => {
     expect(meta!.template).toBeUndefined();
   });
 });
-
-// ---------------------------------------------------------------------------
-// Preset lorebooks
-// ---------------------------------------------------------------------------
 
 describe("preset lorebooks", () => {
   beforeEach(cleanLorebooks);
@@ -381,10 +354,6 @@ describe("preset lorebooks", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// listLocationEntries
-// ---------------------------------------------------------------------------
-
 describe("listLocationEntries", () => {
   beforeEach(async () => { await cleanLorebooks(); await createLorebook("default", "Default"); });
   afterEach(cleanLorebooks);
@@ -456,46 +425,37 @@ describe("listLocationEntries", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// findActiveEntries — context-aware activation engine
-// ---------------------------------------------------------------------------
-
 describe("findActiveEntries", () => {
   beforeEach(async () => { await cleanLorebooks(); await createLorebook("default", "Default"); });
   afterEach(cleanLorebooks);
 
   async function seedContextEntries() {
-    // Location: village-square
     await saveEntry("default", "locations/village-square", {
       ...DEFAULT_ENTRY, name: "Village Square", keywords: ["village", "square"],
       priority: 5, enabled: true, contexts: [],
       characters: ["characters/sage", "characters/guard"],
     });
-    // Character: sage (home at village-square, currentLocation = homeLocation)
     await saveEntry("default", "characters/sage", {
       ...DEFAULT_ENTRY, name: "The Sage", keywords: ["sage", "wise man"],
       priority: 10, enabled: true, contexts: [],
       homeLocation: "locations/village-square",
     });
-    // Item: iron-key (located at blacksmith, not used here — use location-based)
     await saveEntry("default", "items/iron-key", {
       ...DEFAULT_ENTRY, name: "Iron Key", keywords: ["key", "iron key"],
       priority: 15, enabled: true, contexts: [],
       location: "characters/sage",
     });
-    // Location: treasure-room
     await saveEntry("default", "locations/treasure-room", {
       ...DEFAULT_ENTRY, name: "Treasure Room", keywords: ["treasure"],
       priority: 20, enabled: true, contexts: [],
       characters: [],
     });
-    // Character: guard (requires trait:warrior, home at village-square)
+    // guard requires trait:warrior
     await saveEntry("default", "characters/guard", {
       ...DEFAULT_ENTRY, name: "The Guard", keywords: ["guard"],
       priority: 10, enabled: true, contexts: ["trait:warrior"],
       homeLocation: "locations/village-square",
     });
-    // Goal: incomplete goal always active
     await saveEntry("default", "goals/find-key", {
       ...DEFAULT_ENTRY, name: "Find the Key", keywords: [],
       priority: 5, enabled: true, contexts: [],
@@ -538,7 +498,6 @@ describe("findActiveEntries", () => {
 
   test("characters with no matching location do NOT activate", async () => {
     await seedContextEntries();
-    // sage has homeLocation village-square, but current location is empty — not at home
     const result = await findActiveEntries("default", {
       text: "I talk to the sage", currentLocation: "", traits: [],
     });
@@ -546,9 +505,8 @@ describe("findActiveEntries", () => {
     expect(paths).not.toContain("characters/sage");
   });
 
-  test("chained activation (location → home character → item at character)", async () => {
+  test("chained activation (location -> home character -> item at character)", async () => {
     await seedContextEntries();
-    // village-square is current location → sage auto-activates (homeLocation) → iron-key has location: characters/sage
     const result = await findActiveEntries("default", {
       text: "",
       currentLocation: "locations/village-square",
@@ -563,36 +521,25 @@ describe("findActiveEntries", () => {
 
   test("trait-based context activation for character at location", async () => {
     await seedContextEntries();
-    // guard requires trait:warrior and has homeLocation village-square
     const result = await findActiveEntries("default", {
       text: "", currentLocation: "locations/village-square", traits: ["warrior"],
     });
     const paths = result.map((e) => e.path);
-    // guard has homeLocation matching but also has a context gate — trait:warrior
-    // In the new algorithm, characters activate by location, then context gates apply in step 5
-    // But guard is a character and activates in step 2 if homeLocation matches.
-    // Wait — guard has contexts: ["trait:warrior"], so it would only activate in step 2
-    // if its homeLocation matches AND it passes the context check.
-    // Actually, step 2 has no context check — it just checks homeLocation/currentLocation.
-    // The guard *will* activate at village-square even without the trait.
-    // Let's just verify it's active with the trait:
     expect(paths).toContain("characters/guard");
   });
 
+  // Characters activate by location, not by context gates
   test("characters activate at home location regardless of traits", async () => {
     await seedContextEntries();
-    // In the new model, characters activate purely by location — contexts are not checked
     const result = await findActiveEntries("default", {
       text: "", currentLocation: "locations/village-square", traits: [],
     });
     const paths = result.map((e) => e.path);
-    // Guard has homeLocation village-square, so it activates even without trait:warrior
     expect(paths).toContain("characters/guard");
   });
 
   test("characters not at current location do not activate", async () => {
     await seedContextEntries();
-    // sage has homeLocation village-square, but we're at treasure-room
     const result = await findActiveEntries("default", {
       text: "sage",
       currentLocation: "locations/treasure-room",
@@ -645,14 +592,12 @@ describe("findActiveEntries", () => {
 
   test("currentLocation field takes precedence over homeLocation", async () => {
     await seedContextEntries();
-    // Set sage's currentLocation to treasure-room
     await saveEntry("default", "characters/sage", {
       ...DEFAULT_ENTRY, name: "The Sage", keywords: ["sage"],
       priority: 10, enabled: true, contexts: [],
       homeLocation: "locations/village-square",
       currentLocation: "locations/treasure-room",
     });
-    // At treasure-room, sage should now activate
     const result = await findActiveEntries("default", {
       text: "", currentLocation: "locations/treasure-room", traits: [],
     });
@@ -722,7 +667,6 @@ describe("findActiveEntries", () => {
 
   test("items at active character activate", async () => {
     await seedContextEntries();
-    // iron-key is at characters/sage, sage is at village-square
     const result = await findActiveEntries("default", {
       text: "", currentLocation: "locations/village-square", traits: [],
     });

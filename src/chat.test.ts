@@ -16,16 +16,8 @@ import {
 const CHATS_DIR = resolve(join(import.meta.dir, "..", "data-test", "chats"));
 
 async function cleanChats() {
-  try {
-    await rm(CHATS_DIR, { recursive: true });
-  } catch {
-    // doesn't exist yet
-  }
+  try { await rm(CHATS_DIR, { recursive: true }); } catch {}
 }
-
-// ---------------------------------------------------------------------------
-// generateChatId
-// ---------------------------------------------------------------------------
 
 describe("generateChatId", () => {
   test("matches expected format: <timestamp>-<3-hex>", () => {
@@ -38,15 +30,9 @@ describe("generateChatId", () => {
     for (let i = 0; i < 20; i++) {
       ids.add(generateChatId());
     }
-    // With 3-hex suffix (4096 values) and 20 calls at the same ms,
-    // collisions are extremely unlikely
     expect(ids.size).toBe(20);
   });
 });
-
-// ---------------------------------------------------------------------------
-// createConversation
-// ---------------------------------------------------------------------------
 
 describe("createConversation", () => {
   beforeEach(cleanChats);
@@ -92,10 +78,6 @@ describe("createConversation", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// listConversations
-// ---------------------------------------------------------------------------
-
 describe("listConversations", () => {
   beforeEach(cleanChats);
   afterEach(cleanChats);
@@ -104,7 +86,6 @@ describe("listConversations", () => {
     const a = await createConversation();
     await appendMessage(a.id, { role: "user", content: "First", timestamp: new Date().toISOString() });
 
-    // Ensure different timestamp
     await new Promise((r) => setTimeout(r, 15));
 
     const b = await createConversation();
@@ -112,7 +93,6 @@ describe("listConversations", () => {
 
     const list = await listConversations();
     expect(list.length).toBe(2);
-    // b was updated more recently
     expect(list[0].id).toBe(b.id);
     expect(list[1].id).toBe(a.id);
   });
@@ -124,9 +104,7 @@ describe("listConversations", () => {
 
   test("skips malformed files", async () => {
     await mkdir(CHATS_DIR, { recursive: true });
-    // Write a malformed file
     await Bun.write(join(CHATS_DIR, "9999999999999-bad.jsonl"), "not valid json\n");
-    // Write a valid one
     const meta = await createConversation();
 
     const list = await listConversations();
@@ -155,10 +133,6 @@ describe("listConversations", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// loadConversation
-// ---------------------------------------------------------------------------
-
 describe("loadConversation", () => {
   beforeEach(cleanChats);
   afterEach(cleanChats);
@@ -184,7 +158,6 @@ describe("loadConversation", () => {
 
   test("skips malformed message lines", async () => {
     const meta = await createConversation();
-    // Manually write a file with a bad line
     const filePath = join(CHATS_DIR, meta.id + ".jsonl");
     const text = await Bun.file(filePath).text();
     await Bun.write(filePath, text + "not valid json\n" + JSON.stringify({ role: "user", content: "Valid", timestamp: "2024-01-01T00:00:00Z" }) + "\n");
@@ -195,10 +168,6 @@ describe("loadConversation", () => {
     expect(conv!.messages[0].content).toBe("Valid");
   });
 });
-
-// ---------------------------------------------------------------------------
-// appendMessage
-// ---------------------------------------------------------------------------
 
 describe("appendMessage", () => {
   beforeEach(cleanChats);
@@ -218,7 +187,6 @@ describe("appendMessage", () => {
     const meta = await createConversation();
     const before = meta.updatedAt;
 
-    // Small delay to ensure timestamp differs
     await new Promise((r) => setTimeout(r, 10));
     await appendMessage(meta.id, { role: "user", content: "Hi", timestamp: new Date().toISOString() });
 
@@ -243,7 +211,7 @@ describe("appendMessage", () => {
     await appendMessage(meta.id, { role: "user", content: longMsg, timestamp: new Date().toISOString() });
 
     const conv = await loadConversation(meta.id);
-    expect(conv!.meta.title).toBe("A".repeat(50) + "…");
+    expect(conv!.meta.title).toBe("A".repeat(50) + "\u2026");
   });
 
   test("does not overwrite title on subsequent user messages", async () => {
@@ -272,10 +240,6 @@ describe("appendMessage", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// deleteConversation
-// ---------------------------------------------------------------------------
-
 describe("deleteConversation", () => {
   beforeEach(cleanChats);
   afterEach(cleanChats);
@@ -288,10 +252,6 @@ describe("deleteConversation", () => {
     expect(loaded).toBeNull();
   });
 });
-
-// ---------------------------------------------------------------------------
-// changeLocation
-// ---------------------------------------------------------------------------
 
 describe("changeLocation", () => {
   beforeEach(cleanChats);
@@ -334,10 +294,6 @@ describe("changeLocation", () => {
     expect(conv!.messages[1].content).toBe("Narration 2");
   });
 });
-
-// ---------------------------------------------------------------------------
-// Path validation
-// ---------------------------------------------------------------------------
 
 describe("path validation", () => {
   test("rejects empty ID", () => {

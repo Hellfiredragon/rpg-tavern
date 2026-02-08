@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeAll, beforeEach, afterEach, afterAll } from "bun:test";
-import { resolve, join } from "path";
-import { rm, readdir } from "fs/promises";
+import { join } from "path";
+import { readdir } from "fs/promises";
 import type { Server } from "bun";
 import {
   saveEntry,
@@ -9,16 +9,7 @@ import {
   createLorebook,
 } from "../src/lorebook";
 import { startServer } from "../src/server";
-
-const LOREBOOKS_DIR = resolve(join(import.meta.dir, "..", "data-test", "lorebooks"));
-
-async function cleanLorebooks() {
-  try {
-    await rm(LOREBOOKS_DIR, { recursive: true });
-  } catch {
-    // doesn't exist yet
-  }
-}
+import { LOREBOOKS_DIR, cleanLorebooks } from "./helpers";
 
 describe("lorebook API routes", () => {
   let server: Server;
@@ -227,12 +218,11 @@ describe("lorebook API routes", () => {
   // --- Lorebook management API tests ---
 
   test("GET /api/lorebooks returns JSON with templates", async () => {
-    await createLorebook("default", "Default Lorebook", true);
     const res = await fetch(`${BASE}/api/lorebooks`);
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.templates).toBeDefined();
-    expect(data.templates.some((t: { name: string }) => t.name === "Default Lorebook")).toBe(true);
+    expect(data.templates.some((t: { name: string }) => t.name === "The Rusty Flagon")).toBe(true);
   });
 
   test("POST /api/lorebooks creates a lorebook", async () => {
@@ -339,7 +329,7 @@ describe("lorebook API routes", () => {
     expect(data.templates).toBeDefined();
     expect(data.adventures).toBeUndefined();
     expect(data.templates.some((t: { name: string }) => t.name === "Key Quest")).toBe(true);
-    expect(data.templates.some((t: { name: string }) => t.name === "Default Lorebook")).toBe(true);
+    expect(data.templates.some((t: { name: string }) => t.name === "The Rusty Flagon")).toBe(true);
   });
 
   test("GET /api/lorebooks shows only templates, not adventures", async () => {

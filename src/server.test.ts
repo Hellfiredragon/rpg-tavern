@@ -1,20 +1,12 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from "bun:test";
-import { join, resolve } from "path";
-import { rm } from "fs/promises";
 import { startServer } from "./server";
-
-const DATA_DIR = resolve(join(import.meta.dir, "..", "data-test"));
-const CHATS_DIR = join(DATA_DIR, "chats");
-const LOREBOOKS_DIR = join(DATA_DIR, "lorebooks");
+import { createLorebook } from "./lorebook";
+import { cleanData, cleanChats, createApiHelpers } from "../tests/helpers";
 
 let server: ReturnType<typeof Bun.serve>;
-const PORT = 39182; // unlikely to collide
+const PORT = 39182;
 const BASE = `http://localhost:${PORT}`;
-
-async function cleanData() {
-  try { await rm(CHATS_DIR, { recursive: true }); } catch {}
-  try { await rm(LOREBOOKS_DIR, { recursive: true }); } catch {}
-}
+const { api, jsonPost, jsonPut } = createApiHelpers(BASE);
 
 beforeAll(async () => {
   await cleanData();
@@ -25,35 +17,6 @@ afterAll(async () => {
   server.stop(true);
   await cleanData();
 });
-
-// Helper: reset chats between tests (presets provide templates automatically)
-async function cleanChats() {
-  try { await rm(CHATS_DIR, { recursive: true }); } catch {}
-}
-
-function api(path: string, init?: RequestInit) {
-  return fetch(BASE + path, init);
-}
-
-function jsonPost(path: string, body: object) {
-  return fetch(BASE + path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-}
-
-function jsonPut(path: string, body: object) {
-  return fetch(BASE + path, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-}
-
-// ---------------------------------------------------------------------------
-// GET /api/adventures — picker
-// ---------------------------------------------------------------------------
 
 describe("GET /api/adventures", () => {
   beforeEach(cleanChats);
@@ -145,10 +108,6 @@ describe("GET /api/adventures", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// POST /api/chats — create conversation with lorebook
-// ---------------------------------------------------------------------------
-
 describe("POST /api/chats", () => {
   beforeEach(cleanChats);
 
@@ -178,10 +137,6 @@ describe("POST /api/chats", () => {
     expect(convos).toEqual([]);
   });
 });
-
-// ---------------------------------------------------------------------------
-// POST /api/chat — send message with lorebook
-// ---------------------------------------------------------------------------
 
 describe("POST /api/chat", () => {
   beforeEach(cleanChats);
@@ -242,7 +197,6 @@ describe("POST /api/chat", () => {
     expect(sysMsg.content).toContain("flower garden");
     expect(data.location).toBe("locations/flower-garden");
 
-    // Verify the new location appears in the locations list
     const locRes = await api("/api/adventures/locations?lorebook=chat-new-loc");
     const locs = await locRes.json();
     expect(locs.some((l: { name: string }) => l.name === "flower garden")).toBe(true);
@@ -265,10 +219,6 @@ describe("POST /api/chat", () => {
     expect(data.location).toBeNull();
   });
 });
-
-// ---------------------------------------------------------------------------
-// GET /api/chats/messages — render messages including system
-// ---------------------------------------------------------------------------
 
 describe("GET /api/chats/messages", () => {
   beforeEach(cleanChats);
@@ -320,10 +270,6 @@ describe("GET /api/chats/messages", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// GET /api/adventures/locations — location dropdown
-// ---------------------------------------------------------------------------
-
 describe("GET /api/adventures/locations", () => {
   test("returns location entries for a lorebook with locations", async () => {
     const res = await api("/api/adventures/locations?lorebook=template-key-quest");
@@ -336,15 +282,12 @@ describe("GET /api/adventures/locations", () => {
   });
 
   test("returns empty array for lorebook with no locations", async () => {
-    const res = await api("/api/adventures/locations?lorebook=default");
+    await createLorebook("empty-loc-test", "Empty Loc Test");
+    const res = await api("/api/adventures/locations?lorebook=empty-loc-test");
     const data = await res.json();
     expect(data).toEqual([]);
   });
 });
-
-// ---------------------------------------------------------------------------
-// PUT /api/adventures/location — change location
-// ---------------------------------------------------------------------------
 
 describe("PUT /api/adventures/location", () => {
   beforeEach(cleanChats);
@@ -412,10 +355,6 @@ describe("PUT /api/adventures/location", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// DELETE /api/adventures — delete adventure
-// ---------------------------------------------------------------------------
-
 describe("DELETE /api/adventures", () => {
   beforeEach(cleanChats);
 
@@ -429,13 +368,11 @@ describe("DELETE /api/adventures", () => {
     const delData = await delRes.json();
     expect(delData.ok).toBe(true);
 
-    // Adventure should no longer appear in picker
     const pickRes = await api("/api/adventures");
     const pickData = await pickRes.json();
     const slugs = pickData.adventures.map((a: { slug: string }) => a.slug);
     expect(slugs).not.toContain("to-delete");
 
-    // Conversation should be gone
     const msgRes = await api(`/api/chats/messages?id=${chatData.chatId}`);
     expect(msgRes.status).toBe(404);
   });
@@ -468,7 +405,6 @@ describe("DELETE /api/adventures", () => {
     const delData = await delRes.json();
     expect(delData.ok).toBe(true);
 
-    // Del A gone, Del B still there
     const pickRes = await api("/api/adventures");
     const pickData = await pickRes.json();
     const names = pickData.adventures.map((a: { name: string }) => a.name);
@@ -476,10 +412,6 @@ describe("DELETE /api/adventures", () => {
     expect(names).toContain("Del B");
   });
 });
-
-// ---------------------------------------------------------------------------
-// GET /api/adventures/resume — resume adventure by lorebook
-// ---------------------------------------------------------------------------
 
 describe("GET /api/adventures/resume", () => {
   beforeEach(cleanChats);
@@ -512,8 +444,7 @@ describe("GET /api/adventures/resume", () => {
 
   test("returns the most recent conversation when multiple exist", async () => {
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "resume-multi", name: "Resume Multi" });
-    const chat1Res = await jsonPost("/api/chats", { lorebook: "resume-multi" });
-    const chat1Data = await chat1Res.json();
+    await jsonPost("/api/chats", { lorebook: "resume-multi" });
 
     await new Promise((r) => setTimeout(r, 15));
 
@@ -526,10 +457,6 @@ describe("GET /api/adventures/resume", () => {
     expect(data.chatId).toBe(chat2Data.chatId);
   });
 });
-
-// ---------------------------------------------------------------------------
-// GET /api/adventures/active-entries — active lorebook entries
-// ---------------------------------------------------------------------------
 
 describe("GET /api/adventures/active-entries", () => {
   beforeEach(cleanChats);
@@ -545,9 +472,7 @@ describe("GET /api/adventures/active-entries", () => {
     const res = await api("/api/adventures/active-entries?chatId=" + chatData.chatId);
     expect(res.status).toBe(200);
     const data = await res.json();
-    // Village Square should be active (current location)
     expect(data.entries.some((e: { name: string }) => e.name.includes("Village Square"))).toBe(true);
-    // The sage should be active
     expect(data.entries.some((e: { name: string }) => e.name.includes("Old Sage"))).toBe(true);
   });
 
@@ -573,10 +498,6 @@ describe("GET /api/adventures/active-entries", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// PUT /api/adventures/traits — update player traits
-// ---------------------------------------------------------------------------
-
 describe("PUT /api/adventures/traits", () => {
   beforeEach(cleanChats);
 
@@ -598,10 +519,6 @@ describe("PUT /api/adventures/traits", () => {
     expect(res.status).toBe(400);
   });
 });
-
-// ---------------------------------------------------------------------------
-// JSON response format (replaces HX-Trigger tests)
-// ---------------------------------------------------------------------------
 
 describe("JSON response format", () => {
   beforeEach(cleanChats);
@@ -626,15 +543,10 @@ describe("JSON response format", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Full adventure flow
-// ---------------------------------------------------------------------------
-
 describe("full adventure flow", () => {
   beforeEach(cleanChats);
 
-  test("start from template → play → change location → back → continue", async () => {
-    // 1. Copy template
+  test("start from template -> play -> change location -> back -> continue", async () => {
     const copyRes = await jsonPost("/api/lorebooks/copy", {
       source: "template-key-quest",
       slug: "flow-test",
@@ -642,18 +554,15 @@ describe("full adventure flow", () => {
     });
     expect(copyRes.status).toBe(200);
 
-    // 2. Create conversation
     const chatRes = await jsonPost("/api/chats", { lorebook: "flow-test" });
     expect(chatRes.status).toBe(200);
     const chatData = await chatRes.json();
     expect(chatData.chatId).toBeTruthy();
 
-    // 3. Load locations
     const locRes = await api("/api/adventures/locations?lorebook=flow-test");
     const locs = await locRes.json();
     expect(locs.some((l: { name: string }) => l.name.includes("Village Square"))).toBe(true);
 
-    // 4. Change location
     const moveRes = await jsonPut("/api/adventures/location", {
       chatId: chatData.chatId,
       location: "locations/village-square",
@@ -662,7 +571,6 @@ describe("full adventure flow", () => {
     const moveData = await moveRes.json();
     expect(moveData.narration).toBeTruthy();
 
-    // 5. Send a message
     const msgRes = await jsonPost("/api/chat", {
       message: "I look around",
       chatId: chatData.chatId,
@@ -670,7 +578,6 @@ describe("full adventure flow", () => {
     });
     expect(msgRes.status).toBe(200);
 
-    // 6. Load all messages — should have system + user + assistant
     const allMsgRes = await api(`/api/chats/messages?id=${chatData.chatId}`);
     const allMsgData = await allMsgRes.json();
     const roles = allMsgData.messages.map((m: { role: string }) => m.role);
@@ -680,7 +587,6 @@ describe("full adventure flow", () => {
     const userMsg = allMsgData.messages.find((m: { content: string }) => m.content === "I look around");
     expect(userMsg).toBeTruthy();
 
-    // 7. Check picker shows the adventure
     const pickRes = await api("/api/adventures");
     const pickData = await pickRes.json();
     const adv = pickData.adventures.find((a: { slug: string }) => a.slug === "flow-test");
@@ -689,14 +595,12 @@ describe("full adventure flow", () => {
     expect(adv.latestChatId).toBe(chatData.chatId);
     expect(adv.currentLocation).toBe("locations/village-square");
 
-    // 8. Change location again
     const move2Res = await jsonPut("/api/adventures/location", {
       chatId: chatData.chatId,
       location: "locations/cellar",
     });
     expect(move2Res.status).toBe(200);
 
-    // 9. Picker should now show updated location
     const pick2Res = await api("/api/adventures");
     const pick2Data = await pick2Res.json();
     const adv2 = pick2Data.adventures.find((a: { slug: string }) => a.slug === "flow-test");

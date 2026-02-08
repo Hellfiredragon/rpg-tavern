@@ -18,21 +18,11 @@ import {
   type LorebookEntry,
 } from "./lorebook";
 
-// The lorebook module stores data in data/lorebooks/ relative to src/.
-// Tests use that real directory, so we clean it before/after each test.
 const LOREBOOKS_DIR = resolve(join(import.meta.dir, "..", "data-test", "lorebooks"));
 
 async function cleanLorebooks() {
-  try {
-    await rm(LOREBOOKS_DIR, { recursive: true });
-  } catch {
-    // doesn't exist yet
-  }
+  try { await rm(LOREBOOKS_DIR, { recursive: true }); } catch {}
 }
-
-// ---------------------------------------------------------------------------
-// validateEntry
-// ---------------------------------------------------------------------------
 
 describe("validateEntry", () => {
   test("validates a minimal valid entry", () => {
@@ -151,10 +141,6 @@ describe("validateEntry", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Path validation
-// ---------------------------------------------------------------------------
-
 describe("resolveEntryPath", () => {
   test("resolves a simple path", () => {
     const result = resolveEntryPath("default", "people/gabrielle");
@@ -186,10 +172,6 @@ describe("resolveDirPath", () => {
     expect(() => resolveDirPath("default", "../../../tmp")).toThrow("Invalid path");
   });
 });
-
-// ---------------------------------------------------------------------------
-// CRUD operations
-// ---------------------------------------------------------------------------
 
 describe("CRUD operations", () => {
   beforeEach(async () => { await cleanLorebooks(); await createLorebook("default", "Default"); });
@@ -242,7 +224,6 @@ describe("CRUD operations", () => {
     await saveEntry("default", "cleanup/nested/entry", sampleEntry);
     await deleteEntry("default", "cleanup/nested/entry");
 
-    // The cleanup/ and cleanup/nested/ dirs should be removed
     const rootContents = await readdir(join(LOREBOOKS_DIR, "default")).catch(() => []);
     expect(rootContents).not.toContain("cleanup");
   });
@@ -252,7 +233,6 @@ describe("CRUD operations", () => {
     await saveEntry("default", "shared/entry-b", sampleEntry);
     await deleteEntry("default", "shared/entry-a");
 
-    // shared/ should still exist because entry-b is there
     const loaded = await loadEntry("default", "shared/entry-b");
     expect(loaded).not.toBeNull();
   });
@@ -300,10 +280,6 @@ describe("CRUD operations", () => {
     expect(all).toEqual([]);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Tree scanning
-// ---------------------------------------------------------------------------
 
 describe("scanTree", () => {
   beforeEach(async () => { await cleanLorebooks(); await createLorebook("default", "Default"); });
@@ -368,7 +344,6 @@ describe("scanTree", () => {
   });
 
   test("handles file and directory with same name (coexistence)", async () => {
-    // gabrielle.json + gabrielle/ directory
     await saveEntry("default", "gabrielle", {
       name: "Gabrielle",
       content: "The barmaid.",
@@ -408,10 +383,6 @@ describe("scanTree", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// moveEntry
-// ---------------------------------------------------------------------------
-
 describe("moveEntry", () => {
   beforeEach(async () => { await cleanLorebooks(); await createLorebook("default", "Default"); });
   afterEach(cleanLorebooks);
@@ -431,9 +402,7 @@ describe("moveEntry", () => {
     const newPath = await moveEntry("default", "characters/sage", "items");
     expect(newPath).toBe("items/sage");
 
-    // Old location should be gone
     expect(await loadEntry("default", "characters/sage")).toBeNull();
-    // New location should have the entry
     const loaded = await loadEntry("default", "items/sage");
     expect(loaded).not.toBeNull();
     expect(loaded!.name).toBe("Test Entry");
@@ -462,7 +431,6 @@ describe("moveEntry", () => {
     const newPath = await moveEntry("default", "characters/sage", "characters");
     expect(newPath).toBe("characters/sage");
 
-    // Entry should still be at original location
     expect(await loadEntry("default", "characters/sage")).not.toBeNull();
   });
 
@@ -487,7 +455,6 @@ describe("moveEntry", () => {
     await saveEntry("default", "characters/knight", { ...sampleEntry, name: "Knight" });
     await moveEntry("default", "characters/sage", "items");
 
-    // characters/ should still exist with knight
     expect(await loadEntry("default", "characters/knight")).not.toBeNull();
   });
 });

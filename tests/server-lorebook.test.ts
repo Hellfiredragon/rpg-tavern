@@ -1,20 +1,11 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from "bun:test";
-import { join, resolve } from "path";
-import { rm } from "fs/promises";
 import { startServer } from "../src/server";
-
-const DATA_DIR = resolve(join(import.meta.dir, "..", "data-test"));
-const CHATS_DIR = join(DATA_DIR, "chats");
-const LOREBOOKS_DIR = join(DATA_DIR, "lorebooks");
+import { cleanData, cleanChats, createApiHelpers } from "./helpers";
 
 let server: ReturnType<typeof Bun.serve>;
-const PORT = 39183; // different from server.test.ts
+const PORT = 39183;
 const BASE = `http://localhost:${PORT}`;
-
-async function cleanData() {
-  try { await rm(CHATS_DIR, { recursive: true }); } catch {}
-  try { await rm(LOREBOOKS_DIR, { recursive: true }); } catch {}
-}
+const { api, jsonPost } = createApiHelpers(BASE);
 
 beforeAll(async () => {
   await cleanData();
@@ -26,35 +17,13 @@ afterAll(async () => {
   await cleanData();
 });
 
-async function cleanChats() {
-  try { await rm(CHATS_DIR, { recursive: true }); } catch {}
-}
-
-function api(path: string, init?: RequestInit) {
-  return fetch(BASE + path, init);
-}
-
-function jsonPost(path: string, body: object) {
-  return fetch(BASE + path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-}
-
-// ---------------------------------------------------------------------------
-// POST /api/lorebooks/make-template — save adventure as template
-// ---------------------------------------------------------------------------
-
 describe("POST /api/lorebooks/make-template", () => {
   beforeEach(cleanChats);
 
   test("copies adventure lorebook as template", async () => {
-    // Create an adventure from a template
     await jsonPost("/api/lorebooks/copy", { source: "template-key-quest", slug: "my-adventure", name: "My Adventure" });
     await jsonPost("/api/chats", { lorebook: "my-adventure" });
 
-    // Save it as a template
     const res = await jsonPost("/api/lorebooks/make-template", {
       source: "my-adventure",
       slug: "my-template",
@@ -64,7 +33,6 @@ describe("POST /api/lorebooks/make-template", () => {
     const data = await res.json();
     expect(data.ok).toBe(true);
 
-    // Verify the new lorebook is a template (appears in templates list)
     const lbRes = await api("/api/lorebooks");
     const lbData = await lbRes.json();
     expect(lbData.templates.some((t: { name: string }) => t.name === "My Template")).toBe(true);
@@ -76,20 +44,14 @@ describe("POST /api/lorebooks/make-template", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// GET /api/lorebooks — unified model
-// ---------------------------------------------------------------------------
-
 describe("GET /api/lorebooks — templates only", () => {
   test("returns templates as JSON (no adventures)", async () => {
     const res = await api("/api/lorebooks");
     const data = await res.json();
 
-    // Templates section
     expect(data.templates.some((t: { name: string }) => t.name === "Key Quest")).toBe(true);
-    expect(data.templates.some((t: { name: string }) => t.name === "Default Lorebook")).toBe(true);
+    expect(data.templates.some((t: { name: string }) => t.name === "The Rusty Flagon")).toBe(true);
 
-    // No adventures key
     expect(data.adventures).toBeUndefined();
   });
 
@@ -100,10 +62,6 @@ describe("GET /api/lorebooks — templates only", () => {
     expect(Array.isArray(data.templates)).toBe(true);
   });
 });
-
-// ---------------------------------------------------------------------------
-// GET /api/lorebooks/meta — lorebook metadata
-// ---------------------------------------------------------------------------
 
 describe("GET /api/lorebooks/meta", () => {
   test("returns JSON with slug, name, template, preset for existing lorebook", async () => {
@@ -127,25 +85,16 @@ describe("GET /api/lorebooks/meta", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// POST /api/lorebooks — creates templates
-// ---------------------------------------------------------------------------
-
 describe("POST /api/lorebooks — creates templates", () => {
   test("created lorebook is a template", async () => {
     const res = await jsonPost("/api/lorebooks", { slug: "new-tpl-test", name: "New Tpl Test" });
     expect(res.status).toBe(200);
 
-    // Should appear in the templates list
     const lbRes = await api("/api/lorebooks");
     const lbData = await lbRes.json();
     expect(lbData.templates.some((t: { name: string }) => t.name === "New Tpl Test")).toBe(true);
   });
 });
-
-// ---------------------------------------------------------------------------
-// DELETE /api/lorebooks — preset guard
-// ---------------------------------------------------------------------------
 
 describe("DELETE /api/lorebooks — preset guard", () => {
   test("can delete user-created lorebooks", async () => {
@@ -165,10 +114,6 @@ describe("DELETE /api/lorebooks — preset guard", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Adventure picker — Save as Template button
-// ---------------------------------------------------------------------------
-
 describe("adventure picker — adventures have metadata", () => {
   beforeEach(cleanChats);
 
@@ -185,15 +130,10 @@ describe("adventure picker — adventures have metadata", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Startup migration — orphan lorebooks become templates
-// ---------------------------------------------------------------------------
-
 describe("preset lorebooks visible at startup", () => {
   test("default lorebook is available as a preset template", async () => {
     const lbRes = await api("/api/lorebooks");
     const lbData = await lbRes.json();
-    // "default" should appear as a template (from presets)
-    expect(lbData.templates.some((t: { name: string }) => t.name === "Default Lorebook")).toBe(true);
+    expect(lbData.templates.some((t: { name: string }) => t.name === "The Rusty Flagon")).toBe(true);
   });
 });
