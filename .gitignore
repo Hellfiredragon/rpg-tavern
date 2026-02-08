@@ -1,6 +1,10 @@
 # Built frontend served by backend
 backend/static/
 
+# Runtime data storage
+data/
+data-tests/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

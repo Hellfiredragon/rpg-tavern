@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="50a9b81e-9d74-4479-8c61-31a066ebb53e" name="Changes" comment="feat(core): new project setup with python backend">
+    <list default="true" id="50a9b81e-9d74-4479-8c61-31a066ebb53e" name="Changes" comment="feat(config): centralize host/port settings in .env for backend and frontend">
       <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CLAUDE.md" beforeDir="false" afterPath="$PROJECT_DIR$/CLAUDE.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/vite.config.ts" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/vite.config.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/routes.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/routes.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/App.css" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/App.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/App.tsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/pyproject.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/uv.lock" beforeDir="false" afterPath="$PROJECT_DIR$/uv.lock" afterDir="false" />
@@ -116,7 +119,7 @@
       <workItem from="1770214646871" duration="4124000" />
       <workItem from="1770325907705" duration="1367000" />
       <workItem from="1770363099830" duration="4904000" />
-      <workItem from="1770548586643" duration="2560000" />
+      <workItem from="1770548586643" duration="3511000" />
     </task>
     <task id="LOCAL-00001" summary="feat(pipeline): abort/cancel generation + error handling with classified LLM errors">
       <option name="closed" value="true" />
@@ -150,7 +153,15 @@
       <option name="project" value="LOCAL" />
       <updated>1770550960951</updated>
     </task>
-    <option name="localTasksCounter" value="5" />
+    <task id="LOCAL-00005" summary="feat(config): centralize host/port settings in .env for backend and frontend">
+      <option name="closed" value="true" />
+      <created>1770551984226</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1770551984226</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -161,9 +172,10 @@
     <MESSAGE value="feat(settings): remove legacy LLM section, adventure-scoped settings URL, character dialog partners, pipeline descriptions" />
     <MESSAGE value="test: fix failures, clean up tests, add events/settings/backends coverage" />
     <MESSAGE value="feat(core): new project setup with python backend" />
-    <option name="LAST_COMMIT_MESSAGE" value="feat(core): new project setup with python backend" />
+    <MESSAGE value="feat(config): centralize host/port settings in .env for backend and frontend" />
+    <option name="LAST_COMMIT_MESSAGE" value="feat(config): centralize host/port settings in .env for backend and frontend" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/rpg_tavern$main.coverage" NAME="main Coverage Results" MODIFIED="1770550659153" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/rpg_tavern$main.coverage" NAME="main Coverage Results" MODIFIED="1770551954240" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>
