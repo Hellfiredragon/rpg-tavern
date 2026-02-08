@@ -2,7 +2,6 @@
 
 import argparse
 import os
-import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -41,17 +40,6 @@ def main():
 
     procs: list[subprocess.Popen] = []
 
-    def shutdown(*_):
-        print("\nShutting down...")
-        for p in procs:
-            p.terminate()
-        for p in procs:
-            p.wait()
-        sys.exit(0)
-
-    signal.signal(signal.SIGINT, shutdown)
-    signal.signal(signal.SIGTERM, shutdown)
-
     print(f"Starting backend on http://localhost:{BACKEND_PORT} ...")
     procs.append(subprocess.Popen(
         ["uv", "run", "uvicorn", "backend.app:app", "--reload", "--host", HOST, "--port", BACKEND_PORT],
@@ -64,8 +52,15 @@ def main():
         cwd=ROOT / "frontend", env=env,
     ))
 
-    for p in procs:
-        p.wait()
+    try:
+        for p in procs:
+            p.wait()
+    except KeyboardInterrupt:
+        print("\nShutting down...")
+        for p in procs:
+            if p.poll() is None:
+                p.terminate()
+                p.wait()
 
 
 if __name__ == "__main__":
