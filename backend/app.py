@@ -3,6 +3,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.routes import router
@@ -22,7 +23,13 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
     app.include_router(router, prefix="/api")
 
     if STATIC_DIR.exists() and not os.getenv("VITE_DEV", ""):
-        app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
+        # Serve static assets (JS, CSS, etc.)
+        app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
+
+        # SPA fallback: all non-API routes serve index.html
+        @app.get("/{path:path}")
+        async def spa_fallback(path: str):
+            return FileResponse(STATIC_DIR / "index.html")
 
     return app
 
