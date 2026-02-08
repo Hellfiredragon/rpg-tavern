@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './EmbarkDialog.css'
 
 interface EmbarkDialogProps {
@@ -11,6 +11,7 @@ interface EmbarkDialogProps {
 export default function EmbarkDialog({ templateSlug, templateTitle, onEmbark, onCancel }: EmbarkDialogProps) {
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(true)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const fetchName = async () => {
     setLoading(true)
@@ -21,6 +22,13 @@ export default function EmbarkDialog({ templateSlug, templateTitle, onEmbark, on
   }
 
   useEffect(() => { fetchName() }, [templateSlug])
+
+  useEffect(() => {
+    if (!loading && inputRef.current) {
+      inputRef.current.focus()
+      inputRef.current.select()
+    }
+  }, [loading])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -35,12 +43,12 @@ export default function EmbarkDialog({ templateSlug, templateTitle, onEmbark, on
           <label className="embark-label">Adventure name</label>
           <div className="embark-input-row">
             <input
+              ref={inputRef}
               type="text"
               className="embark-input"
               value={name}
               onChange={e => setName(e.target.value)}
               disabled={loading}
-              autoFocus
             />
             <button
               type="button"
