@@ -1,10 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="50a9b81e-9d74-4479-8c61-31a066ebb53e" name="Changes" comment="feat(adventures): add template/running variants with tab navigation">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/CLAUDE.md" beforeDir="false" afterPath="$PROJECT_DIR$/CLAUDE.md" afterDir="false" />
-    </list>
+    <list default="true" id="50a9b81e-9d74-4479-8c61-31a066ebb53e" name="Changes" comment="feat(adventures): add template/running variants with tab navigation" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -110,7 +107,7 @@
       <workItem from="1770214646871" duration="4124000" />
       <workItem from="1770325907705" duration="1367000" />
       <workItem from="1770363099830" duration="4904000" />
-      <workItem from="1770548586643" duration="5864000" />
+      <workItem from="1770548586643" duration="6691000" />
     </task>
     <task id="LOCAL-00001" summary="feat(pipeline): abort/cancel generation + error handling with classified LLM errors">
       <option name="closed" value="true" />
