@@ -26,7 +26,6 @@ export default function EmbarkDialog({ templateSlug, templateTitle, onEmbark, on
   useEffect(() => {
     if (!loading && inputRef.current) {
       inputRef.current.focus()
-      inputRef.current.select()
     }
   }, [loading])
 
