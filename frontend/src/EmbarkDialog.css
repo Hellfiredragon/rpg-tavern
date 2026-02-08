@@ -1,0 +1,49 @@
+/* ── Embark Dialog ────────────────────────────────────────── */
+
+.embark-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.embark-dialog {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 2rem;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.embark-dialog-title {
+  font-size: 1.3rem;
+  margin-bottom: 1.25rem;
+}
+
+.embark-label {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 0.4rem;
+}
+
+.embark-input-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.embark-input {
+  flex: 1;
+}
+
+.embark-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}

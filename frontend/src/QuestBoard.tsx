@@ -1,38 +1,52 @@
 import { useEffect, useState } from 'react'
+import EmbarkDialog from './EmbarkDialog'
 import './QuestBoard.css'
+
+export interface Template {
+  title: string
+  slug: string
+  description: string
+  source: 'preset' | 'user'
+}
 
 export interface Adventure {
   title: string
   slug: string
   description: string
-  variant: 'template' | 'running'
-  template_path?: string
+  template_slug?: string
   created_at: string
 }
 
 interface QuestBoardProps {
-  onSelect: (slug: string) => void
+  onSelectTemplate: (slug: string) => void
+  onSelectAdventure: (slug: string) => void
 }
 
-export default function QuestBoard({ onSelect }: QuestBoardProps) {
+export default function QuestBoard({ onSelectTemplate, onSelectAdventure }: QuestBoardProps) {
+  const [templates, setTemplates] = useState<Template[]>([])
   const [adventures, setAdventures] = useState<Adventure[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const [embarkSlug, setEmbarkSlug] = useState<string | null>(null)
 
-  const fetchAdventures = async () => {
-    const res = await fetch('/api/adventures')
-    setAdventures(await res.json())
+  const fetchData = async () => {
+    const [tmplRes, advRes] = await Promise.all([
+      fetch('/api/templates'),
+      fetch('/api/adventures'),
+    ])
+    setTemplates(await tmplRes.json())
+    setAdventures(await advRes.json())
     setLoading(false)
   }
 
-  useEffect(() => { fetchAdventures() }, [])
+  useEffect(() => { fetchData() }, [])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!title.trim()) return
-    await fetch('/api/adventures', {
+    await fetch('/api/templates', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: title.trim(), description: description.trim() }),
@@ -40,23 +54,34 @@ export default function QuestBoard({ onSelect }: QuestBoardProps) {
     setTitle('')
     setDescription('')
     setShowCreate(false)
-    fetchAdventures()
+    fetchData()
   }
 
-  const handleDelete = async (slug: string) => {
+  const handleDeleteTemplate = async (slug: string) => {
+    await fetch(`/api/templates/${slug}`, { method: 'DELETE' })
+    fetchData()
+  }
+
+  const handleDeleteAdventure = async (slug: string) => {
     await fetch(`/api/adventures/${slug}`, { method: 'DELETE' })
-    fetchAdventures()
+    fetchData()
   }
 
-  const handleEmbark = async (slug: string) => {
-    const res = await fetch(`/api/adventures/${slug}/embark`, { method: 'POST' })
-    const running: Adventure = await res.json()
-    fetchAdventures()
-    onSelect(running.slug)
+  const handleEmbark = async (slug: string, adventureTitle: string) => {
+    const res = await fetch(`/api/templates/${slug}/embark`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: adventureTitle }),
+    })
+    const adventure: Adventure = await res.json()
+    setEmbarkSlug(null)
+    fetchData()
+    onSelectAdventure(adventure.slug)
   }
 
-  const templates = adventures.filter(a => a.variant === 'template')
-  const running = adventures.filter(a => a.variant === 'running')
+  const embarkTemplate = embarkSlug
+    ? templates.find(t => t.slug === embarkSlug) ?? null
+    : null
 
   if (loading) {
     return <p className="loading-text">Unrolling the quest board...</p>
@@ -71,7 +96,7 @@ export default function QuestBoard({ onSelect }: QuestBoardProps) {
         </div>
         {!showCreate && (
           <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-            New Adventure
+            New Template
           </button>
         )}
       </div>
@@ -84,7 +109,7 @@ export default function QuestBoard({ onSelect }: QuestBoardProps) {
             <h3 className="form-title">Scribe a New Tale</h3>
             <input
               type="text"
-              placeholder="Name your adventure..."
+              placeholder="Name your template..."
               value={title}
               onChange={e => setTitle(e.target.value)}
               autoFocus
@@ -106,11 +131,11 @@ export default function QuestBoard({ onSelect }: QuestBoardProps) {
         </>
       )}
 
-      {running.length > 0 && (
+      {adventures.length > 0 && (
         <>
           <h3 className="section-title">Running Adventures</h3>
           <div className="adventure-list">
-            {running.map(adv => (
+            {adventures.map(adv => (
               <article key={adv.slug} className="adventure-card adventure-card--running">
                 <div className="adventure-card-body">
                   <h3 className="adventure-name">{adv.title}</h3>
@@ -119,10 +144,10 @@ export default function QuestBoard({ onSelect }: QuestBoardProps) {
                   )}
                 </div>
                 <div className="adventure-actions">
-                  <button className="btn btn-primary" onClick={() => onSelect(adv.slug)}>
+                  <button className="btn btn-primary" onClick={() => onSelectAdventure(adv.slug)}>
                     Continue
                   </button>
-                  <button className="btn btn-danger" onClick={() => handleDelete(adv.slug)}>
+                  <button className="btn btn-danger" onClick={() => handleDeleteAdventure(adv.slug)}>
                     Discard
                   </button>
                 </div>
@@ -135,22 +160,22 @@ export default function QuestBoard({ onSelect }: QuestBoardProps) {
 
       <h3 className="section-title">Templates</h3>
       <div className="adventure-list">
-        {templates.map(adv => (
-          <article key={adv.slug} className="adventure-card">
+        {templates.map(tmpl => (
+          <article key={tmpl.slug} className="adventure-card">
             <div className="adventure-card-body">
-              <h3 className="adventure-name">{adv.title}</h3>
-              {adv.description && (
-                <p className="adventure-desc">{adv.description}</p>
+              <h3 className="adventure-name">{tmpl.title}</h3>
+              {tmpl.description && (
+                <p className="adventure-desc">{tmpl.description}</p>
               )}
             </div>
             <div className="adventure-actions">
-              <button className="btn btn-primary" onClick={() => handleEmbark(adv.slug)}>
+              <button className="btn btn-primary" onClick={() => setEmbarkSlug(tmpl.slug)}>
                 Embark
               </button>
-              <button className="btn btn-ghost" onClick={() => onSelect(adv.slug)}>
+              <button className="btn btn-ghost" onClick={() => onSelectTemplate(tmpl.slug)}>
                 Edit
               </button>
-              <button className="btn btn-danger" onClick={() => handleDelete(adv.slug)}>
+              <button className="btn btn-danger" onClick={() => handleDeleteTemplate(tmpl.slug)}>
                 Discard
               </button>
             </div>
@@ -164,6 +189,15 @@ export default function QuestBoard({ onSelect }: QuestBoardProps) {
           </div>
         )}
       </div>
+
+      {embarkTemplate && (
+        <EmbarkDialog
+          templateSlug={embarkTemplate.slug}
+          templateTitle={embarkTemplate.title}
+          onEmbark={(adventureTitle) => handleEmbark(embarkTemplate.slug, adventureTitle)}
+          onCancel={() => setEmbarkSlug(null)}
+        />
+      )}
     </section>
   )
 }

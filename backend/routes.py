@@ -6,15 +6,18 @@ from backend import storage
 router = APIRouter()
 
 
-class CreateAdventure(BaseModel):
+class CreateTemplate(BaseModel):
     title: str
     description: str = ""
 
 
-class UpdateAdventure(BaseModel):
+class UpdateTemplate(BaseModel):
     title: str | None = None
     description: str | None = None
-    variant: str | None = None
+
+
+class EmbarkBody(BaseModel):
+    title: str
 
 
 @router.get("/health")
@@ -22,17 +25,63 @@ async def health():
     return {"status": "ok"}
 
 
+# ── Templates ─────────────────────────────────────────────
+
+
+@router.get("/templates")
+async def list_templates():
+    return storage.list_templates()
+
+
+@router.post("/templates", status_code=201)
+async def create_template(body: CreateTemplate):
+    try:
+        return storage.create_template(body.title, body.description)
+    except FileExistsError as e:
+        raise HTTPException(409, str(e))
+
+
+@router.get("/templates/{slug}")
+async def get_template(slug: str):
+    template = storage.get_template(slug)
+    if not template:
+        raise HTTPException(404, "Template not found")
+    return template
+
+
+@router.patch("/templates/{slug}")
+async def update_template(slug: str, body: UpdateTemplate):
+    fields = body.model_dump(exclude_none=True)
+    try:
+        updated = storage.update_template(slug, fields)
+    except FileExistsError as e:
+        raise HTTPException(409, str(e))
+    if not updated:
+        raise HTTPException(404, "Template not found")
+    return updated
+
+
+@router.delete("/templates/{slug}")
+async def delete_template(slug: str):
+    if not storage.delete_template(slug):
+        raise HTTPException(404, "Template not found")
+    return {"ok": True}
+
+
+@router.post("/templates/{slug}/embark", status_code=201)
+async def embark_template(slug: str, body: EmbarkBody):
+    adventure = storage.embark_template(slug, body.title)
+    if not adventure:
+        raise HTTPException(404, "Template not found")
+    return adventure
+
+
+# ── Adventures ────────────────────────────────────────────
+
+
 @router.get("/adventures")
 async def list_adventures():
     return storage.list_adventures()
-
-
-@router.post("/adventures", status_code=201)
-async def create_adventure(body: CreateAdventure):
-    try:
-        return storage.create_adventure(body.title, body.description)
-    except FileExistsError as e:
-        raise HTTPException(409, str(e))
 
 
 @router.get("/adventures/{slug}")
@@ -43,28 +92,16 @@ async def get_adventure(slug: str):
     return adventure
 
 
-@router.patch("/adventures/{slug}")
-async def update_adventure(slug: str, body: UpdateAdventure):
-    fields = body.model_dump(exclude_none=True)
-    try:
-        updated = storage.update_adventure(slug, fields)
-    except FileExistsError as e:
-        raise HTTPException(409, str(e))
-    if not updated:
-        raise HTTPException(404, "Adventure not found")
-    return updated
-
-
-@router.post("/adventures/{slug}/embark", status_code=201)
-async def embark_adventure(slug: str):
-    running = storage.embark_adventure(slug)
-    if not running:
-        raise HTTPException(404, "Adventure not found")
-    return running
-
-
 @router.delete("/adventures/{slug}")
 async def delete_adventure(slug: str):
     if not storage.delete_adventure(slug):
         raise HTTPException(404, "Adventure not found")
     return {"ok": True}
+
+
+# ── Utility ───────────────────────────────────────────────
+
+
+@router.get("/name-suggestion")
+async def name_suggestion(title: str):
+    return {"name": storage.generate_adventure_name(title)}

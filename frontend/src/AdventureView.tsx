@@ -1,28 +1,35 @@
 import { useEffect, useState } from 'react'
-import type { Adventure } from './QuestBoard'
 import './AdventureView.css'
 
 interface AdventureViewProps {
   slug: string
+  kind: 'template' | 'adventure'
+}
+
+interface ItemData {
+  title: string
+  slug: string
+  description: string
 }
 
 type Tab = 'chat' | 'world' | 'settings'
 
-export default function AdventureView({ slug }: AdventureViewProps) {
-  const [adventure, setAdventure] = useState<Adventure | null>(null)
+export default function AdventureView({ slug, kind }: AdventureViewProps) {
+  const [data, setData] = useState<ItemData | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('chat')
 
   useEffect(() => {
-    fetch(`/api/adventures/${slug}`)
+    const apiBase = kind === 'template' ? '/api/templates' : '/api/adventures'
+    fetch(`${apiBase}/${slug}`)
       .then(res => res.json())
-      .then(setAdventure)
-  }, [slug])
+      .then(setData)
+  }, [slug, kind])
 
-  if (!adventure) {
-    return <p className="loading-text">Loading adventure...</p>
+  if (!data) {
+    return <p className="loading-text">Loading...</p>
   }
 
-  const isTemplate = adventure.variant === 'template'
+  const isTemplate = kind === 'template'
   const chatLabel = isTemplate ? 'Test' : 'Chat'
 
   const tabs: { key: Tab; label: string }[] = [
@@ -49,20 +56,20 @@ export default function AdventureView({ slug }: AdventureViewProps) {
         {activeTab === 'chat' && (
           <div className="tab-placeholder">
             {isTemplate ? (
-              <p>Test chat for <strong>{adventure.title}</strong>. Messages here won't be saved.</p>
+              <p>Test chat for <strong>{data.title}</strong>. Messages here won't be saved.</p>
             ) : (
-              <p>Live chat for <strong>{adventure.title}</strong>. (Coming soon)</p>
+              <p>Live chat for <strong>{data.title}</strong>. (Coming soon)</p>
             )}
           </div>
         )}
         {activeTab === 'world' && (
           <div className="tab-placeholder">
-            <p>World settings for <strong>{adventure.title}</strong>. (Coming soon)</p>
+            <p>World settings for <strong>{data.title}</strong>. (Coming soon)</p>
           </div>
         )}
         {activeTab === 'settings' && (
           <div className="tab-placeholder">
-            <p>Adventure settings for <strong>{adventure.title}</strong>. (Coming soon)</p>
+            <p>Adventure settings for <strong>{data.title}</strong>. (Coming soon)</p>
           </div>
         )}
       </div>

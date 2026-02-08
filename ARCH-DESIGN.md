@@ -26,42 +26,84 @@ Title → slug conversion: Unicode normalized, non-ASCII stripped, lowercased, n
 
 Objects are referenced by their **path** from the data root — not by IDs or UUIDs.
 
-Example path: `adventures/the-cursed-tavern`
+Example path: `templates/the-cursed-tavern`
 
 ### Title Collision
 
 Two objects cannot have slugs that collide within the same parent folder. Creation fails if the slug already exists at that level.
 
-### Example Tree
+## Directory Split
+
+Templates and running adventures live in separate directories:
 
 ```
 data/
-  adventures/                        # Child folder of root
-    the-cursed-tavern.json           # Adventure object data
-    the-cursed-tavern/               # Children of this adventure
+  templates/                       # User-created templates
     dragons-hollow.json
     dragons-hollow/
-    the-lost-caravan.json
-    the-lost-caravan/
+  adventures/                      # Running adventures
+    day-of-the-crimson-moon-the-cursed-tavern.json
+    day-of-the-crimson-moon-the-cursed-tavern/
 ```
 
-## Adventure
+## Presets (copy-on-write)
 
-An adventure is an object under `adventures/`.
+Built-in content lives in `presets/` (committed to git). At runtime, preset templates are merged with user templates — user data wins on slug collision.
+
+```
+presets/
+  templates/
+    the-cursed-tavern.json         # Built-in preset template
+    the-cursed-tavern/
+  adventure-names.txt              # Name generation word lists
+```
+
+**Read behavior:** `list_templates()` and `get_template()` merge preset + user data. Presets have `source: "preset"`, user templates have `source: "user"`.
+
+**Write behavior (copy-on-write):** When a preset template is updated, it is first copied to `data/templates/` before applying changes. The preset file is never modified.
+
+**Delete behavior:** Deleting a user override reveals the preset underneath. Preset templates cannot be deleted (only overridden).
+
+## Template
+
+A template is an object under `templates/` (either `data/templates/` or `presets/templates/`).
 
 ### Fields
 
 | Field | Type | Description |
 |---|---|---|
 | `title` | string | Display name |
+| `slug` | string | Filesystem slug |
 | `description` | string | Adventure premise |
-| `variant` | `"template"` \| `"running"` | Template (editing) or running (active play) |
-| `template_path` | string? | Running only — path to source template (e.g., `adventures/the-cursed-tavern`) |
+| `source` | `"preset"` \| `"user"` | In-memory only — not stored on disk |
+| `created_at` | string | ISO 8601 timestamp (user templates only) |
+
+## Adventure
+
+A running adventure is an object under `data/adventures/`.
+
+### Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `title` | string | User-chosen adventure name |
+| `slug` | string | Filesystem slug |
+| `description` | string | Copied from template |
+| `template_slug` | string | Slug of source template |
 | `created_at` | string | ISO 8601 timestamp |
 
-### Variants
+### Embarking
 
-- **Template** (default) — for editing; test chat won't save
-- **Running** — active play with persistent chat; created via "Embark" from a template
+Embarking creates a running adventure from a template. The user picks a name (with a random suggestion like "Day of the Crimson Moon: The Cursed Tavern"). If the adventure slug collides, a numeric suffix is appended (`my-adventure-2`, `-3`, etc.).
 
-Embarking copies the template into a new running adventure. If the slug collides with an existing object, a numeric suffix is appended (`the-cursed-tavern-2`, `-3`, etc.).
+### Name Generation
+
+`adventure-names.txt` has two `#`-headed sections: "Periods" and "Epithets". Generated name format: `"{period} the {epithet}: {template_title}"`.
+
+## URL Routes
+
+| Route | View |
+|---|---|
+| `/` | Quest board |
+| `/templates/<slug>` | Edit a template |
+| `/adventures/<slug>` | View a running adventure |
