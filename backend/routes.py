@@ -7,12 +7,12 @@ router = APIRouter()
 
 
 class CreateAdventure(BaseModel):
-    name: str
+    title: str
     description: str = ""
 
 
 class UpdateAdventure(BaseModel):
-    name: str | None = None
+    title: str | None = None
     description: str | None = None
     variant: str | None = None
 
@@ -29,36 +29,42 @@ async def list_adventures():
 
 @router.post("/adventures", status_code=201)
 async def create_adventure(body: CreateAdventure):
-    return storage.create_adventure(body.name, body.description)
+    try:
+        return storage.create_adventure(body.title, body.description)
+    except FileExistsError as e:
+        raise HTTPException(409, str(e))
 
 
-@router.get("/adventures/{adventure_id}")
-async def get_adventure(adventure_id: str):
-    adventure = storage.get_adventure(adventure_id)
+@router.get("/adventures/{slug}")
+async def get_adventure(slug: str):
+    adventure = storage.get_adventure(slug)
     if not adventure:
         raise HTTPException(404, "Adventure not found")
     return adventure
 
 
-@router.patch("/adventures/{adventure_id}")
-async def update_adventure(adventure_id: str, body: UpdateAdventure):
+@router.patch("/adventures/{slug}")
+async def update_adventure(slug: str, body: UpdateAdventure):
     fields = body.model_dump(exclude_none=True)
-    updated = storage.update_adventure(adventure_id, fields)
+    try:
+        updated = storage.update_adventure(slug, fields)
+    except FileExistsError as e:
+        raise HTTPException(409, str(e))
     if not updated:
         raise HTTPException(404, "Adventure not found")
     return updated
 
 
-@router.post("/adventures/{adventure_id}/embark", status_code=201)
-async def embark_adventure(adventure_id: str):
-    running = storage.embark_adventure(adventure_id)
+@router.post("/adventures/{slug}/embark", status_code=201)
+async def embark_adventure(slug: str):
+    running = storage.embark_adventure(slug)
     if not running:
         raise HTTPException(404, "Adventure not found")
     return running
 
 
-@router.delete("/adventures/{adventure_id}")
-async def delete_adventure(adventure_id: str):
-    if not storage.delete_adventure(adventure_id):
+@router.delete("/adventures/{slug}")
+async def delete_adventure(slug: str):
+    if not storage.delete_adventure(slug):
         raise HTTPException(404, "Adventure not found")
     return {"ok": True}

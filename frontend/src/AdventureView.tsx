@@ -3,20 +3,20 @@ import type { Adventure } from './QuestBoard'
 import './AdventureView.css'
 
 interface AdventureViewProps {
-  adventureId: string
+  slug: string
 }
 
 type Tab = 'chat' | 'world' | 'settings'
 
-export default function AdventureView({ adventureId }: AdventureViewProps) {
+export default function AdventureView({ slug }: AdventureViewProps) {
   const [adventure, setAdventure] = useState<Adventure | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('chat')
 
   useEffect(() => {
-    fetch(`/api/adventures/${adventureId}`)
+    fetch(`/api/adventures/${slug}`)
       .then(res => res.json())
       .then(setAdventure)
-  }, [adventureId])
+  }, [slug])
 
   if (!adventure) {
     return <p className="loading-text">Loading adventure...</p>
@@ -49,20 +49,20 @@ export default function AdventureView({ adventureId }: AdventureViewProps) {
         {activeTab === 'chat' && (
           <div className="tab-placeholder">
             {isTemplate ? (
-              <p>Test chat for <strong>{adventure.name}</strong>. Messages here won't be saved.</p>
+              <p>Test chat for <strong>{adventure.title}</strong>. Messages here won't be saved.</p>
             ) : (
-              <p>Live chat for <strong>{adventure.name}</strong>. (Coming soon)</p>
+              <p>Live chat for <strong>{adventure.title}</strong>. (Coming soon)</p>
             )}
           </div>
         )}
         {activeTab === 'world' && (
           <div className="tab-placeholder">
-            <p>World settings for <strong>{adventure.name}</strong>. (Coming soon)</p>
+            <p>World settings for <strong>{adventure.title}</strong>. (Coming soon)</p>
           </div>
         )}
         {activeTab === 'settings' && (
           <div className="tab-placeholder">
-            <p>Adventure settings for <strong>{adventure.name}</strong>. (Coming soon)</p>
+            <p>Adventure settings for <strong>{adventure.title}</strong>. (Coming soon)</p>
           </div>
         )}
       </div>

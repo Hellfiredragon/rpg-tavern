@@ -6,27 +6,27 @@ import AdventureView from './AdventureView'
 import './App.css'
 
 function App() {
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [adventureName, setAdventureName] = useState<string | null>(null)
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
+  const [adventureTitle, setAdventureTitle] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!selectedId) {
-      setAdventureName(null)
+    if (!selectedSlug) {
+      setAdventureTitle(null)
       return
     }
-    fetch(`/api/adventures/${selectedId}`)
+    fetch(`/api/adventures/${selectedSlug}`)
       .then(res => res.json())
-      .then((adv: Adventure) => setAdventureName(adv.name))
-  }, [selectedId])
+      .then((adv: Adventure) => setAdventureTitle(adv.title))
+  }, [selectedSlug])
 
   return (
     <Layout
-      adventureName={adventureName}
-      onBack={selectedId ? () => setSelectedId(null) : undefined}
+      adventureName={adventureTitle}
+      onBack={selectedSlug ? () => setSelectedSlug(null) : undefined}
     >
-      {selectedId
-        ? <AdventureView adventureId={selectedId} />
-        : <QuestBoard onSelect={setSelectedId} />
+      {selectedSlug
+        ? <AdventureView slug={selectedSlug} />
+        : <QuestBoard onSelect={setSelectedSlug} />
       }
     </Layout>
   )
