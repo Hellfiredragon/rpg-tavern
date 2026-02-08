@@ -41,18 +41,51 @@ def get_adventure(adventure_id: str) -> dict[str, Any] | None:
     return json.loads(meta.read_text())
 
 
-def create_adventure(name: str, description: str = "") -> dict[str, Any]:
+def create_adventure(
+    name: str, description: str = "", variant: str = "template"
+) -> dict[str, Any]:
     adventure_id = uuid.uuid4().hex[:12]
     adventure = {
         "id": adventure_id,
         "name": name,
         "description": description,
+        "variant": variant,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     folder = adventures_dir() / adventure_id
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "adventure.json").write_text(json.dumps(adventure, indent=2))
     return adventure
+
+
+def update_adventure(adventure_id: str, fields: dict[str, Any]) -> dict[str, Any] | None:
+    adventure = get_adventure(adventure_id)
+    if adventure is None:
+        return None
+    allowed = {"name", "description", "variant"}
+    for key, value in fields.items():
+        if key in allowed:
+            adventure[key] = value
+    folder = adventures_dir() / adventure_id
+    (folder / "adventure.json").write_text(json.dumps(adventure, indent=2))
+    return adventure
+
+
+def embark_adventure(adventure_id: str) -> dict[str, Any] | None:
+    """Copy a template adventure into a new running adventure."""
+    template = get_adventure(adventure_id)
+    if template is None:
+        return None
+    running = create_adventure(
+        name=template["name"],
+        description=template["description"],
+        variant="running",
+    )
+    # Back-reference to the original template
+    running["template_id"] = template["id"]
+    folder = adventures_dir() / running["id"]
+    (folder / "adventure.json").write_text(json.dumps(running, indent=2))
+    return running
 
 
 def delete_adventure(adventure_id: str) -> bool:

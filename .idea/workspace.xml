@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="50a9b81e-9d74-4479-8c61-31a066ebb53e" name="Changes" comment="feat(views): scope view data to parent ancestry via ancestor_id filter">
+    <list default="true" id="50a9b81e-9d74-4479-8c61-31a066ebb53e" name="Changes" comment="feat(ui): dark fantasy layout with quest board adventure picker">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/routes.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/routes.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/storage.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/storage.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/frontend/src/App.css" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/App.css" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/frontend/src/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/App.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/index.css" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/index.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/Layout.css" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/Layout.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/Layout.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/Layout.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_storage.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_storage.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -113,7 +116,7 @@
       <workItem from="1770214646871" duration="4124000" />
       <workItem from="1770325907705" duration="1367000" />
       <workItem from="1770363099830" duration="4904000" />
-      <workItem from="1770548586643" duration="4198000" />
+      <workItem from="1770548586643" duration="4881000" />
     </task>
     <task id="LOCAL-00001" summary="feat(pipeline): abort/cancel generation + error handling with classified LLM errors">
       <option name="closed" value="true" />
@@ -171,7 +174,15 @@
       <option name="project" value="LOCAL" />
       <updated>1770553175134</updated>
     </task>
-    <option name="localTasksCounter" value="8" />
+    <task id="LOCAL-00008" summary="feat(ui): dark fantasy layout with quest board adventure picker">
+      <option name="closed" value="true" />
+      <created>1770553638488</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1770553638488</updated>
+    </task>
+    <option name="localTasksCounter" value="9" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -184,7 +195,8 @@
     <MESSAGE value="feat(core): new project setup with python backend" />
     <MESSAGE value="feat(config): centralize host/port settings in .env for backend and frontend" />
     <MESSAGE value="feat(views): scope view data to parent ancestry via ancestor_id filter" />
-    <option name="LAST_COMMIT_MESSAGE" value="feat(views): scope view data to parent ancestry via ancestor_id filter" />
+    <MESSAGE value="feat(ui): dark fantasy layout with quest board adventure picker" />
+    <option name="LAST_COMMIT_MESSAGE" value="feat(ui): dark fantasy layout with quest board adventure picker" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/rpg_tavern$main.coverage" NAME="main Coverage Results" MODIFIED="1770553200869" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />

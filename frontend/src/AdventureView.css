@@ -1,0 +1,49 @@
+/* ── Tab Bar ──────────────────────────────────────────────── */
+
+.adventure-view {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab-btn {
+  padding: 0.7rem 1.4rem;
+  font-size: 0.95rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.tab-btn:hover {
+  color: var(--text);
+}
+
+.tab-btn--active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ── Tab Content ─────────────────────────────────────────── */
+
+.tab-content {
+  padding: 2rem 0;
+}
+
+.tab-placeholder {
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 3rem 1rem;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  background: var(--bg-surface);
+}

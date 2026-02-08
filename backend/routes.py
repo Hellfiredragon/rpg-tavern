@@ -11,6 +11,12 @@ class CreateAdventure(BaseModel):
     description: str = ""
 
 
+class UpdateAdventure(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    variant: str | None = None
+
+
 @router.get("/health")
 async def health():
     return {"status": "ok"}
@@ -32,6 +38,23 @@ async def get_adventure(adventure_id: str):
     if not adventure:
         raise HTTPException(404, "Adventure not found")
     return adventure
+
+
+@router.patch("/adventures/{adventure_id}")
+async def update_adventure(adventure_id: str, body: UpdateAdventure):
+    fields = body.model_dump(exclude_none=True)
+    updated = storage.update_adventure(adventure_id, fields)
+    if not updated:
+        raise HTTPException(404, "Adventure not found")
+    return updated
+
+
+@router.post("/adventures/{adventure_id}/embark", status_code=201)
+async def embark_adventure(adventure_id: str):
+    running = storage.embark_adventure(adventure_id)
+    if not running:
+        raise HTTPException(404, "Adventure not found")
+    return running
 
 
 @router.delete("/adventures/{adventure_id}")
