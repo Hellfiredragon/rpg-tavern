@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import Layout from './Layout'
 import './App.css'
 
 interface Adventure {
@@ -42,61 +43,94 @@ function App() {
     fetchAdventures()
   }
 
-  if (loading) return <div className="container"><p>Loading...</p></div>
+  if (loading) {
+    return (
+      <Layout>
+        <p className="loading-text">Unrolling the quest board...</p>
+      </Layout>
+    )
+  }
 
   return (
-    <div className="container">
-      <h1>RPG Tavern</h1>
-      <p className="subtitle">Choose your adventure</p>
-
-      <div className="adventure-list">
-        {adventures.map(adv => (
-          <div key={adv.id} className="adventure-card">
-            <div className="adventure-info">
-              <h2>{adv.name}</h2>
-              {adv.description && <p>{adv.description}</p>}
-            </div>
-            <div className="adventure-actions">
-              <button className="btn-primary" onClick={() => alert(`TODO: Play "${adv.name}"`)}>
-                Play
-              </button>
-              <button className="btn-danger" onClick={() => handleDelete(adv.id)}>
-                Delete
-              </button>
-            </div>
+    <Layout>
+      <section className="quest-board">
+        <div className="quest-board-header">
+          <div>
+            <h2 className="quest-board-title">Quest Board</h2>
+            <p className="quest-board-subtitle">Choose your adventure, traveler</p>
           </div>
-        ))}
-        {adventures.length === 0 && (
-          <p className="empty">No adventures yet. Create one to get started!</p>
+          {!showCreate && (
+            <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+              New Adventure
+            </button>
+          )}
+        </div>
+
+        <hr className="divider" />
+
+        {showCreate && (
+          <>
+            <form className="create-form" onSubmit={handleCreate}>
+              <h3 className="form-title">Scribe a New Tale</h3>
+              <input
+                type="text"
+                placeholder="Name your adventure..."
+                value={name}
+                onChange={e => setName(e.target.value)}
+                autoFocus
+              />
+              <textarea
+                placeholder="Describe the premise... (optional)"
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                rows={3}
+              />
+              <div className="form-actions">
+                <button type="submit" className="btn btn-primary">Create</button>
+                <button type="button" className="btn btn-ghost" onClick={() => setShowCreate(false)}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+            <hr className="divider" />
+          </>
         )}
-      </div>
 
-      {showCreate ? (
-        <form className="create-form" onSubmit={handleCreate}>
-          <input
-            type="text"
-            placeholder="Adventure name"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            autoFocus
-          />
-          <textarea
-            placeholder="Description (optional)"
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            rows={3}
-          />
-          <div className="form-actions">
-            <button type="submit" className="btn-primary">Create</button>
-            <button type="button" onClick={() => setShowCreate(false)}>Cancel</button>
-          </div>
-        </form>
-      ) : (
-        <button className="btn-primary" onClick={() => setShowCreate(true)}>
-          New Adventure
-        </button>
-      )}
-    </div>
+        <div className="adventure-list">
+          {adventures.map(adv => (
+            <article key={adv.id} className="adventure-card">
+              <div className="adventure-card-body">
+                <h3 className="adventure-name">{adv.name}</h3>
+                {adv.description && (
+                  <p className="adventure-desc">{adv.description}</p>
+                )}
+              </div>
+              <div className="adventure-actions">
+                <button
+                  className="btn btn-primary"
+                  onClick={() => alert(`TODO: Play "${adv.name}"`)}
+                >
+                  Embark
+                </button>
+                <button
+                  className="btn btn-danger"
+                  onClick={() => handleDelete(adv.id)}
+                >
+                  Discard
+                </button>
+              </div>
+            </article>
+          ))}
+          {adventures.length === 0 && (
+            <div className="empty-board">
+              <p className="empty-board-text">
+                The quest board stands empty. Perhaps you should pin a new tale upon it.
+              </p>
+            </div>
+          )}
+        </div>
+      </section>
+    </Layout>
   )
 }
 
