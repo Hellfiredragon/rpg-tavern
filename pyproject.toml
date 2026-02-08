@@ -1,0 +1,9 @@
+[project]
+name = "rpg-tavern"
+version = "0.1.0"
+description = "LLM-powered RPG engine where players narrate actions and AI shapes the world"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.128.5",
+    "uvicorn[standard]>=0.40.0",
+]
