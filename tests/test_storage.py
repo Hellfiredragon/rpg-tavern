@@ -245,19 +245,17 @@ def test_update_config_connections():
     """Adding connections replaces the array and persists."""
     conns = [
         {
-            "name": "My OpenAI",
-            "provider_url": "https://api.openai.com/v1",
-            "api_key": "sk-test",
-            "model": "gpt-4o",
-            "completion_mode": "chat",
+            "name": "My KoboldCpp",
+            "provider_url": "http://localhost:5001",
+            "api_key": "",
         }
     ]
     result = storage.update_config({"llm_connections": conns})
     assert len(result["llm_connections"]) == 1
-    assert result["llm_connections"][0]["name"] == "My OpenAI"
+    assert result["llm_connections"][0]["name"] == "My KoboldCpp"
 
     reloaded = storage.get_config()
-    assert reloaded["llm_connections"][0]["model"] == "gpt-4o"
+    assert reloaded["llm_connections"][0]["provider_url"] == "http://localhost:5001"
 
 
 def test_update_config_roles():
@@ -285,11 +283,11 @@ def test_update_config_partial():
 def test_update_config_replaces_connections_array():
     """Sending a new connections array fully replaces the old one."""
     storage.update_config({"llm_connections": [
-        {"name": "A", "provider_url": "", "api_key": "", "model": "", "completion_mode": "chat"},
-        {"name": "B", "provider_url": "", "api_key": "", "model": "", "completion_mode": "chat"},
+        {"name": "A", "provider_url": "", "api_key": ""},
+        {"name": "B", "provider_url": "", "api_key": ""},
     ]})
     storage.update_config({"llm_connections": [
-        {"name": "C", "provider_url": "", "api_key": "", "model": "", "completion_mode": "chat"},
+        {"name": "C", "provider_url": "", "api_key": ""},
     ]})
 
     config = storage.get_config()

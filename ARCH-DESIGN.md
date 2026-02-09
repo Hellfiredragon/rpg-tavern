@@ -127,13 +127,11 @@ App settings are stored in `data/config.json` (not under presets — no merging 
 
 An array of named LLM connection objects. Replaced wholesale on update.
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `name` | string | | Unique display name for this connection |
-| `provider_url` | string | | LLM provider base URL (e.g. `https://api.openai.com/v1`) |
-| `api_key` | string | | API key for the provider |
-| `model` | string | | Model name (e.g. `gpt-4o`) |
-| `completion_mode` | `"chat"` \| `"text"` | `"chat"` | Completion endpoint style |
+| Field | Type | Description |
+|---|---|---|
+| `name` | string | Unique display name for this connection |
+| `provider_url` | string | LLM provider base URL (e.g. `http://localhost:5001`) |
+| `api_key` | string | API key (optional — KoboldCpp doesn't require one) |
 
 ### Story Roles
 
@@ -160,3 +158,23 @@ Empty string means "not assigned".
 - `llm_connections` (array) — replaced wholesale
 - `story_roles` (dict) — merged key-by-key
 - `app_width_percent` (scalar) — overwritten
+
+## Chat
+
+### Endpoint
+
+```
+POST /api/adventures/{slug}/chat
+Body: { "message": "I look around the tavern" }
+Returns: { "reply": "You see a dusty counter..." }
+```
+
+### Flow
+
+1. Load adventure (404 if missing)
+2. Load config → find narrator role's connection name → find matching connection
+3. Build prompt: `"{description}\n\n> {message}\n\n"`
+4. POST to `{provider_url}/api/v1/generate` with `{"prompt": prompt}` (KoboldCpp format)
+5. Return `{"reply": results[0]["text"]}`
+
+No message history storage yet — each request is a single prompt → response.

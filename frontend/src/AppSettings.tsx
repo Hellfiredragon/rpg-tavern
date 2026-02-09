@@ -5,8 +5,6 @@ interface LLMConnection {
   name: string
   provider_url: string
   api_key: string
-  model: string
-  completion_mode: string
 }
 
 interface StoryRoles {
@@ -26,7 +24,7 @@ interface AppSettingsProps {
 }
 
 function newConnection(): LLMConnection {
-  return { name: '', provider_url: '', api_key: '', model: '', completion_mode: 'chat' }
+  return { name: '', provider_url: '', api_key: '' }
 }
 
 export default function AppSettings({ onWidthChange }: AppSettingsProps) {
@@ -185,25 +183,6 @@ export default function AppSettings({ onWidthChange }: AppSettingsProps) {
                 onChange={e => updateConnection(i, 'api_key', e.target.value)}
                 placeholder="sk-..."
               />
-            </div>
-            <div className="settings-field">
-              <label>Model</label>
-              <input
-                type="text"
-                value={conn.model}
-                onChange={e => updateConnection(i, 'model', e.target.value)}
-                placeholder="gpt-4o"
-              />
-            </div>
-            <div className="settings-field">
-              <label>Completion Mode</label>
-              <select
-                value={conn.completion_mode}
-                onChange={e => updateConnection(i, 'completion_mode', e.target.value)}
-              >
-                <option value="chat">Chat</option>
-                <option value="text">Text</option>
-              </select>
             </div>
           </div>
         ))}

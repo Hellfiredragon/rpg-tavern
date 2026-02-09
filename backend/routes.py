@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from backend import storage
+from backend import llm, storage
 
 router = APIRouter()
 
@@ -18,6 +18,10 @@ class UpdateTemplate(BaseModel):
 
 class EmbarkBody(BaseModel):
     title: str
+
+
+class ChatBody(BaseModel):
+    message: str
 
 
 @router.get("/health")
@@ -97,6 +101,30 @@ async def delete_adventure(slug: str):
     if not storage.delete_adventure(slug):
         raise HTTPException(404, "Adventure not found")
     return {"ok": True}
+
+
+@router.post("/adventures/{slug}/chat")
+async def adventure_chat(slug: str, body: ChatBody):
+    adventure = storage.get_adventure(slug)
+    if not adventure:
+        raise HTTPException(404, "Adventure not found")
+
+    config = storage.get_config()
+    narrator_conn_name = config["story_roles"].get("narrator")
+    if not narrator_conn_name:
+        raise HTTPException(400, "Narrator role is not assigned — configure it in Settings")
+
+    connection = None
+    for conn in config["llm_connections"]:
+        if conn["name"] == narrator_conn_name:
+            connection = conn
+            break
+    if not connection:
+        raise HTTPException(400, f"Connection '{narrator_conn_name}' not found")
+
+    prompt = f"{adventure['description']}\n\n> {body.message}\n\n"
+    text = await llm.generate(connection["provider_url"], connection.get("api_key", ""), prompt)
+    return {"reply": text}
 
 
 # ── Utility ───────────────────────────────────────────────

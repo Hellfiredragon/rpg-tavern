@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './AdventureView.css'
 
 interface AdventureViewProps {
@@ -12,11 +12,21 @@ interface ItemData {
   description: string
 }
 
+interface ChatMessage {
+  role: 'user' | 'assistant'
+  text: string
+}
+
 type Tab = 'chat' | 'world' | 'settings'
 
 export default function AdventureView({ slug, kind }: AdventureViewProps) {
   const [data, setData] = useState<ItemData | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('chat')
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const apiBase = kind === 'template' ? '/api/templates' : '/api/adventures'
@@ -24,6 +34,38 @@ export default function AdventureView({ slug, kind }: AdventureViewProps) {
       .then(res => res.json())
       .then(setData)
   }, [slug, kind])
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  async function sendMessage() {
+    const text = input.trim()
+    if (!text || loading) return
+
+    setInput('')
+    setError('')
+    setMessages(prev => [...prev, { role: 'user', text }])
+    setLoading(true)
+
+    try {
+      const res = await fetch(`/api/adventures/${slug}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Request failed' }))
+        throw new Error(err.detail || `Error ${res.status}`)
+      }
+      const data = await res.json()
+      setMessages(prev => [...prev, { role: 'assistant', text: data.reply }])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   if (!data) {
     return <p className="loading-text">Loading...</p>
@@ -54,12 +96,36 @@ export default function AdventureView({ slug, kind }: AdventureViewProps) {
 
       <div className="tab-content">
         {activeTab === 'chat' && (
-          <div className="tab-placeholder">
-            {isTemplate ? (
-              <p>Test chat for <strong>{data.title}</strong>. Messages here won't be saved.</p>
-            ) : (
-              <p>Live chat for <strong>{data.title}</strong>. (Coming soon)</p>
-            )}
+          <div className="chat-container">
+            <div className="chat-messages">
+              {messages.length === 0 && !loading && (
+                <p className="chat-empty">Describe what your character does to begin.</p>
+              )}
+              {messages.map((msg, i) => (
+                <div key={i} className={`chat-msg chat-msg--${msg.role}`}>
+                  {msg.text}
+                </div>
+              ))}
+              {loading && (
+                <div className="chat-msg chat-msg--assistant chat-msg--loading">
+                  <i className="fa-solid fa-ellipsis fa-fade" />
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+            {error && <p className="chat-error">{error}</p>}
+            <form className="chat-input-bar" onSubmit={e => { e.preventDefault(); sendMessage() }}>
+              <input
+                type="text"
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                placeholder="What do you do?"
+                disabled={loading}
+              />
+              <button type="submit" disabled={loading || !input.trim()}>
+                <i className="fa-solid fa-paper-plane" />
+              </button>
+            </form>
           </div>
         )}
         {activeTab === 'world' && (
