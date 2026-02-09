@@ -139,7 +139,7 @@ export default function AppSettings({ onWidthChange }: AppSettingsProps) {
       <div className="settings-field">
         <label>{label}</label>
         <select value={settings!.story_roles[role]} onChange={e => patchRole(role, e.target.value)}>
-          <option value="">Not assigned</option>
+          <option value="">Which LLM connection to assign?</option>
           {connectionNames.map(name => (
             <option key={name} value={name}>{name}</option>
           ))}
