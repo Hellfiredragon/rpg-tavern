@@ -29,4 +29,8 @@ def create_demo_data() -> None:
 
     for tmpl in DEMO_TEMPLATES:
         storage.create_template(tmpl["title"], tmpl["description"])
-    print(f"Created {len(DEMO_TEMPLATES)} demo templates.")
+
+    # Embark a demo adventure so story roles are visible out of the box
+    storage.embark_template("dragons-hollow", "Dragon's Hollow Demo Run")
+
+    print(f"Created {len(DEMO_TEMPLATES)} demo templates + 1 demo adventure.")

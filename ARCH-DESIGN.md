@@ -159,6 +159,72 @@ Empty string means "not assigned".
 - `story_roles` (dict) — merged key-by-key
 - `app_width_percent` (scalar) — overwritten
 
+## Story Roles (per-adventure)
+
+Each adventure has per-role settings stored in `data/adventures/<slug>/story-roles.json`. These configure **when** each role triggers, **where** it acts, and the **Handlebars prompt template** used to build the LLM prompt.
+
+### Storage
+
+```
+data/adventures/<slug>/story-roles.json
+```
+
+Written automatically on embark with default values.
+
+### Model
+
+```json
+{
+  "narrator": {
+    "when": "on_player_message",
+    "where": "chat",
+    "prompt": "{{description}}\n\n{{#each messages}}..."
+  },
+  "character_writer": { "when": "disabled", "where": "chat", "prompt": "" },
+  "extractor": { "when": "disabled", "where": "chat", "prompt": "" }
+}
+```
+
+| Field | Values | Description |
+|---|---|---|
+| `when` | `on_player_message`, `after_narration`, `disabled` | Trigger event |
+| `where` | `chat` | Context (future: `world`) |
+| `prompt` | string | Handlebars template |
+
+### Handlebars Template Variables
+
+| Variable | Type | Available | Description |
+|---|---|---|---|
+| `description` | string | always | Adventure premise |
+| `title` | string | always | Adventure title |
+| `message` | string | always | Current player message |
+| `history` | string | always | Pre-formatted history (`> ` prefix for player lines) |
+| `messages` | array | always | Message objects for `{{#each}}` |
+| `messages.[].role` | string | — | `"player"` or `"narrator"` |
+| `messages.[].text` | string | — | Content |
+| `messages.[].ts` | string | — | ISO timestamp |
+| `messages.[].is_player` | boolean | — | Convenience flag |
+| `messages.[].is_narrator` | boolean | — | Convenience flag |
+| `narration` | string | `after_narration` only | Narrator's response from current turn |
+
+### Chat Pipeline
+
+1. Load adventure, global config, per-adventure story roles, message history
+2. Store player message
+3. **Phase 1** — run roles with `when: "on_player_message"` in order: narrator → character_writer → extractor
+4. **Phase 2** — run roles with `when: "after_narration"` in same order
+5. Each role: resolve connection from global config → render Handlebars prompt → call LLM → append response
+6. Persist all new messages, return them
+
+Global `config.json` `story_roles` maps role → connection name. Per-adventure `story-roles.json` adds trigger + prompt config.
+
+### Endpoints
+
+```
+GET   /api/adventures/{slug}/story-roles
+PATCH /api/adventures/{slug}/story-roles   (partial update, same merge pattern as PATCH /settings)
+```
+
 ## Messages
 
 Chat messages are stored per-adventure in a separate file to keep adventure metadata small.

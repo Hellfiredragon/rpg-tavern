@@ -230,6 +230,69 @@ def append_messages(slug: str, messages: list[dict[str, Any]]) -> None:
     path.write_text(json.dumps(existing, indent=2))
 
 
+# ── Story Roles (per-adventure) ──────────────────────────
+
+DEFAULT_NARRATOR_PROMPT = (
+    "{{description}}\n\n"
+    "{{#each messages}}"
+    "{{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}\n\n"
+    "{{/each}}"
+    "> {{message}}\n"
+)
+
+DEFAULT_STORY_ROLES: dict[str, Any] = {
+    "narrator": {
+        "when": "on_player_message",
+        "where": "chat",
+        "prompt": DEFAULT_NARRATOR_PROMPT,
+    },
+    "character_writer": {
+        "when": "disabled",
+        "where": "chat",
+        "prompt": "",
+    },
+    "extractor": {
+        "when": "disabled",
+        "where": "chat",
+        "prompt": "",
+    },
+}
+
+
+def _story_roles_path(slug: str) -> Path:
+    return adventures_dir() / slug / "story-roles.json"
+
+
+def get_story_roles(slug: str) -> dict[str, Any]:
+    """Read per-adventure story role settings. Returns defaults if missing."""
+    path = _story_roles_path(slug)
+    if not path.is_file():
+        return json.loads(json.dumps(DEFAULT_STORY_ROLES))  # deep copy
+    stored = json.loads(path.read_text())
+    # Merge with defaults so new roles get default values
+    result = json.loads(json.dumps(DEFAULT_STORY_ROLES))
+    for role_name, role_data in stored.items():
+        if role_name in result:
+            result[role_name].update(role_data)
+    return result
+
+
+def update_story_roles(slug: str, roles: dict[str, Any]) -> dict[str, Any]:
+    """Merge partial role updates and persist. Returns full roles."""
+    current = get_story_roles(slug)
+    allowed_fields = {"when", "where", "prompt"}
+    for role_name, role_data in roles.items():
+        if role_name not in current:
+            continue  # ignore unknown roles
+        if isinstance(role_data, dict):
+            for field, value in role_data.items():
+                if field in allowed_fields:
+                    current[role_name][field] = value
+    path = _story_roles_path(slug)
+    path.write_text(json.dumps(current, indent=2))
+    return current
+
+
 # ── Embark ────────────────────────────────────────────────
 
 
@@ -259,6 +322,10 @@ def embark_template(
         json.dumps(adventure, indent=2)
     )
     (adventures_dir() / target_slug).mkdir(exist_ok=True)
+    # Write default story roles for the new adventure
+    _story_roles_path(target_slug).write_text(
+        json.dumps(DEFAULT_STORY_ROLES, indent=2)
+    )
     return adventure
 
 

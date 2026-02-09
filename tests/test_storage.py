@@ -321,6 +321,64 @@ def test_append_messages_accumulates():
     assert result[1]["text"] == "Hi there."
 
 
+# ── Story Roles ─────────────────────────────────────────────
+
+
+def test_get_story_roles_defaults():
+    """Returns defaults when no story-roles.json exists."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    roles = storage.get_story_roles(adv["slug"])
+    assert roles["narrator"]["when"] == "on_player_message"
+    assert roles["character_writer"]["when"] == "disabled"
+    assert roles["extractor"]["when"] == "disabled"
+    assert roles["narrator"]["prompt"] != ""
+
+
+def test_embark_writes_story_roles():
+    """Embarking writes story-roles.json automatically."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    path = storage.adventures_dir() / adv["slug"] / "story-roles.json"
+    assert path.is_file()
+
+
+def test_update_story_roles_partial():
+    """Partial update merges into existing roles."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    storage.update_story_roles(adv["slug"], {
+        "character_writer": {"when": "after_narration", "prompt": "Write dialogue."},
+    })
+    roles = storage.get_story_roles(adv["slug"])
+    assert roles["character_writer"]["when"] == "after_narration"
+    assert roles["character_writer"]["prompt"] == "Write dialogue."
+    # narrator untouched
+    assert roles["narrator"]["when"] == "on_player_message"
+
+
+def test_update_story_roles_enable_disabled():
+    """Can enable a disabled role."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    storage.update_story_roles(adv["slug"], {
+        "extractor": {"when": "after_narration", "prompt": "Extract data."},
+    })
+    roles = storage.get_story_roles(adv["slug"])
+    assert roles["extractor"]["when"] == "after_narration"
+
+
+def test_update_story_roles_ignores_unknown():
+    """Unknown role names are silently ignored."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    storage.update_story_roles(adv["slug"], {
+        "unknown_role": {"when": "on_player_message"},
+    })
+    roles = storage.get_story_roles(adv["slug"])
+    assert "unknown_role" not in roles
+
+
 def test_update_config_replaces_connections_array():
     """Sending a new connections array fully replaces the old one."""
     storage.update_config({"llm_connections": [

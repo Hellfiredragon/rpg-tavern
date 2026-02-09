@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from backend import llm, storage
+from backend.prompts import PromptError, build_context, render_prompt
 
 router = APIRouter()
 
@@ -113,18 +114,19 @@ async def get_messages(slug: str):
     return storage.get_messages(slug)
 
 
-def _build_prompt(description: str, history: list[dict], new_intent: str) -> str:
-    """Build a text-adventure prompt from description + history + new intent."""
-    parts = [description, ""]
-    for msg in history:
-        if msg["role"] == "player":
-            parts.append(f"> {msg['text']}")
-        else:
-            parts.append(msg["text"])
-        parts.append("")
-    parts.append(f"> {new_intent}")
-    parts.append("")
-    return "\n".join(parts)
+def _resolve_connection(config: dict, role_name: str) -> dict | None:
+    """Find the LLM connection assigned to a story role. Returns None if unassigned."""
+    conn_name = config["story_roles"].get(role_name)
+    if not conn_name:
+        return None
+    for conn in config["llm_connections"]:
+        if conn["name"] == conn_name:
+            return conn
+    return None
+
+
+# Role execution order — determines priority within each phase
+_ROLE_ORDER = ["narrator", "character_writer", "extractor"]
 
 
 @router.post("/adventures/{slug}/chat")
@@ -134,28 +136,91 @@ async def adventure_chat(slug: str, body: ChatBody):
         raise HTTPException(404, "Adventure not found")
 
     config = storage.get_config()
-    narrator_conn_name = config["story_roles"].get("narrator")
-    if not narrator_conn_name:
-        raise HTTPException(400, "Narrator role is not assigned — configure it in Settings")
-
-    connection = None
-    for conn in config["llm_connections"]:
-        if conn["name"] == narrator_conn_name:
-            connection = conn
-            break
-    if not connection:
-        raise HTTPException(400, f"Connection '{narrator_conn_name}' not found")
-
+    story_roles = storage.get_story_roles(slug)
     history = storage.get_messages(slug)
-    prompt = _build_prompt(adventure["description"], history, body.message)
-    text = await llm.generate(connection["provider_url"], connection.get("api_key", ""), prompt)
 
     now = datetime.now(timezone.utc).isoformat()
     player_msg = {"role": "player", "text": body.message, "ts": now}
-    narrator_msg = {"role": "narrator", "text": text, "ts": now}
-    storage.append_messages(slug, [player_msg, narrator_msg])
+    new_messages = [player_msg]
+    narration: str | None = None
 
-    return {"messages": [player_msg, narrator_msg]}
+    # Phase 1: on_player_message
+    for role_name in _ROLE_ORDER:
+        role_cfg = story_roles.get(role_name, {})
+        if role_cfg.get("when") != "on_player_message":
+            continue
+
+        connection = _resolve_connection(config, role_name)
+        if role_name == "narrator" and not connection:
+            raise HTTPException(
+                400, "Narrator role is not assigned — configure it in Settings"
+            )
+        if not connection:
+            continue
+
+        ctx = build_context(adventure, history, body.message, narration=narration)
+        template_str = role_cfg.get("prompt", "")
+        if not template_str:
+            continue
+        try:
+            prompt = render_prompt(template_str, ctx)
+        except PromptError as e:
+            raise HTTPException(400, f"Prompt template error ({role_name}): {e}")
+
+        text = await llm.generate(
+            connection["provider_url"], connection.get("api_key", ""), prompt
+        )
+        msg = {"role": role_name, "text": text, "ts": now}
+        new_messages.append(msg)
+        if role_name == "narrator":
+            narration = text
+
+    # Phase 2: after_narration
+    for role_name in _ROLE_ORDER:
+        role_cfg = story_roles.get(role_name, {})
+        if role_cfg.get("when") != "after_narration":
+            continue
+
+        connection = _resolve_connection(config, role_name)
+        if not connection:
+            continue
+
+        ctx = build_context(adventure, history, body.message, narration=narration)
+        template_str = role_cfg.get("prompt", "")
+        if not template_str:
+            continue
+        try:
+            prompt = render_prompt(template_str, ctx)
+        except PromptError as e:
+            raise HTTPException(400, f"Prompt template error ({role_name}): {e}")
+
+        text = await llm.generate(
+            connection["provider_url"], connection.get("api_key", ""), prompt
+        )
+        msg = {"role": role_name, "text": text, "ts": now}
+        new_messages.append(msg)
+
+    storage.append_messages(slug, new_messages)
+    return {"messages": new_messages}
+
+
+# ── Story Roles (per-adventure) ──────────────────────────
+
+
+@router.get("/adventures/{slug}/story-roles")
+async def get_story_roles(slug: str):
+    adventure = storage.get_adventure(slug)
+    if not adventure:
+        raise HTTPException(404, "Adventure not found")
+    return storage.get_story_roles(slug)
+
+
+@router.patch("/adventures/{slug}/story-roles")
+async def update_story_roles(slug: str, body: dict):
+    adventure = storage.get_adventure(slug)
+    if not adventure:
+        raise HTTPException(404, "Adventure not found")
+    return storage.update_story_roles(slug, body)
 
 
 # ── Utility ───────────────────────────────────────────────

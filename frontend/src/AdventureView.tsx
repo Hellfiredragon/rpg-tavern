@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import './AdventureView.css'
 
 interface AdventureViewProps {
@@ -13,12 +13,90 @@ interface ItemData {
 }
 
 interface ChatMessage {
-  role: 'player' | 'narrator'
+  role: 'player' | 'narrator' | 'character_writer' | 'extractor'
   text: string
   ts: string
 }
 
 type Tab = 'chat' | 'world' | 'settings'
+
+type WhenTrigger = 'on_player_message' | 'after_narration' | 'disabled'
+
+interface StoryRoleConfig {
+  when: WhenTrigger
+  where: string
+  prompt: string
+}
+
+interface StoryRoles {
+  narrator: StoryRoleConfig
+  character_writer: StoryRoleConfig
+  extractor: StoryRoleConfig
+}
+
+type RoleName = keyof StoryRoles
+
+const ROLE_LABELS: Record<RoleName, string> = {
+  narrator: 'Narrator',
+  character_writer: 'Character Writer',
+  extractor: 'Extractor',
+}
+
+const WHEN_OPTIONS: { value: WhenTrigger; label: string }[] = [
+  { value: 'on_player_message', label: 'On player message' },
+  { value: 'after_narration', label: 'After narration' },
+  { value: 'disabled', label: 'Disabled' },
+]
+
+function StoryRoleCard({
+  role,
+  config,
+  onTriggerChange,
+  onPromptChange,
+}: {
+  role: RoleName
+  config: StoryRoleConfig
+  onTriggerChange: (when: WhenTrigger) => void
+  onPromptChange: (prompt: string) => void
+}) {
+  const [promptValue, setPromptValue] = useState(config.prompt)
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  useEffect(() => {
+    setPromptValue(config.prompt)
+  }, [config.prompt])
+
+  function handlePromptChange(value: string) {
+    setPromptValue(value)
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => onPromptChange(value), 500)
+  }
+
+  return (
+    <div className="story-role-card">
+      <div className="story-role-header">
+        <h4>{ROLE_LABELS[role]}</h4>
+        <select
+          value={config.when}
+          onChange={e => onTriggerChange(e.target.value as WhenTrigger)}
+        >
+          {WHEN_OPTIONS.map(opt => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      </div>
+      {config.when !== 'disabled' && (
+        <textarea
+          className="prompt-editor"
+          value={promptValue}
+          onChange={e => handlePromptChange(e.target.value)}
+          placeholder="Handlebars prompt template..."
+          rows={8}
+        />
+      )}
+    </div>
+  )
+}
 
 export default function AdventureView({ slug, kind }: AdventureViewProps) {
   const [data, setData] = useState<ItemData | null>(null)
@@ -27,6 +105,7 @@ export default function AdventureView({ slug, kind }: AdventureViewProps) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [storyRoles, setStoryRoles] = useState<StoryRoles | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -44,8 +123,27 @@ export default function AdventureView({ slug, kind }: AdventureViewProps) {
   }, [slug, kind])
 
   useEffect(() => {
+    if (kind !== 'adventure') return
+    fetch(`/api/adventures/${slug}/story-roles`)
+      .then(res => res.ok ? res.json() : null)
+      .then(setStoryRoles)
+  }, [slug, kind])
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  const patchStoryRole = useCallback((role: RoleName, fields: Partial<StoryRoleConfig>) => {
+    setStoryRoles(prev => {
+      if (!prev) return prev
+      return { ...prev, [role]: { ...prev[role], ...fields } }
+    })
+    fetch(`/api/adventures/${slug}/story-roles`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [role]: fields }),
+    })
+  }, [slug])
 
   async function sendMessage() {
     const text = input.trim()
@@ -67,7 +165,7 @@ export default function AdventureView({ slug, kind }: AdventureViewProps) {
         throw new Error(err.detail || `Error ${res.status}`)
       }
       const data = await res.json()
-      // Replace optimistic player msg + add narrator msg with server timestamps
+      // Replace optimistic player msg + add all response msgs with server timestamps
       setMessages(prev => [...prev.slice(0, -1), ...data.messages])
     } catch (e) {
       // Remove optimistic player message on error
@@ -144,9 +242,23 @@ export default function AdventureView({ slug, kind }: AdventureViewProps) {
             <p>World settings for <strong>{data.title}</strong>. (Coming soon)</p>
           </div>
         )}
-        {activeTab === 'settings' && (
+        {activeTab === 'settings' && kind === 'adventure' && storyRoles && (
+          <div className="story-roles-settings">
+            <h3>Story Roles</h3>
+            {(Object.keys(ROLE_LABELS) as RoleName[]).map(role => (
+              <StoryRoleCard
+                key={role}
+                role={role}
+                config={storyRoles[role]}
+                onTriggerChange={when => patchStoryRole(role, { when })}
+                onPromptChange={prompt => patchStoryRole(role, { prompt })}
+              />
+            ))}
+          </div>
+        )}
+        {activeTab === 'settings' && isTemplate && (
           <div className="tab-placeholder">
-            <p>Adventure settings for <strong>{data.title}</strong>. (Coming soon)</p>
+            <p>Template settings for <strong>{data.title}</strong>. (Coming soon)</p>
           </div>
         )}
       </div>
