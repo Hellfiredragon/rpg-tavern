@@ -145,6 +145,127 @@
   cursor: not-allowed;
 }
 
+/* ── Settings Layout (sidebar + content) ────────────────── */
+
+.settings-layout {
+  display: flex;
+  gap: 2rem;
+  align-items: flex-start;
+}
+
+.settings-layout .story-roles-settings {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Prompt Hints Sidebar ───────────────────────────────── */
+
+.prompt-hints {
+  width: 240px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1rem;
+  background: var(--bg-surface, var(--bg-deep));
+  font-size: 0.82rem;
+  line-height: 1.5;
+  max-height: calc(100vh - 10rem);
+  overflow-y: auto;
+}
+
+.prompt-hints h4 {
+  margin: 0 0 0.4rem 0;
+  font-size: 0.82rem;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.prompt-hints h4:not(:first-child) {
+  margin-top: 1rem;
+}
+
+.hint-intro {
+  margin: 0 0 0.5rem 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.hint-intro code {
+  font-size: 0.78rem;
+  color: var(--text);
+}
+
+.hint-vars {
+  margin: 0;
+  padding: 0;
+}
+
+.hint-var {
+  margin-bottom: 0.4rem;
+}
+
+.hint-var--dim {
+  opacity: 0.45;
+}
+
+.hint-var dt {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4em;
+}
+
+.hint-var dt code {
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.hint-type {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.hint-var dd {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.hint-badge {
+  display: inline-block;
+  margin-left: 0.3em;
+  font-size: 0.68rem;
+  color: var(--accent);
+  opacity: 0.8;
+}
+
+.hint-example {
+  margin: 0.4rem 0 0 0;
+  padding: 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+@media (max-width: 720px) {
+  .settings-layout {
+    flex-direction: column;
+  }
+
+  .prompt-hints {
+    width: 100%;
+    position: static;
+    max-height: none;
+  }
+}
+
 /* ── Story Roles Settings ───────────────────────────────── */
 
 .story-roles-settings h3 {

@@ -48,6 +48,67 @@ const WHEN_OPTIONS: { value: WhenTrigger; label: string }[] = [
   { value: 'disabled', label: 'Disabled' },
 ]
 
+interface TemplateVar {
+  name: string
+  type: string
+  desc: string
+  afterOnly?: boolean
+}
+
+const TEMPLATE_VARS: TemplateVar[] = [
+  { name: 'description', type: 'string', desc: 'Adventure premise' },
+  { name: 'title', type: 'string', desc: 'Adventure title' },
+  { name: 'message', type: 'string', desc: 'Current player message' },
+  { name: 'history', type: 'string', desc: 'Pre-formatted history' },
+  { name: 'messages', type: 'array', desc: 'Message objects for {{#each}}' },
+  { name: 'narration', type: 'string', desc: 'Narrator response (current turn)', afterOnly: true },
+]
+
+const MESSAGE_FIELDS: { name: string; desc: string }[] = [
+  { name: '.role', desc: '"player" or "narrator"' },
+  { name: '.text', desc: 'Content' },
+  { name: '.ts', desc: 'ISO timestamp' },
+  { name: '.is_player', desc: 'Boolean flag' },
+  { name: '.is_narrator', desc: 'Boolean flag' },
+]
+
+function PromptHintsSidebar({ showAfterNarration }: { showAfterNarration: boolean }) {
+  return (
+    <aside className="prompt-hints">
+      <h4>Template Variables</h4>
+      <p className="hint-intro">Use Handlebars syntax in prompt templates.</p>
+      <dl className="hint-vars">
+        {TEMPLATE_VARS.map(v => (
+          <div key={v.name} className={`hint-var ${v.afterOnly && !showAfterNarration ? 'hint-var--dim' : ''}`}>
+            <dt>
+              <code>{'{{' + v.name + '}}'}</code>
+              <span className="hint-type">{v.type}</span>
+            </dt>
+            <dd>
+              {v.desc}
+              {v.afterOnly && <span className="hint-badge">after_narration only</span>}
+            </dd>
+          </div>
+        ))}
+      </dl>
+
+      <h4>Message Fields</h4>
+      <p className="hint-intro">Inside <code>{'{{#each messages}}'}</code>:</p>
+      <dl className="hint-vars">
+        {MESSAGE_FIELDS.map(f => (
+          <div key={f.name} className="hint-var">
+            <dt><code>{f.name}</code></dt>
+            <dd>{f.desc}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <h4>Examples</h4>
+      <pre className="hint-example">{'{{#each messages}}\n{{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}\n{{/each}}'}</pre>
+    </aside>
+  )
+}
+
 function StoryRoleCard({
   role,
   config,
@@ -243,17 +304,22 @@ export default function AdventureView({ slug, kind }: AdventureViewProps) {
           </div>
         )}
         {activeTab === 'settings' && kind === 'adventure' && storyRoles && (
-          <div className="story-roles-settings">
-            <h3>Story Roles</h3>
-            {(Object.keys(ROLE_LABELS) as RoleName[]).map(role => (
-              <StoryRoleCard
-                key={role}
-                role={role}
-                config={storyRoles[role]}
-                onTriggerChange={when => patchStoryRole(role, { when })}
-                onPromptChange={prompt => patchStoryRole(role, { prompt })}
-              />
-            ))}
+          <div className="settings-layout">
+            <PromptHintsSidebar
+              showAfterNarration={Object.values(storyRoles).some(r => r.when === 'after_narration')}
+            />
+            <div className="story-roles-settings">
+              <h3>Story Roles</h3>
+              {(Object.keys(ROLE_LABELS) as RoleName[]).map(role => (
+                <StoryRoleCard
+                  key={role}
+                  role={role}
+                  config={storyRoles[role]}
+                  onTriggerChange={when => patchStoryRole(role, { when })}
+                  onPromptChange={prompt => patchStoryRole(role, { prompt })}
+                />
+              ))}
+            </div>
           </div>
         )}
         {activeTab === 'settings' && isTemplate && (
