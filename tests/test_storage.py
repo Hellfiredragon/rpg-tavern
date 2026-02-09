@@ -280,6 +280,47 @@ def test_update_config_partial():
     assert config["llm_connections"] == []  # untouched default
 
 
+# ── Messages ─────────────────────────────────────────────────
+
+
+def test_get_messages_empty():
+    """Returns [] when no messages file exists."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    assert storage.get_messages(adv["slug"]) == []
+
+
+def test_append_and_get_messages():
+    """Append + read round-trip."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    msgs = [
+        {"role": "player", "text": "I look around", "ts": "2026-01-01T00:00:00Z"},
+        {"role": "narrator", "text": "You see a tavern.", "ts": "2026-01-01T00:00:00Z"},
+    ]
+    storage.append_messages(adv["slug"], msgs)
+    result = storage.get_messages(adv["slug"])
+    assert len(result) == 2
+    assert result[0]["role"] == "player"
+    assert result[1]["text"] == "You see a tavern."
+
+
+def test_append_messages_accumulates():
+    """Multiple appends build up history."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    storage.append_messages(adv["slug"], [
+        {"role": "player", "text": "Hello", "ts": "2026-01-01T00:00:00Z"},
+    ])
+    storage.append_messages(adv["slug"], [
+        {"role": "narrator", "text": "Hi there.", "ts": "2026-01-01T00:00:01Z"},
+    ])
+    result = storage.get_messages(adv["slug"])
+    assert len(result) == 2
+    assert result[0]["text"] == "Hello"
+    assert result[1]["text"] == "Hi there."
+
+
 def test_update_config_replaces_connections_array():
     """Sending a new connections array fully replaces the old one."""
     storage.update_config({"llm_connections": [

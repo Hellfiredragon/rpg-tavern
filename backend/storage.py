@@ -211,6 +211,25 @@ def delete_adventure(slug: str) -> bool:
     return True
 
 
+# ── Messages ─────────────────────────────────────────────
+
+
+def get_messages(slug: str) -> list[dict[str, Any]]:
+    """Load messages for an adventure. Returns [] if none exist."""
+    path = adventures_dir() / slug / "messages.json"
+    if not path.is_file():
+        return []
+    return json.loads(path.read_text())
+
+
+def append_messages(slug: str, messages: list[dict[str, Any]]) -> None:
+    """Append messages to an adventure's chat log."""
+    path = adventures_dir() / slug / "messages.json"
+    existing = get_messages(slug)
+    existing.extend(messages)
+    path.write_text(json.dumps(existing, indent=2))
+
+
 # ── Embark ────────────────────────────────────────────────
 
 

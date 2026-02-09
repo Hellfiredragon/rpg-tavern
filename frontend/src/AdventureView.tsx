@@ -13,8 +13,9 @@ interface ItemData {
 }
 
 interface ChatMessage {
-  role: 'user' | 'assistant'
+  role: 'player' | 'narrator'
   text: string
+  ts: string
 }
 
 type Tab = 'chat' | 'world' | 'settings'
@@ -36,6 +37,13 @@ export default function AdventureView({ slug, kind }: AdventureViewProps) {
   }, [slug, kind])
 
   useEffect(() => {
+    if (kind !== 'adventure') return
+    fetch(`/api/adventures/${slug}/messages`)
+      .then(res => res.ok ? res.json() : [])
+      .then(setMessages)
+  }, [slug, kind])
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
@@ -45,7 +53,7 @@ export default function AdventureView({ slug, kind }: AdventureViewProps) {
 
     setInput('')
     setError('')
-    setMessages(prev => [...prev, { role: 'user', text }])
+    setMessages(prev => [...prev, { role: 'player', text, ts: new Date().toISOString() }])
     setLoading(true)
 
     try {
@@ -59,8 +67,11 @@ export default function AdventureView({ slug, kind }: AdventureViewProps) {
         throw new Error(err.detail || `Error ${res.status}`)
       }
       const data = await res.json()
-      setMessages(prev => [...prev, { role: 'assistant', text: data.reply }])
+      // Replace optimistic player msg + add narrator msg with server timestamps
+      setMessages(prev => [...prev.slice(0, -1), ...data.messages])
     } catch (e) {
+      // Remove optimistic player message on error
+      setMessages(prev => prev.slice(0, -1))
       setError(e instanceof Error ? e.message : 'Something went wrong')
     } finally {
       setLoading(false)
@@ -107,7 +118,7 @@ export default function AdventureView({ slug, kind }: AdventureViewProps) {
                 </div>
               ))}
               {loading && (
-                <div className="chat-msg chat-msg--assistant chat-msg--loading">
+                <div className="chat-msg chat-msg--narrator chat-msg--loading">
                   <i className="fa-solid fa-ellipsis fa-fade" />
                 </div>
               )}

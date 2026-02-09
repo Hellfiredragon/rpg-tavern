@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -103,6 +105,28 @@ async def delete_adventure(slug: str):
     return {"ok": True}
 
 
+@router.get("/adventures/{slug}/messages")
+async def get_messages(slug: str):
+    adventure = storage.get_adventure(slug)
+    if not adventure:
+        raise HTTPException(404, "Adventure not found")
+    return storage.get_messages(slug)
+
+
+def _build_prompt(description: str, history: list[dict], new_intent: str) -> str:
+    """Build a text-adventure prompt from description + history + new intent."""
+    parts = [description, ""]
+    for msg in history:
+        if msg["role"] == "player":
+            parts.append(f"> {msg['text']}")
+        else:
+            parts.append(msg["text"])
+        parts.append("")
+    parts.append(f"> {new_intent}")
+    parts.append("")
+    return "\n".join(parts)
+
+
 @router.post("/adventures/{slug}/chat")
 async def adventure_chat(slug: str, body: ChatBody):
     adventure = storage.get_adventure(slug)
@@ -122,9 +146,16 @@ async def adventure_chat(slug: str, body: ChatBody):
     if not connection:
         raise HTTPException(400, f"Connection '{narrator_conn_name}' not found")
 
-    prompt = f"{adventure['description']}\n\n> {body.message}\n\n"
+    history = storage.get_messages(slug)
+    prompt = _build_prompt(adventure["description"], history, body.message)
     text = await llm.generate(connection["provider_url"], connection.get("api_key", ""), prompt)
-    return {"reply": text}
+
+    now = datetime.now(timezone.utc).isoformat()
+    player_msg = {"role": "player", "text": body.message, "ts": now}
+    narrator_msg = {"role": "narrator", "text": text, "ts": now}
+    storage.append_messages(slug, [player_msg, narrator_msg])
+
+    return {"messages": [player_msg, narrator_msg]}
 
 
 # ── Utility ───────────────────────────────────────────────

@@ -159,22 +159,66 @@ Empty string means "not assigned".
 - `story_roles` (dict) — merged key-by-key
 - `app_width_percent` (scalar) — overwritten
 
+## Messages
+
+Chat messages are stored per-adventure in a separate file to keep adventure metadata small.
+
+### Storage
+
+```
+data/adventures/<slug>/messages.json   # Array of message objects
+```
+
+### Message Model
+
+| Field | Type | Description |
+|---|---|---|
+| `role` | `"player"` \| `"narrator"` | Who sent the message |
+| `text` | string | Message content |
+| `ts` | string | ISO 8601 timestamp |
+
+Players describe **intent** — what their character wants to do. The narrator (LLM) decides what actually happens in context of the world.
+
 ## Chat
 
-### Endpoint
+### Endpoints
 
 ```
+GET  /api/adventures/{slug}/messages
+Returns: [ { "role": "player", "text": "...", "ts": "..." }, ... ]
+
 POST /api/adventures/{slug}/chat
 Body: { "message": "I look around the tavern" }
-Returns: { "reply": "You see a dusty counter..." }
+Returns: { "messages": [ player_msg, narrator_msg ] }
 ```
+
+### Prompt Building
+
+The prompt is built from the adventure description + full message history + new player intent:
+
+```
+{description}
+
+> {player message 1}
+
+{narrator response 1}
+
+> {player message 2}
+
+{narrator response 2}
+
+> {new player intent}
+
+```
+
+The `> ` prefix marks player lines; bare text is narration. The prompt ends with the new intent, cueing the LLM to narrate.
 
 ### Flow
 
 1. Load adventure (404 if missing)
 2. Load config → find narrator role's connection name → find matching connection
-3. Build prompt: `"{description}\n\n> {message}\n\n"`
-4. POST to `{provider_url}/api/v1/generate` with `{"prompt": prompt}` (KoboldCpp format)
-5. Return `{"reply": results[0]["text"]}`
-
-No message history storage yet — each request is a single prompt → response.
+3. Load message history from `messages.json`
+4. Build prompt from description + history + new intent
+5. POST to `{provider_url}/api/v1/generate` with `{"prompt": prompt}` (KoboldCpp format)
+6. Persist both player message and narrator reply to `messages.json`
+7. Return `{"messages": [player_msg, narrator_msg]}`

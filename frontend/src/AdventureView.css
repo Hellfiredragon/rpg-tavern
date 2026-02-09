@@ -80,16 +80,21 @@
   white-space: pre-wrap;
 }
 
-.chat-msg--user {
-  align-self: flex-end;
-  background: var(--accent);
-  color: var(--bg);
+.chat-msg--player {
+  align-self: flex-start;
+  border-left: 3px solid var(--accent);
+  padding-left: 1rem;
+  font-style: italic;
+  color: var(--text-muted);
+  background: none;
+  max-width: 100%;
 }
 
-.chat-msg--assistant {
+.chat-msg--narrator {
   align-self: flex-start;
   background: var(--bg-surface);
   border: 1px solid var(--border);
+  max-width: 100%;
 }
 
 .chat-msg--loading {
