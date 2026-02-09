@@ -232,35 +232,66 @@ def test_generate_adventure_name():
 def test_get_config_empty():
     """Returns defaults when no config file exists."""
     config = storage.get_config()
-    assert config["llm_provider_url"] == ""
-    assert config["llm_api_key"] == ""
-    assert config["llm_model"] == ""
-    assert config["llm_completion_mode"] == "chat"
+    assert config["llm_connections"] == []
+    assert config["story_roles"] == {
+        "narrator": "",
+        "character_writer": "",
+        "extractor": "",
+    }
     assert config["app_width_percent"] == 100
 
 
-def test_update_config():
-    """Merges and persists config."""
-    result = storage.update_config({
-        "llm_provider_url": "http://localhost:8080",
-        "llm_model": "llama3",
-    })
-    assert result["llm_provider_url"] == "http://localhost:8080"
-    assert result["llm_model"] == "llama3"
-    assert result["app_width_percent"] == 100  # default preserved
+def test_update_config_connections():
+    """Adding connections replaces the array and persists."""
+    conns = [
+        {
+            "name": "My OpenAI",
+            "provider_url": "https://api.openai.com/v1",
+            "api_key": "sk-test",
+            "model": "gpt-4o",
+            "completion_mode": "chat",
+        }
+    ]
+    result = storage.update_config({"llm_connections": conns})
+    assert len(result["llm_connections"]) == 1
+    assert result["llm_connections"][0]["name"] == "My OpenAI"
 
-    # Verify persisted
     reloaded = storage.get_config()
-    assert reloaded["llm_provider_url"] == "http://localhost:8080"
-    assert reloaded["llm_model"] == "llama3"
+    assert reloaded["llm_connections"][0]["model"] == "gpt-4o"
+
+
+def test_update_config_roles():
+    """Partial role update preserves other roles."""
+    storage.update_config({"story_roles": {"narrator": "My OpenAI"}})
+    storage.update_config({"story_roles": {"extractor": "Local LLM"}})
+
+    config = storage.get_config()
+    assert config["story_roles"]["narrator"] == "My OpenAI"
+    assert config["story_roles"]["extractor"] == "Local LLM"
+    assert config["story_roles"]["character_writer"] == ""  # untouched
 
 
 def test_update_config_partial():
-    """Only updates provided fields, leaves others intact."""
-    storage.update_config({"llm_model": "gpt-4o"})
+    """Scalar and roles updates are independent."""
+    storage.update_config({"story_roles": {"narrator": "X"}})
     storage.update_config({"app_width_percent": 75})
 
     config = storage.get_config()
-    assert config["llm_model"] == "gpt-4o"
+    assert config["story_roles"]["narrator"] == "X"
     assert config["app_width_percent"] == 75
-    assert config["llm_completion_mode"] == "chat"  # untouched default
+    assert config["llm_connections"] == []  # untouched default
+
+
+def test_update_config_replaces_connections_array():
+    """Sending a new connections array fully replaces the old one."""
+    storage.update_config({"llm_connections": [
+        {"name": "A", "provider_url": "", "api_key": "", "model": "", "completion_mode": "chat"},
+        {"name": "B", "provider_url": "", "api_key": "", "model": "", "completion_mode": "chat"},
+    ]})
+    storage.update_config({"llm_connections": [
+        {"name": "C", "provider_url": "", "api_key": "", "model": "", "completion_mode": "chat"},
+    ]})
+
+    config = storage.get_config()
+    assert len(config["llm_connections"]) == 1
+    assert config["llm_connections"][0]["name"] == "C"

@@ -37,9 +37,7 @@ export default function Layout({ children, adventureName, onBack, onSettings, ap
             )}
             {onSettings && (
               <button className="btn-gear" onClick={onSettings} title="Settings">
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M11.078 0l.762 2.845a7.46 7.46 0 011.57.908l2.87-.678 1.078 1.868-2.11 2.166c.1.35.168.71.204 1.078l2.528 1.37v2.156l-2.528 1.37a7.46 7.46 0 01-.204 1.078l2.11 2.166-1.078 1.868-2.87-.678a7.46 7.46 0 01-1.57.908L11.078 20H8.922l-.762-2.845a7.46 7.46 0 01-1.57-.908l-2.87.678-1.078-1.868 2.11-2.166a7.46 7.46 0 01-.204-1.078L2 11.443V9.287l2.548-1.37a7.46 7.46 0 01.204-1.078L2.642 4.673 3.72 2.805l2.87.678a7.46 7.46 0 011.57-.908L8.922 0h2.156zM10 6.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7z"/>
-                </svg>
+                <i className="fa-solid fa-gear" />
               </button>
             )}
           </div>

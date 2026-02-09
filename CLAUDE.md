@@ -92,6 +92,10 @@ Templates and adventures are stored in separate directories:
 
 Configurable via `DATA_DIR` env or `--data-dir` flag. Tests use `data-tests/` which is wiped before each test run.
 
+### Icons
+
+Use **Font Awesome Free** (`@fortawesome/fontawesome-free`) for all icons. Prefer `fa-solid` style. Usage: `<i className="fa-solid fa-gear" />`. Do not use inline SVGs or Unicode symbols for icons. The CSS is imported in `main.tsx`.
+
 ### Dev proxy setup
 
 In development, the Vite dev server proxies `/api/*` requests to the backend. In production, the backend serves everything — API routes and static frontend files — from a single port.

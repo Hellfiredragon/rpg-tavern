@@ -111,14 +111,52 @@ Embarking creates a running adventure from a template. The user picks a name (wi
 
 ## Config
 
-App settings are stored in `data/config.json` (not under presets — no merging layer). The file is a flat JSON object with these fields:
+App settings are stored in `data/config.json` (not under presets — no merging layer).
+
+### Structure
+
+```json
+{
+  "llm_connections": [ ... ],
+  "story_roles": { "narrator": "", "character_writer": "", "extractor": "" },
+  "app_width_percent": 100
+}
+```
+
+### LLM Connections
+
+An array of named LLM connection objects. Replaced wholesale on update.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `llm_provider_url` | string | `""` | LLM provider base URL |
-| `llm_api_key` | string | `""` | API key for the provider |
-| `llm_model` | string | `""` | Model name |
-| `llm_completion_mode` | `"chat"` \| `"text"` | `"chat"` | Completion endpoint style |
+| `name` | string | | Unique display name for this connection |
+| `provider_url` | string | | LLM provider base URL (e.g. `https://api.openai.com/v1`) |
+| `api_key` | string | | API key for the provider |
+| `model` | string | | Model name (e.g. `gpt-4o`) |
+| `completion_mode` | `"chat"` \| `"text"` | `"chat"` | Completion endpoint style |
+
+### Story Roles
+
+Maps story-telling roles to connection names. Merged key-by-key on partial updates.
+
+| Role | Description |
+|---|---|
+| `narrator` | Narrates the story and describes world events |
+| `character_writer` | Writes NPC dialogue and character actions |
+| `extractor` | Extracts structured data from narrative text |
+
+Empty string means "not assigned".
+
+### Display
+
+| Field | Type | Default | Description |
+|---|---|---|---|
 | `app_width_percent` | number | `100` | Max width of the main content area (50–100%) |
 
-`get_config()` returns defaults merged with stored values. `update_config(fields)` merges partial updates and persists.
+### Merge semantics
+
+`get_config()` returns defaults merged with stored values. `update_config(fields)` applies partial updates:
+
+- `llm_connections` (array) — replaced wholesale
+- `story_roles` (dict) — merged key-by-key
+- `app_width_percent` (scalar) — overwritten

@@ -278,10 +278,12 @@ def generate_adventure_name(template_title: str) -> str:
 # ── Config ────────────────────────────────────────────────
 
 _CONFIG_DEFAULTS: dict[str, Any] = {
-    "llm_provider_url": "",
-    "llm_api_key": "",
-    "llm_model": "",
-    "llm_completion_mode": "chat",
+    "llm_connections": [],
+    "story_roles": {
+        "narrator": "",
+        "character_writer": "",
+        "extractor": "",
+    },
     "app_width_percent": 100,
 }
 
@@ -292,17 +294,31 @@ def _config_path() -> Path:
 
 def get_config() -> dict[str, Any]:
     """Read config, returning defaults merged with stored values."""
-    config = dict(_CONFIG_DEFAULTS)
+    config: dict[str, Any] = {
+        "llm_connections": list(_CONFIG_DEFAULTS["llm_connections"]),
+        "story_roles": dict(_CONFIG_DEFAULTS["story_roles"]),
+        "app_width_percent": _CONFIG_DEFAULTS["app_width_percent"],
+    }
     path = _config_path()
     if path.is_file():
         stored = json.loads(path.read_text())
-        config.update(stored)
+        if "llm_connections" in stored:
+            config["llm_connections"] = stored["llm_connections"]
+        if "story_roles" in stored:
+            config["story_roles"].update(stored["story_roles"])
+        if "app_width_percent" in stored:
+            config["app_width_percent"] = stored["app_width_percent"]
     return config
 
 
 def update_config(fields: dict[str, Any]) -> dict[str, Any]:
     """Merge fields into config and persist. Returns full config."""
     config = get_config()
-    config.update(fields)
+    if "llm_connections" in fields:
+        config["llm_connections"] = fields["llm_connections"]
+    if "story_roles" in fields:
+        config["story_roles"].update(fields["story_roles"])
+    if "app_width_percent" in fields:
+        config["app_width_percent"] = fields["app_width_percent"]
     _config_path().write_text(json.dumps(config, indent=2))
     return config
