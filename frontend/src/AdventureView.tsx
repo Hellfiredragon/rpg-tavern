@@ -20,6 +20,36 @@ interface ChatMessage {
   ts: string
 }
 
+type StateCategory = 'core' | 'persistent' | 'temporal'
+
+interface CharacterState {
+  label: string
+  value: number
+}
+
+interface CharacterStates {
+  core: CharacterState[]
+  persistent: CharacterState[]
+  temporal: CharacterState[]
+}
+
+interface Character {
+  name: string
+  slug: string
+  states: CharacterStates
+  overflow_pending: boolean
+}
+
+const CATEGORY_LIMITS: Record<StateCategory, number> = { core: 3, persistent: 10, temporal: 10 }
+
+function stateLevel(value: number): string {
+  if (value < 6) return 'silent'
+  if (value <= 10) return 'urge'
+  if (value <= 16) return 'driver'
+  if (value <= 20) return 'important'
+  return 'overflow'
+}
+
 type Tab = 'chat' | 'world' | 'settings' | 'global-settings'
 
 type WhenTrigger = 'on_player_message' | 'after_narration' | 'disabled'
@@ -64,6 +94,8 @@ const TEMPLATE_VARS: TemplateVar[] = [
   { name: 'history', type: 'string', desc: 'Pre-formatted history' },
   { name: 'messages', type: 'array', desc: 'Message objects for {{#each}}' },
   { name: 'narration', type: 'string', desc: 'Narrator response (current turn)', afterOnly: true },
+  { name: 'characters', type: 'array', desc: 'Character objects with .name, .descriptions' },
+  { name: 'characters_summary', type: 'string', desc: 'Pre-formatted character states' },
 ]
 
 const MESSAGE_FIELDS: { name: string; desc: string }[] = [
@@ -157,6 +189,148 @@ function StoryRoleCard({
           rows={8}
         />
       )}
+    </div>
+  )
+}
+
+function CharacterPanel({ slug }: { slug: string }) {
+  const [characters, setCharacters] = useState<Character[]>([])
+  const [newName, setNewName] = useState('')
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [addStateLabel, setAddStateLabel] = useState('')
+  const [addStateCategory, setAddStateCategory] = useState<StateCategory>('temporal')
+
+  useEffect(() => {
+    fetch(`/api/adventures/${slug}/characters`)
+      .then(res => res.ok ? res.json() : [])
+      .then(setCharacters)
+  }, [slug])
+
+  async function addCharacter() {
+    const name = newName.trim()
+    if (!name) return
+    const res = await fetch(`/api/adventures/${slug}/characters`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    })
+    if (res.ok) {
+      const char = await res.json()
+      setCharacters(prev => [...prev, char])
+      setNewName('')
+    }
+  }
+
+  async function deleteCharacter(cslug: string) {
+    const res = await fetch(`/api/adventures/${slug}/characters/${cslug}`, { method: 'DELETE' })
+    if (res.ok) {
+      setCharacters(prev => prev.filter(c => c.slug !== cslug))
+      if (expanded === cslug) setExpanded(null)
+    }
+  }
+
+  async function patchStates(cslug: string, states: Partial<CharacterStates>) {
+    const res = await fetch(`/api/adventures/${slug}/characters/${cslug}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ states }),
+    })
+    if (res.ok) {
+      const updated = await res.json()
+      setCharacters(prev => prev.map(c => c.slug === cslug ? updated : c))
+    }
+  }
+
+  function removeState(char: Character, category: StateCategory, index: number) {
+    const newList = char.states[category].filter((_, i) => i !== index)
+    patchStates(char.slug, { [category]: newList })
+  }
+
+  function addState(char: Character) {
+    const label = addStateLabel.trim()
+    if (!label) return
+    const newList = [...char.states[addStateCategory], { label, value: 6 }]
+    patchStates(char.slug, { [addStateCategory]: newList })
+    setAddStateLabel('')
+  }
+
+  return (
+    <div className="character-panel">
+      <h3>Characters</h3>
+      <form className="add-character-form" onSubmit={e => { e.preventDefault(); addCharacter() }}>
+        <input
+          type="text"
+          value={newName}
+          onChange={e => setNewName(e.target.value)}
+          placeholder="Character name..."
+        />
+        <button type="submit" disabled={!newName.trim()}>
+          <i className="fa-solid fa-plus" /> Add
+        </button>
+      </form>
+
+      {characters.length === 0 && (
+        <p className="character-empty">No characters yet. Add one above.</p>
+      )}
+
+      {characters.map(char => {
+        const isExpanded = expanded === char.slug
+        const totalStates = char.states.core.length + char.states.persistent.length + char.states.temporal.length
+        return (
+          <div key={char.slug} className="character-card">
+            <div className="character-card-header" onClick={() => setExpanded(isExpanded ? null : char.slug)}>
+              <i className={`fa-solid ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'} character-expand-icon`} />
+              <span className="character-name">{char.name}</span>
+              {char.overflow_pending && <span className="overflow-badge" title="Category overflow — resolve slots">overflow</span>}
+              <span className="character-state-count">{totalStates} states</span>
+            </div>
+
+            {isExpanded && (
+              <div className="character-card-body">
+                {(['core', 'persistent', 'temporal'] as StateCategory[]).map(category => (
+                  <div key={category} className="character-states-section">
+                    <h5>
+                      {category}
+                      <span className="slot-count">{char.states[category].length}/{CATEGORY_LIMITS[category]}</span>
+                    </h5>
+                    {char.states[category].length === 0 && (
+                      <p className="states-empty">No {category} states</p>
+                    )}
+                    {char.states[category].map((state, i) => (
+                      <div key={i} className="state-row">
+                        <span className="state-label">{state.label}</span>
+                        <span className={`state-value state-level--${stateLevel(state.value)}`}>{state.value}</span>
+                        <button className="state-remove" onClick={() => removeState(char, category, i)} title="Remove state">
+                          <i className="fa-solid fa-xmark" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+
+                <div className="add-state-row">
+                  <input
+                    type="text"
+                    value={addStateLabel}
+                    onChange={e => setAddStateLabel(e.target.value)}
+                    placeholder="State label..."
+                  />
+                  <select value={addStateCategory} onChange={e => setAddStateCategory(e.target.value as StateCategory)}>
+                    <option value="core">Core</option>
+                    <option value="persistent">Persistent</option>
+                    <option value="temporal">Temporal</option>
+                  </select>
+                  <button onClick={() => addState(char)} disabled={!addStateLabel.trim()}>Add</button>
+                </div>
+
+                <button className="character-delete" onClick={() => deleteCharacter(char.slug)}>
+                  <i className="fa-solid fa-trash" /> Delete Character
+                </button>
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -302,7 +476,10 @@ export default function AdventureView({ slug, kind, onWidthChange }: AdventureVi
             </form>
           </div>
         )}
-        {activeTab === 'world' && (
+        {activeTab === 'world' && kind === 'adventure' && (
+          <CharacterPanel slug={slug} />
+        )}
+        {activeTab === 'world' && kind === 'template' && (
           <div className="tab-placeholder">
             <p>World settings for <strong>{data.title}</strong>. (Coming soon)</p>
           </div>

@@ -88,6 +88,27 @@ def test_build_context_empty_messages():
 # ── Default narrator prompt reproduces old _build_prompt ─────
 
 
+def test_build_context_with_characters():
+    char_ctx = {
+        "characters": [{"name": "Gareth", "slug": "gareth", "descriptions": ["Loyal drives their actions"]}],
+        "characters_summary": "Gareth: Loyal drives their actions",
+    }
+    ctx = build_context(
+        {"title": "T", "description": "D"},
+        [],
+        "hello",
+        characters=char_ctx,
+    )
+    assert ctx["characters"] == char_ctx["characters"]
+    assert ctx["characters_summary"] == char_ctx["characters_summary"]
+
+
+def test_build_context_without_characters():
+    ctx = build_context({"title": "T", "description": "D"}, [], "hello")
+    assert "characters" not in ctx
+    assert "characters_summary" not in ctx
+
+
 def test_default_narrator_prompt_matches_legacy():
     """The default Handlebars narrator prompt produces the same output
     as the old _build_prompt() function."""

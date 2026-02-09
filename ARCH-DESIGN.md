@@ -226,6 +226,75 @@ GET   /api/adventures/{slug}/story-roles
 PATCH /api/adventures/{slug}/story-roles   (partial update, same merge pattern as PATCH /settings)
 ```
 
+## Characters
+
+Each adventure has characters with internal states that influence their behavior in the story. Characters are managed in the World tab.
+
+### Storage
+
+```
+data/adventures/<slug>/characters.json   # Array of character objects
+```
+
+Written automatically on embark as an empty array `[]`.
+
+### Character Model
+
+```json
+{
+  "name": "Gareth",
+  "slug": "gareth",
+  "states": {
+    "core": [{ "label": "Loyal to the King", "value": 18 }],
+    "persistent": [{ "label": "Loves Elena", "value": 12 }],
+    "temporal": [{ "label": "Angry", "value": 4 }]
+  },
+  "overflow_pending": false
+}
+```
+
+### State Categories
+
+| Category | Max Slots | Tick Rate | Description |
+|----------|-----------|-----------|-------------|
+| core | 3 | +2/round | Rarely change, life crisis if challenged |
+| persistent | 10 | +1/round | Current beliefs, relationships |
+| temporal | 10 | -1/round | Short-lived emotions, situations |
+
+### Value Thresholds
+
+| Range | Level | Description Template |
+|-------|-------|---------------------|
+| < 6 | silent | (not mentioned in prompts) |
+| 6-10 | urge | "feels an urge related to {label}" |
+| 11-16 | driver | "{label} drives their actions" |
+| 17-20 | important | "{label} is very important to them" |
+| 21+ | overflow | "{label} is their absolute focus" |
+
+### Tick & Promotion Rules
+
+- **Per round**: after chat pipeline phases complete, all characters are ticked
+- **Temporal tick**: -1 per round (states decay toward removal)
+- **Removal**: any state reaching value 0 is removed
+- **Temporal -> persistent promotion**: temporal state reaching value 20 moves to persistent (if slots available)
+- **Category overflow**: if a category exceeds max slots, `overflow_pending` is set to true
+
+### Endpoints
+
+```
+GET    /api/adventures/{slug}/characters           — list all characters
+POST   /api/adventures/{slug}/characters           — create { "name": "Gareth" }
+GET    /api/adventures/{slug}/characters/{cslug}   — get single character
+PATCH  /api/adventures/{slug}/characters/{cslug}   — update states (partial merge)
+DELETE /api/adventures/{slug}/characters/{cslug}   — remove character
+```
+
+### Prompt Context
+
+Characters are included in the Handlebars prompt context:
+- `characters` — array of character objects with enriched state descriptions
+- `characters_summary` — pre-formatted text block listing each character and their non-silent states
+
 ## Messages
 
 Chat messages are stored per-adventure in a separate file to keep adventure metadata small.

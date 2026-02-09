@@ -34,6 +34,7 @@ def build_context(
     messages: list[dict[str, Any]],
     player_message: str,
     narration: str | None = None,
+    characters: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble template variables from adventure state.
 
@@ -67,4 +68,7 @@ def build_context(
     }
     if narration is not None:
         ctx["narration"] = narration
+    if characters is not None:
+        ctx["characters"] = characters.get("characters", [])
+        ctx["characters_summary"] = characters.get("characters_summary", "")
     return ctx

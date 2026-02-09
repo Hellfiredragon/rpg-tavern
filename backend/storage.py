@@ -326,7 +326,38 @@ def embark_template(
     _story_roles_path(target_slug).write_text(
         json.dumps(DEFAULT_STORY_ROLES, indent=2)
     )
+    # Write empty characters list
+    _characters_path(target_slug).write_text(json.dumps([], indent=2))
     return adventure
+
+
+# ── Characters ────────────────────────────────────────────
+
+
+def _characters_path(slug: str) -> Path:
+    return adventures_dir() / slug / "characters.json"
+
+
+def get_characters(slug: str) -> list[dict[str, Any]]:
+    """Load characters for an adventure. Returns [] if missing."""
+    path = _characters_path(slug)
+    if not path.is_file():
+        return []
+    return json.loads(path.read_text())
+
+
+def save_characters(slug: str, characters: list[dict[str, Any]]) -> None:
+    """Write characters list for an adventure."""
+    path = _characters_path(slug)
+    path.write_text(json.dumps(characters, indent=2))
+
+
+def get_character(slug: str, char_slug: str) -> dict[str, Any] | None:
+    """Find a single character by slug. Returns None if not found."""
+    for char in get_characters(slug):
+        if char["slug"] == char_slug:
+            return char
+    return None
 
 
 # ── Name generation ───────────────────────────────────────

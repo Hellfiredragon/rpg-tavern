@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from backend import llm, storage
+from backend.characters import character_prompt_context, new_character, tick_character
 from backend.prompts import PromptError, build_context, render_prompt
 
 router = APIRouter()
@@ -25,6 +26,14 @@ class EmbarkBody(BaseModel):
 
 class ChatBody(BaseModel):
     message: str
+
+
+class CreateCharacter(BaseModel):
+    name: str
+
+
+class UpdateCharacterStates(BaseModel):
+    states: dict[str, list[dict]] | None = None
 
 
 @router.get("/health")
@@ -138,6 +147,8 @@ async def adventure_chat(slug: str, body: ChatBody):
     config = storage.get_config()
     story_roles = storage.get_story_roles(slug)
     history = storage.get_messages(slug)
+    characters = storage.get_characters(slug)
+    char_ctx = character_prompt_context(characters) if characters else None
 
     now = datetime.now(timezone.utc).isoformat()
     player_msg = {"role": "player", "text": body.message, "ts": now}
@@ -158,7 +169,10 @@ async def adventure_chat(slug: str, body: ChatBody):
         if not connection:
             continue
 
-        ctx = build_context(adventure, history, body.message, narration=narration)
+        ctx = build_context(
+            adventure, history, body.message,
+            narration=narration, characters=char_ctx,
+        )
         template_str = role_cfg.get("prompt", "")
         if not template_str:
             continue
@@ -185,7 +199,10 @@ async def adventure_chat(slug: str, body: ChatBody):
         if not connection:
             continue
 
-        ctx = build_context(adventure, history, body.message, narration=narration)
+        ctx = build_context(
+            adventure, history, body.message,
+            narration=narration, characters=char_ctx,
+        )
         template_str = role_cfg.get("prompt", "")
         if not template_str:
             continue
@@ -200,8 +217,85 @@ async def adventure_chat(slug: str, body: ChatBody):
         msg = {"role": role_name, "text": text, "ts": now}
         new_messages.append(msg)
 
+    # Tick character states after pipeline phases
+    if characters:
+        for char in characters:
+            tick_character(char)
+        storage.save_characters(slug, characters)
+
     storage.append_messages(slug, new_messages)
     return {"messages": new_messages}
+
+
+# ── Characters ────────────────────────────────────────────
+
+
+@router.get("/adventures/{slug}/characters")
+async def list_characters(slug: str):
+    adventure = storage.get_adventure(slug)
+    if not adventure:
+        raise HTTPException(404, "Adventure not found")
+    return storage.get_characters(slug)
+
+
+@router.post("/adventures/{slug}/characters", status_code=201)
+async def create_character(slug: str, body: CreateCharacter):
+    adventure = storage.get_adventure(slug)
+    if not adventure:
+        raise HTTPException(404, "Adventure not found")
+    characters = storage.get_characters(slug)
+    char = new_character(body.name)
+    # Check for slug collision
+    if any(c["slug"] == char["slug"] for c in characters):
+        raise HTTPException(409, f"Character '{body.name}' already exists")
+    characters.append(char)
+    storage.save_characters(slug, characters)
+    return char
+
+
+@router.get("/adventures/{slug}/characters/{cslug}")
+async def get_character_endpoint(slug: str, cslug: str):
+    adventure = storage.get_adventure(slug)
+    if not adventure:
+        raise HTTPException(404, "Adventure not found")
+    char = storage.get_character(slug, cslug)
+    if not char:
+        raise HTTPException(404, "Character not found")
+    return char
+
+
+@router.patch("/adventures/{slug}/characters/{cslug}")
+async def update_character(slug: str, cslug: str, body: UpdateCharacterStates):
+    adventure = storage.get_adventure(slug)
+    if not adventure:
+        raise HTTPException(404, "Adventure not found")
+    characters = storage.get_characters(slug)
+    found = None
+    for char in characters:
+        if char["slug"] == cslug:
+            found = char
+            break
+    if not found:
+        raise HTTPException(404, "Character not found")
+    if body.states:
+        for category in ("core", "persistent", "temporal"):
+            if category in body.states:
+                found["states"][category] = body.states[category]
+    storage.save_characters(slug, characters)
+    return found
+
+
+@router.delete("/adventures/{slug}/characters/{cslug}")
+async def delete_character(slug: str, cslug: str):
+    adventure = storage.get_adventure(slug)
+    if not adventure:
+        raise HTTPException(404, "Adventure not found")
+    characters = storage.get_characters(slug)
+    new_list = [c for c in characters if c["slug"] != cslug]
+    if len(new_list) == len(characters):
+        raise HTTPException(404, "Character not found")
+    storage.save_characters(slug, new_list)
+    return {"ok": True}
 
 
 # ── Story Roles (per-adventure) ──────────────────────────

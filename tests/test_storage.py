@@ -379,6 +379,49 @@ def test_update_story_roles_ignores_unknown():
     assert "unknown_role" not in roles
 
 
+# ── Characters ──────────────────────────────────────────────
+
+
+def test_get_characters_empty():
+    """Returns [] for a new adventure."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    assert storage.get_characters(adv["slug"]) == []
+
+
+def test_save_and_get_characters_roundtrip():
+    """Save + read round-trip."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    chars = [{"name": "Gareth", "slug": "gareth", "states": {"core": [], "persistent": [], "temporal": []}, "overflow_pending": False}]
+    storage.save_characters(adv["slug"], chars)
+    result = storage.get_characters(adv["slug"])
+    assert len(result) == 1
+    assert result[0]["name"] == "Gareth"
+
+
+def test_embark_writes_characters_json():
+    """Embarking writes characters.json automatically."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    path = storage.adventures_dir() / adv["slug"] / "characters.json"
+    assert path.is_file()
+
+
+def test_get_character_by_slug():
+    """Find a single character by slug."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    chars = [
+        {"name": "Gareth", "slug": "gareth", "states": {"core": [], "persistent": [], "temporal": []}, "overflow_pending": False},
+        {"name": "Elena", "slug": "elena", "states": {"core": [], "persistent": [], "temporal": []}, "overflow_pending": False},
+    ]
+    storage.save_characters(adv["slug"], chars)
+    assert storage.get_character(adv["slug"], "gareth")["name"] == "Gareth"
+    assert storage.get_character(adv["slug"], "elena")["name"] == "Elena"
+    assert storage.get_character(adv["slug"], "nobody") is None
+
+
 def test_update_config_replaces_connections_array():
     """Sending a new connections array fully replaces the old one."""
     storage.update_config({"llm_connections": [

@@ -3,6 +3,7 @@
 import shutil
 
 from backend import storage
+from backend.characters import new_character
 
 DEMO_TEMPLATES = [
     {
@@ -31,6 +32,31 @@ def create_demo_data() -> None:
         storage.create_template(tmpl["title"], tmpl["description"])
 
     # Embark a demo adventure so story roles are visible out of the box
-    storage.embark_template("dragons-hollow", "Dragon's Hollow Demo Run")
+    adventure = storage.embark_template("dragons-hollow", "Dragon's Hollow Demo Run")
 
-    print(f"Created {len(DEMO_TEMPLATES)} demo templates + 1 demo adventure.")
+    # Add demo characters with sample states
+    gareth = new_character("Gareth")
+    gareth["states"]["core"] = [{"label": "Loyal to the King", "value": 18}]
+    gareth["states"]["persistent"] = [
+        {"label": "Loves Elena", "value": 12},
+        {"label": "Grumpy", "value": 8},
+    ]
+    gareth["states"]["temporal"] = [{"label": "Angry", "value": 4}]
+
+    elena = new_character("Elena")
+    elena["states"]["persistent"] = [
+        {"label": "Healer's oath", "value": 14},
+        {"label": "Curious about the dragon", "value": 9},
+    ]
+    elena["states"]["temporal"] = [{"label": "Worried about Gareth", "value": 7}]
+
+    thrak = new_character("Thrak")
+    thrak["states"]["core"] = [{"label": "Survival instinct", "value": 19}]
+    thrak["states"]["temporal"] = [
+        {"label": "Hungry", "value": 6},
+        {"label": "Suspicious of strangers", "value": 11},
+    ]
+
+    storage.save_characters(adventure["slug"], [gareth, elena, thrak])
+
+    print(f"Created {len(DEMO_TEMPLATES)} demo templates + 1 demo adventure + 3 demo characters.")
