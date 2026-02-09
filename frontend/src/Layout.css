@@ -50,6 +50,26 @@
   text-overflow: ellipsis;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-gear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  padding: 0.3rem;
+  border-radius: 4px;
+  transition: color 0.2s, background 0.2s;
+}
+.btn-gear:hover {
+  color: var(--accent);
+  background: var(--bg-card);
+}
+
 .btn-sm {
   font-size: 0.85rem;
   padding: 0.3rem 0.7rem;

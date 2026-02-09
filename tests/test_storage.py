@@ -223,5 +223,44 @@ def test_delete_adventure_missing():
 
 def test_generate_adventure_name():
     name = storage.generate_adventure_name("The Cursed Tavern")
-    assert "The Cursed Tavern" in name
-    assert "the" in name.lower()  # format: "{period} the {epithet}: {title}"
+    assert name.startswith("The Cursed Tavern in the ")
+
+
+# ── Config ───────────────────────────────────────────────────
+
+
+def test_get_config_empty():
+    """Returns defaults when no config file exists."""
+    config = storage.get_config()
+    assert config["llm_provider_url"] == ""
+    assert config["llm_api_key"] == ""
+    assert config["llm_model"] == ""
+    assert config["llm_completion_mode"] == "chat"
+    assert config["app_width_percent"] == 100
+
+
+def test_update_config():
+    """Merges and persists config."""
+    result = storage.update_config({
+        "llm_provider_url": "http://localhost:8080",
+        "llm_model": "llama3",
+    })
+    assert result["llm_provider_url"] == "http://localhost:8080"
+    assert result["llm_model"] == "llama3"
+    assert result["app_width_percent"] == 100  # default preserved
+
+    # Verify persisted
+    reloaded = storage.get_config()
+    assert reloaded["llm_provider_url"] == "http://localhost:8080"
+    assert reloaded["llm_model"] == "llama3"
+
+
+def test_update_config_partial():
+    """Only updates provided fields, leaves others intact."""
+    storage.update_config({"llm_model": "gpt-4o"})
+    storage.update_config({"app_width_percent": 75})
+
+    config = storage.get_config()
+    assert config["llm_model"] == "gpt-4o"
+    assert config["app_width_percent"] == 75
+    assert config["llm_completion_mode"] == "chat"  # untouched default

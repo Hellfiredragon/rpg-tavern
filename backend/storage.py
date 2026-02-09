@@ -272,4 +272,37 @@ def generate_adventure_name(template_title: str) -> str:
     epithets = parts.get("epithets", ["the Unknown"])
     period = random.choice(periods)
     epithet = random.choice(epithets)
-    return f"{period} the {epithet}: {template_title}"
+    return f"{template_title} in the {period} the {epithet}"
+
+
+# ── Config ────────────────────────────────────────────────
+
+_CONFIG_DEFAULTS: dict[str, Any] = {
+    "llm_provider_url": "",
+    "llm_api_key": "",
+    "llm_model": "",
+    "llm_completion_mode": "chat",
+    "app_width_percent": 100,
+}
+
+
+def _config_path() -> Path:
+    return data_dir() / "config.json"
+
+
+def get_config() -> dict[str, Any]:
+    """Read config, returning defaults merged with stored values."""
+    config = dict(_CONFIG_DEFAULTS)
+    path = _config_path()
+    if path.is_file():
+        stored = json.loads(path.read_text())
+        config.update(stored)
+    return config
+
+
+def update_config(fields: dict[str, Any]) -> dict[str, Any]:
+    """Merge fields into config and persist. Returns full config."""
+    config = get_config()
+    config.update(fields)
+    _config_path().write_text(json.dumps(config, indent=2))
+    return config

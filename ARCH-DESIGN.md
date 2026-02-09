@@ -107,3 +107,18 @@ Embarking creates a running adventure from a template. The user picks a name (wi
 | `/` | Quest board |
 | `/templates/<slug>` | Edit a template |
 | `/adventures/<slug>` | View a running adventure |
+| `/settings` | App settings (LLM connection, display) |
+
+## Config
+
+App settings are stored in `data/config.json` (not under presets — no merging layer). The file is a flat JSON object with these fields:
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `llm_provider_url` | string | `""` | LLM provider base URL |
+| `llm_api_key` | string | `""` | API key for the provider |
+| `llm_model` | string | `""` | Model name |
+| `llm_completion_mode` | `"chat"` \| `"text"` | `"chat"` | Completion endpoint style |
+| `app_width_percent` | number | `100` | Max width of the main content area (50–100%) |
+
+`get_config()` returns defaults merged with stored values. `update_config(fields)` merges partial updates and persists.

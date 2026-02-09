@@ -105,3 +105,16 @@ async def delete_adventure(slug: str):
 @router.get("/name-suggestion")
 async def name_suggestion(title: str):
     return {"name": storage.generate_adventure_name(title)}
+
+
+# ── Settings ─────────────────────────────────────────────
+
+
+@router.get("/settings")
+async def get_settings():
+    return storage.get_config()
+
+
+@router.patch("/settings")
+async def update_settings(body: dict):
+    return storage.update_config(body)

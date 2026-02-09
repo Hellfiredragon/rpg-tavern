@@ -1,0 +1,57 @@
+/* ── App Settings ─────────────────────────────────────────── */
+
+.settings-page h2 {
+  font-size: 1.6rem;
+  margin-bottom: 1.5rem;
+}
+
+.settings-section {
+  margin-bottom: 2rem;
+}
+
+.settings-section h3 {
+  font-size: 1.1rem;
+  color: var(--accent);
+  margin-bottom: 1rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.settings-field {
+  margin-bottom: 1rem;
+}
+
+.settings-field label {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 0.3rem;
+}
+
+.settings-field input,
+.settings-field select {
+  width: 100%;
+  max-width: 400px;
+  padding: 0.6em 0.8em;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: var(--text);
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.settings-field input:focus,
+.settings-field select:focus {
+  border-color: var(--accent);
+}
+
+.settings-field select {
+  cursor: pointer;
+}
+
+.settings-field input[type="number"] {
+  max-width: 120px;
+}
