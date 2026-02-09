@@ -5,14 +5,14 @@ interface LayoutProps {
   children: ReactNode
   adventureName?: string | null
   onBack?: () => void
-  onSettings?: () => void
   appWidthPercent?: number
 }
 
-export default function Layout({ children, adventureName, onBack, onSettings, appWidthPercent }: LayoutProps) {
-  const widthStyle = appWidthPercent && appWidthPercent < 100
-    ? { maxWidth: `${appWidthPercent}%` } as const
-    : undefined
+export default function Layout({ children, adventureName, onBack, appWidthPercent }: LayoutProps) {
+  const pct = appWidthPercent ?? 100
+  const widthStyle = pct < 100
+    ? { maxWidth: `${pct}%` } as const
+    : { maxWidth: 'none' } as const
 
   return (
     <div className="layout">
@@ -33,11 +33,6 @@ export default function Layout({ children, adventureName, onBack, onSettings, ap
             {onBack && (
               <button className="btn btn-ghost btn-sm" onClick={onBack}>
                 Quest Board
-              </button>
-            )}
-            {onSettings && (
-              <button className="btn-gear" onClick={onSettings} title="Settings">
-                <i className="fa-solid fa-gear" />
               </button>
             )}
           </div>

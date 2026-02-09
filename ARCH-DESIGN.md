@@ -105,9 +105,10 @@ Embarking creates a running adventure from a template. The user picks a name (wi
 | Route | View |
 |---|---|
 | `/` | Quest board |
-| `/templates/<slug>` | Edit a template |
-| `/adventures/<slug>` | View a running adventure |
-| `/settings` | App settings (LLM connection, display) |
+| `/templates/<slug>` | Edit a template (tabs: Chat/World/Settings/Global Settings) |
+| `/adventures/<slug>` | View a running adventure (tabs: Chat/World/Settings/Global Settings) |
+
+Global Settings (LLM connections, story role assignments, display) is a tab within every template/adventure view, not a separate page.
 
 ## Config
 

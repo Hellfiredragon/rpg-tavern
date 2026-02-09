@@ -58,12 +58,12 @@ backend/              Python backend (FastAPI)
 
 frontend/             React + TypeScript (Vite)
   src/
-    App.tsx            URL router: / → QuestBoard, /templates/:slug, /adventures/:slug, /settings
+    App.tsx            URL router: / → QuestBoard, /templates/:slug, /adventures/:slug
     Layout.tsx         Shell with header breadcrumb (adventure name + back link)
     QuestBoard.tsx     Quest board with "Running Adventures" and "Templates" sections
-    AdventureView.tsx  Tab-based view (Chat/World/Settings) for template or adventure
+    AdventureView.tsx  Tab-based view (Chat/World/Settings/Global Settings) for template or adventure
     EmbarkDialog.tsx   Modal dialog for naming an adventure before embarking
-    AppSettings.tsx    Settings page (LLM connection, display preferences)
+    AppSettings.tsx    Global settings (LLM connections, story role assignments, display)
   vite.config.ts      Build output → ../backend/static, dev proxy /api → backend
 
 presets/              Built-in content (committed to git, read-only at runtime)

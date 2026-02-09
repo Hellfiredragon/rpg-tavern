@@ -32,6 +32,15 @@
   border-bottom-color: var(--accent);
 }
 
+.tab-btn--push-right {
+  margin-left: auto;
+}
+
+.tab-btn i {
+  margin-right: 0.35em;
+  font-size: 0.85em;
+}
+
 /* ── Tab Content ─────────────────────────────────────────── */
 
 .tab-content {

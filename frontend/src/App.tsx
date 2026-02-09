@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import Layout from './Layout'
 import QuestBoard from './QuestBoard'
 import AdventureView from './AdventureView'
-import AppSettings from './AppSettings'
 import './App.css'
 
 // ── URL-based routing ───────────────────────────────────────
@@ -11,7 +10,6 @@ type Route =
   | { page: 'board' }
   | { page: 'template'; slug: string }
   | { page: 'adventure'; slug: string }
-  | { page: 'settings' }
 
 function parseRoute(): Route {
   const path = window.location.pathname
@@ -19,7 +17,6 @@ function parseRoute(): Route {
   if (tmpl) return { page: 'template', slug: tmpl[1] }
   const adv = path.match(/^\/adventures\/([^/]+)/)
   if (adv) return { page: 'adventure', slug: adv[1] }
-  if (path === '/settings') return { page: 'settings' }
   return { page: 'board' }
 }
 
@@ -55,17 +52,21 @@ function App() {
   const goToTemplate = useCallback((slug: string) => navigate(`/templates/${slug}`), [])
   const goToAdventure = useCallback((slug: string) => navigate(`/adventures/${slug}`), [])
   const goToBoard = useCallback(() => navigate('/'), [])
-  const goToSettings = useCallback(() => navigate('/settings'), [])
 
   const [appWidth, setAppWidth] = useState(100)
 
   useEffect(() => {
+    // Load initial width from settings
+    fetch('/api/settings')
+      .then(res => res.json())
+      .then(data => {
+        if (data.app_width_percent) setAppWidth(data.app_width_percent)
+      })
+  }, [])
+
+  useEffect(() => {
     if (route.page === 'board') {
       setTitle(null)
-      return
-    }
-    if (route.page === 'settings') {
-      setTitle('Settings')
       return
     }
     const apiBase = route.page === 'template' ? '/api/templates' : '/api/adventures'
@@ -80,7 +81,6 @@ function App() {
     <Layout
       adventureName={title}
       onBack={isDetail ? goToBoard : undefined}
-      onSettings={goToSettings}
       appWidthPercent={appWidth}
     >
       {route.page === 'board' && (
@@ -90,13 +90,10 @@ function App() {
         />
       )}
       {route.page === 'template' && (
-        <AdventureView slug={route.slug} kind="template" />
+        <AdventureView slug={route.slug} kind="template" onWidthChange={setAppWidth} />
       )}
       {route.page === 'adventure' && (
-        <AdventureView slug={route.slug} kind="adventure" />
-      )}
-      {route.page === 'settings' && (
-        <AppSettings onWidthChange={setAppWidth} />
+        <AdventureView slug={route.slug} kind="adventure" onWidthChange={setAppWidth} />
       )}
     </Layout>
   )

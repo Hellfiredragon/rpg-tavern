@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import AppSettings from './AppSettings'
 import './AdventureView.css'
 
 interface AdventureViewProps {
   slug: string
   kind: 'template' | 'adventure'
+  onWidthChange: (percent: number) => void
 }
 
 interface ItemData {
@@ -18,7 +20,7 @@ interface ChatMessage {
   ts: string
 }
 
-type Tab = 'chat' | 'world' | 'settings'
+type Tab = 'chat' | 'world' | 'settings' | 'global-settings'
 
 type WhenTrigger = 'on_player_message' | 'after_narration' | 'disabled'
 
@@ -159,7 +161,7 @@ function StoryRoleCard({
   )
 }
 
-export default function AdventureView({ slug, kind }: AdventureViewProps) {
+export default function AdventureView({ slug, kind, onWidthChange }: AdventureViewProps) {
   const [data, setData] = useState<ItemData | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('chat')
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -244,10 +246,11 @@ export default function AdventureView({ slug, kind }: AdventureViewProps) {
   const isTemplate = kind === 'template'
   const chatLabel = isTemplate ? 'Test' : 'Chat'
 
-  const tabs: { key: Tab; label: string }[] = [
+  const tabs: { key: Tab; label: string; icon?: string }[] = [
     { key: 'chat', label: chatLabel },
     { key: 'world', label: 'World' },
     { key: 'settings', label: 'Settings' },
+    { key: 'global-settings', label: 'Global Settings', icon: 'fa-solid fa-gear' },
   ]
 
   return (
@@ -256,9 +259,10 @@ export default function AdventureView({ slug, kind }: AdventureViewProps) {
         {tabs.map(tab => (
           <button
             key={tab.key}
-            className={`tab-btn ${activeTab === tab.key ? 'tab-btn--active' : ''}`}
+            className={`tab-btn ${activeTab === tab.key ? 'tab-btn--active' : ''} ${tab.key === 'global-settings' ? 'tab-btn--push-right' : ''}`}
             onClick={() => setActiveTab(tab.key)}
           >
+            {tab.icon && <i className={tab.icon} />}
             {tab.label}
           </button>
         ))}
@@ -326,6 +330,9 @@ export default function AdventureView({ slug, kind }: AdventureViewProps) {
           <div className="tab-placeholder">
             <p>Template settings for <strong>{data.title}</strong>. (Coming soon)</p>
           </div>
+        )}
+        {activeTab === 'global-settings' && (
+          <AppSettings onWidthChange={onWidthChange} />
         )}
       </div>
     </div>
