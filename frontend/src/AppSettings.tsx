@@ -17,6 +17,7 @@ interface Settings {
   llm_connections: LLMConnection[]
   story_roles: StoryRoles
   app_width_percent: number
+  help_panel_width_percent: number
 }
 
 interface AppSettingsProps {
@@ -203,7 +204,7 @@ export default function AppSettings({ onWidthChange }: AppSettingsProps) {
       <hr className="divider" />
 
       <div className="settings-section">
-        <h3>Display</h3>
+        <h3>UI Settings</h3>
         <div className="settings-field">
           <label>App Width (%)</label>
           <input
@@ -214,6 +215,24 @@ export default function AppSettings({ onWidthChange }: AppSettingsProps) {
             onChange={e => {
               const v = Math.max(50, Math.min(100, Number(e.target.value)))
               patchWidth(v)
+            }}
+          />
+        </div>
+        <div className="settings-field">
+          <label>Help Panel Width (%)</label>
+          <input
+            type="number"
+            min={15}
+            max={50}
+            value={settings.help_panel_width_percent}
+            onChange={e => {
+              const v = Math.max(15, Math.min(50, Number(e.target.value)))
+              setSettings(prev => prev ? { ...prev, help_panel_width_percent: v } : prev)
+              fetch('/api/settings', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ help_panel_width_percent: v }),
+              })
             }}
           />
         </div>

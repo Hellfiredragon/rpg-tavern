@@ -120,69 +120,91 @@ const MESSAGE_FIELDS: { name: string; desc: string }[] = [
 
 function PromptHintsPanel({ showAfterNarration }: { showAfterNarration: boolean }) {
   const [open, setOpen] = useState(false)
+  const [widthPct, setWidthPct] = useState(25)
 
-  return (
-    <div className={`hint-panel ${open ? 'hint-panel--open' : ''}`}>
-      {open ? (
-        <div className="hint-panel-slider">
-          <div className="hint-panel-header">
-            <h3>Template Help</h3>
-            <button className="hint-panel-close" onClick={() => setOpen(false)} title="Close">
-              <i className="fa-solid fa-xmark" />
-            </button>
-          </div>
-          <div className="hint-panel-body">
-            <h4>Template Variables</h4>
-            <p className="hint-intro">Use Handlebars syntax in prompt templates.</p>
-            <dl className="hint-vars">
-              {TEMPLATE_VARS.map(v => (
-                <div key={v.name} className={`hint-var ${v.afterOnly && !showAfterNarration ? 'hint-var--dim' : ''}`}>
-                  <dt>
-                    <code>{'{{' + v.name + '}}'}</code>
-                    <span className="hint-type">{v.type}</span>
-                  </dt>
-                  <dd>
-                    {v.desc}
-                    {v.afterOnly && <span className="hint-badge">after_narration only</span>}
-                  </dd>
-                </div>
-              ))}
-            </dl>
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(res => res.json())
+      .then(data => {
+        if (data.help_panel_width_percent) setWidthPct(data.help_panel_width_percent)
+      })
+  }, [])
 
-            <h4>Message Fields</h4>
-            <p className="hint-intro">Inside <code>{'{{#each messages}}'}</code>:</p>
-            <dl className="hint-vars">
-              {MESSAGE_FIELDS.map(f => (
-                <div key={f.name} className="hint-var">
-                  <dt><code>{f.name}</code></dt>
-                  <dd>{f.desc}</dd>
-                </div>
-              ))}
-            </dl>
+  useEffect(() => {
+    if (open) {
+      document.documentElement.style.setProperty('--hint-panel-width', `${widthPct}%`)
+    } else {
+      document.documentElement.style.setProperty('--hint-panel-width', '0px')
+    }
+    return () => {
+      document.documentElement.style.setProperty('--hint-panel-width', '0px')
+    }
+  }, [open, widthPct])
 
-            <h4>Block Helpers</h4>
-            <dl className="hint-vars">
-              <div className="hint-var">
-                <dt><code>{'{{#take arr N}}...{{/take}}'}</code></dt>
-                <dd>Iterate over the first N items of an array</dd>
-              </div>
-              <div className="hint-var">
-                <dt><code>{'{{#last arr N}}...{{/last}}'}</code></dt>
-                <dd>Iterate over the last N items of an array</dd>
-              </div>
-            </dl>
-            <pre className="hint-example">{'{{#last messages 5}}\n{{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}\n{{/last}}'}</pre>
-
-            <h4>Examples</h4>
-            <pre className="hint-example">{'{{#each messages}}\n{{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}\n{{/each}}'}</pre>
-            <pre className="hint-example">{'{{#take characters 3}}\n{{name}}: {{descriptions}}\n{{/take}}'}</pre>
-          </div>
-        </div>
-      ) : (
+  if (!open) {
+    return (
+      <div className="hint-panel">
         <button className="hint-panel-toggle" onClick={() => setOpen(true)} title="Template help">
           <span className="hint-panel-label">Help</span>
         </button>
-      )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="hint-panel hint-panel--open" style={{ width: `${widthPct}%` }}>
+      <div className="hint-panel-header">
+        <h3>Template Help</h3>
+        <button className="hint-panel-close" onClick={() => setOpen(false)} title="Close">
+          <i className="fa-solid fa-xmark" />
+        </button>
+      </div>
+      <div className="hint-panel-body">
+        <h4>Template Variables</h4>
+        <p className="hint-intro">Use Handlebars syntax in prompt templates.</p>
+        <dl className="hint-vars">
+          {TEMPLATE_VARS.map(v => (
+            <div key={v.name} className={`hint-var ${v.afterOnly && !showAfterNarration ? 'hint-var--dim' : ''}`}>
+              <dt>
+                <code>{'{{' + v.name + '}}'}</code>
+                <span className="hint-type">{v.type}</span>
+              </dt>
+              <dd>
+                {v.desc}
+                {v.afterOnly && <span className="hint-badge">after_narration only</span>}
+              </dd>
+            </div>
+          ))}
+        </dl>
+
+        <h4>Message Fields</h4>
+        <p className="hint-intro">Inside <code>{'{{#each messages}}'}</code>:</p>
+        <dl className="hint-vars">
+          {MESSAGE_FIELDS.map(f => (
+            <div key={f.name} className="hint-var">
+              <dt><code>{f.name}</code></dt>
+              <dd>{f.desc}</dd>
+            </div>
+          ))}
+        </dl>
+
+        <h4>Block Helpers</h4>
+        <dl className="hint-vars">
+          <div className="hint-var">
+            <dt><code>{'{{#take arr N}}...{{/take}}'}</code></dt>
+            <dd>Iterate over the first N items of an array</dd>
+          </div>
+          <div className="hint-var">
+            <dt><code>{'{{#last arr N}}...{{/last}}'}</code></dt>
+            <dd>Iterate over the last N items of an array</dd>
+          </div>
+        </dl>
+        <pre className="hint-example">{'{{#last messages 5}}\n{{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}\n{{/last}}'}</pre>
+
+        <h4>Examples</h4>
+        <pre className="hint-example">{'{{#each messages}}\n{{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}\n{{/each}}'}</pre>
+        <pre className="hint-example">{'{{#take characters 3}}\n{{name}}: {{descriptions}}\n{{/take}}'}</pre>
+      </div>
     </div>
   )
 }

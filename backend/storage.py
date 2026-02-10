@@ -402,6 +402,7 @@ _CONFIG_DEFAULTS: dict[str, Any] = {
         "extractor": "",
     },
     "app_width_percent": 100,
+    "help_panel_width_percent": 25,
 }
 
 
@@ -415,6 +416,7 @@ def get_config() -> dict[str, Any]:
         "llm_connections": list(_CONFIG_DEFAULTS["llm_connections"]),
         "story_roles": dict(_CONFIG_DEFAULTS["story_roles"]),
         "app_width_percent": _CONFIG_DEFAULTS["app_width_percent"],
+        "help_panel_width_percent": _CONFIG_DEFAULTS["help_panel_width_percent"],
     }
     path = _config_path()
     if path.is_file():
@@ -425,6 +427,8 @@ def get_config() -> dict[str, Any]:
             config["story_roles"].update(stored["story_roles"])
         if "app_width_percent" in stored:
             config["app_width_percent"] = stored["app_width_percent"]
+        if "help_panel_width_percent" in stored:
+            config["help_panel_width_percent"] = stored["help_panel_width_percent"]
     return config
 
 
@@ -437,5 +441,7 @@ def update_config(fields: dict[str, Any]) -> dict[str, Any]:
         config["story_roles"].update(fields["story_roles"])
     if "app_width_percent" in fields:
         config["app_width_percent"] = fields["app_width_percent"]
+    if "help_panel_width_percent" in fields:
+        config["help_panel_width_percent"] = fields["help_panel_width_percent"]
     _config_path().write_text(json.dumps(config, indent=2))
     return config
