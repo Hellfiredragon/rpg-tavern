@@ -118,40 +118,79 @@ const MESSAGE_FIELDS: { name: string; desc: string }[] = [
   { name: '.is_narrator', desc: 'Boolean flag' },
 ]
 
-function PromptHintsSidebar({ showAfterNarration }: { showAfterNarration: boolean }) {
+function PromptHintsPanel({ showAfterNarration }: { showAfterNarration: boolean }) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
   return (
-    <aside className="prompt-hints">
-      <h4>Template Variables</h4>
-      <p className="hint-intro">Use Handlebars syntax in prompt templates.</p>
-      <dl className="hint-vars">
-        {TEMPLATE_VARS.map(v => (
-          <div key={v.name} className={`hint-var ${v.afterOnly && !showAfterNarration ? 'hint-var--dim' : ''}`}>
-            <dt>
-              <code>{'{{' + v.name + '}}'}</code>
-              <span className="hint-type">{v.type}</span>
-            </dt>
-            <dd>
-              {v.desc}
-              {v.afterOnly && <span className="hint-badge">after_narration only</span>}
-            </dd>
-          </div>
-        ))}
-      </dl>
+    <div className="hint-panel" ref={containerRef}>
+      <button
+        className={`hint-panel-toggle ${open ? 'hint-panel-toggle--open' : ''}`}
+        onClick={() => setOpen(!open)}
+        title="Template helpers"
+      >
+        <i className="fa-solid fa-code" />
+      </button>
+      {open && (
+        <div className="hint-panel-box">
+          <h4>Template Variables</h4>
+          <p className="hint-intro">Use Handlebars syntax in prompt templates.</p>
+          <dl className="hint-vars">
+            {TEMPLATE_VARS.map(v => (
+              <div key={v.name} className={`hint-var ${v.afterOnly && !showAfterNarration ? 'hint-var--dim' : ''}`}>
+                <dt>
+                  <code>{'{{' + v.name + '}}'}</code>
+                  <span className="hint-type">{v.type}</span>
+                </dt>
+                <dd>
+                  {v.desc}
+                  {v.afterOnly && <span className="hint-badge">after_narration only</span>}
+                </dd>
+              </div>
+            ))}
+          </dl>
 
-      <h4>Message Fields</h4>
-      <p className="hint-intro">Inside <code>{'{{#each messages}}'}</code>:</p>
-      <dl className="hint-vars">
-        {MESSAGE_FIELDS.map(f => (
-          <div key={f.name} className="hint-var">
-            <dt><code>{f.name}</code></dt>
-            <dd>{f.desc}</dd>
-          </div>
-        ))}
-      </dl>
+          <h4>Message Fields</h4>
+          <p className="hint-intro">Inside <code>{'{{#each messages}}'}</code>:</p>
+          <dl className="hint-vars">
+            {MESSAGE_FIELDS.map(f => (
+              <div key={f.name} className="hint-var">
+                <dt><code>{f.name}</code></dt>
+                <dd>{f.desc}</dd>
+              </div>
+            ))}
+          </dl>
 
-      <h4>Examples</h4>
-      <pre className="hint-example">{'{{#each messages}}\n{{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}\n{{/each}}'}</pre>
-    </aside>
+          <h4>Block Helpers</h4>
+          <dl className="hint-vars">
+            <div className="hint-var">
+              <dt><code>{'{{#take arr N}}...{{/take}}'}</code></dt>
+              <dd>Iterate over the first N items of an array</dd>
+            </div>
+            <div className="hint-var">
+              <dt><code>{'{{#last arr N}}...{{/last}}'}</code></dt>
+              <dd>Iterate over the last N items of an array</dd>
+            </div>
+          </dl>
+          <pre className="hint-example">{'{{#last messages 5}}\n{{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}\n{{/last}}'}</pre>
+
+          <h4>Examples</h4>
+          <pre className="hint-example">{'{{#each messages}}\n{{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}\n{{/each}}'}</pre>
+          <pre className="hint-example">{'{{#take characters 3}}\n{{name}}: {{descriptions}}\n{{/take}}'}</pre>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -697,22 +736,17 @@ export default function AdventureView({ slug, kind, onWidthChange }: AdventureVi
           </div>
         )}
         {activeTab === 'settings' && kind === 'adventure' && storyRoles && (
-          <div className="settings-layout">
-            <PromptHintsSidebar
-              showAfterNarration={Object.values(storyRoles).some(r => r.when === 'after_narration')}
-            />
-            <div className="story-roles-settings">
-              <h3>Story Roles</h3>
-              {(Object.keys(ROLE_LABELS) as RoleName[]).map(role => (
-                <StoryRoleCard
-                  key={role}
-                  role={role}
-                  config={storyRoles[role]}
-                  onTriggerChange={when => patchStoryRole(role, { when })}
-                  onPromptChange={prompt => patchStoryRole(role, { prompt })}
-                />
-              ))}
-            </div>
+          <div className="story-roles-settings">
+            <h3>Story Roles</h3>
+            {(Object.keys(ROLE_LABELS) as RoleName[]).map(role => (
+              <StoryRoleCard
+                key={role}
+                role={role}
+                config={storyRoles[role]}
+                onTriggerChange={when => patchStoryRole(role, { when })}
+                onPromptChange={prompt => patchStoryRole(role, { prompt })}
+              />
+            ))}
           </div>
         )}
         {activeTab === 'settings' && isTemplate && (
@@ -725,6 +759,11 @@ export default function AdventureView({ slug, kind, onWidthChange }: AdventureVi
         )}
       </div>
 
+      {kind === 'adventure' && storyRoles && (
+        <PromptHintsPanel
+          showAfterNarration={Object.values(storyRoles).some(r => r.when === 'after_narration')}
+        />
+      )}
       {kind === 'adventure' && (
         <StatusTabs storyRoles={storyRoles} loading={loading} />
       )}

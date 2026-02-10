@@ -88,6 +88,45 @@ def test_build_context_empty_messages():
 # ── Default narrator prompt reproduces old _build_prompt ─────
 
 
+# ── helpers: take & last ────────────────────────────────────
+
+
+def test_take_first_n():
+    tpl = "{{#take items 2}}{{this}} {{/take}}"
+    result = render_prompt(tpl, {"items": ["a", "b", "c", "d"]})
+    assert result == "a b "
+
+
+def test_take_more_than_length():
+    tpl = "{{#take items 10}}{{this}} {{/take}}"
+    result = render_prompt(tpl, {"items": ["a", "b"]})
+    assert result == "a b "
+
+
+def test_take_with_objects():
+    tpl = "{{#take msgs 1}}{{text}}{{/take}}"
+    result = render_prompt(tpl, {"msgs": [{"text": "first"}, {"text": "second"}]})
+    assert result == "first"
+
+
+def test_last_n():
+    tpl = "{{#last items 2}}{{this}} {{/last}}"
+    result = render_prompt(tpl, {"items": ["a", "b", "c", "d"]})
+    assert result == "c d "
+
+
+def test_last_more_than_length():
+    tpl = "{{#last items 10}}{{this}} {{/last}}"
+    result = render_prompt(tpl, {"items": ["a", "b"]})
+    assert result == "a b "
+
+
+def test_last_with_objects():
+    tpl = "{{#last msgs 1}}{{text}}{{/last}}"
+    result = render_prompt(tpl, {"msgs": [{"text": "first"}, {"text": "second"}]})
+    assert result == "second"
+
+
 def test_build_context_with_characters():
     char_ctx = {
         "characters": [{"name": "Gareth", "slug": "gareth", "descriptions": ["Loyal drives their actions"]}],

@@ -14,6 +14,31 @@ class PromptError(Exception):
     """Raised when a Handlebars template fails to compile or render."""
 
 
+# ── Custom Handlebars helpers ────────────────────────────
+
+
+def _helper_take(this, options, items, count):
+    """{{#take array N}}...{{/take}} — iterate over the first N items."""
+    result = []
+    for item in list(items)[:int(count)]:
+        result.extend(options["fn"](item))
+    return result
+
+
+def _helper_last(this, options, items, count):
+    """{{#last array N}}...{{/last}} — iterate over the last N items."""
+    result = []
+    for item in list(items)[-int(count):]:
+        result.extend(options["fn"](item))
+    return result
+
+
+_HELPERS: dict[str, Callable] = {
+    "take": _helper_take,
+    "last": _helper_last,
+}
+
+
 def render_prompt(template_str: str, context: dict[str, Any]) -> str:
     """Compile and render a Handlebars template with the given context.
 
@@ -24,7 +49,7 @@ def render_prompt(template_str: str, context: dict[str, Any]) -> str:
         if compiled is None:
             compiled = _compiler.compile(template_str)
             _cache[template_str] = compiled
-        return compiled(context)
+        return compiled(context, helpers=_HELPERS)
     except Exception as e:
         raise PromptError(f"Template error: {e}") from e
 
