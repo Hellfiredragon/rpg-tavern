@@ -317,6 +317,32 @@ async def update_story_roles(slug: str, body: dict):
     return storage.update_story_roles(slug, body)
 
 
+# ── Connection Check ──────────────────────────────────────
+
+
+class CheckConnectionBody(BaseModel):
+    provider_url: str
+    api_key: str = ""
+
+
+@router.post("/check-connection")
+async def check_connection(body: CheckConnectionBody):
+    """Quick health check against an LLM provider URL."""
+    import httpx
+
+    url = f"{body.provider_url.rstrip('/')}/api/v1/model"
+    headers: dict[str, str] = {}
+    if body.api_key:
+        headers["Authorization"] = f"Bearer {body.api_key}"
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.get(url, headers=headers)
+            resp.raise_for_status()
+        return {"ok": True}
+    except Exception:
+        return {"ok": False}
+
+
 # ── Utility ───────────────────────────────────────────────
 
 

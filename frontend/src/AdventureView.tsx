@@ -75,6 +75,17 @@ const ROLE_LABELS: Record<RoleName, string> = {
   extractor: 'Extractor',
 }
 
+const ROLE_ICONS: Record<RoleName, string> = {
+  narrator: 'fa-solid fa-book-open',
+  character_writer: 'fa-solid fa-feather',
+  extractor: 'fa-solid fa-flask',
+}
+
+interface GlobalSettings {
+  llm_connections: { name: string; provider_url: string; api_key: string }[]
+  story_roles: Record<RoleName, string>
+}
+
 const WHEN_OPTIONS: { value: WhenTrigger; label: string }[] = [
   { value: 'on_player_message', label: 'On player message' },
   { value: 'after_narration', label: 'After narration' },
@@ -190,6 +201,144 @@ function StoryRoleCard({
           rows={8}
         />
       )}
+    </div>
+  )
+}
+
+type ConnectionStatus = 'unknown' | 'checking' | 'ok' | 'error'
+
+function StatusTabs({
+  storyRoles,
+  loading,
+}: {
+  storyRoles: StoryRoles | null
+  loading: boolean
+}) {
+  const [globalSettings, setGlobalSettings] = useState<GlobalSettings | null>(null)
+  const [connStatus, setConnStatus] = useState<Record<string, ConnectionStatus>>({})
+  const [openRole, setOpenRole] = useState<RoleName | null>(null)
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(res => res.json())
+      .then((data: GlobalSettings) => setGlobalSettings(data))
+  }, [])
+
+  // Check connection health for each assigned role on mount and every 30s
+  useEffect(() => {
+    if (!globalSettings) return
+
+    function checkAll() {
+      if (!globalSettings) return
+      const roles = Object.keys(ROLE_LABELS) as RoleName[]
+      for (const role of roles) {
+        const connName = globalSettings.story_roles[role]
+        if (!connName) continue
+        const conn = globalSettings.llm_connections.find(c => c.name === connName)
+        if (!conn) continue
+
+        setConnStatus(prev => ({ ...prev, [role]: 'checking' }))
+        fetch('/api/check-connection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider_url: conn.provider_url, api_key: conn.api_key }),
+        })
+          .then(res => res.json())
+          .then(data => {
+            setConnStatus(prev => ({ ...prev, [role]: data.ok ? 'ok' : 'error' }))
+          })
+          .catch(() => {
+            setConnStatus(prev => ({ ...prev, [role]: 'error' }))
+          })
+      }
+    }
+
+    checkAll()
+    const interval = setInterval(checkAll, 30000)
+    return () => clearInterval(interval)
+  }, [globalSettings])
+
+  if (!storyRoles || !globalSettings) return null
+
+  const roles = Object.keys(ROLE_LABELS) as RoleName[]
+
+  function getStatusForRole(role: RoleName): {
+    enabled: boolean
+    assigned: boolean
+    connName: string
+    status: ConnectionStatus
+    executing: boolean
+  } {
+    const cfg = storyRoles![role]
+    const enabled = cfg.when !== 'disabled'
+    const connName = globalSettings!.story_roles[role] || ''
+    const assigned = !!connName
+    const status = connStatus[role] || 'unknown'
+    const executing = loading && enabled && assigned
+    return { enabled, assigned, connName, status, executing }
+  }
+
+  return (
+    <div className="status-tabs">
+      {roles.map(role => {
+        const info = getStatusForRole(role)
+        const isOpen = openRole === role
+
+        let dotClass = 'status-dot--off'
+        if (info.executing) dotClass = 'status-dot--running'
+        else if (!info.enabled) dotClass = 'status-dot--off'
+        else if (!info.assigned) dotClass = 'status-dot--unassigned'
+        else if (info.status === 'ok') dotClass = 'status-dot--ok'
+        else if (info.status === 'error') dotClass = 'status-dot--error'
+        else if (info.status === 'checking') dotClass = 'status-dot--checking'
+        else dotClass = 'status-dot--unknown'
+
+        return (
+          <div key={role} className="status-tab-group">
+            <button
+              className={`status-tab ${isOpen ? 'status-tab--open' : ''}`}
+              onClick={() => setOpenRole(isOpen ? null : role)}
+              title={ROLE_LABELS[role]}
+            >
+              {info.executing
+                ? <i className="fa-solid fa-spinner fa-spin status-tab-icon" />
+                : <i className={`${ROLE_ICONS[role]} status-tab-icon`} />
+              }
+              <span className={`status-dot ${dotClass}`} />
+            </button>
+            {isOpen && (
+              <div className="status-box">
+                <div className="status-box-header">
+                  <i className={ROLE_ICONS[role]} />
+                  <strong>{ROLE_LABELS[role]}</strong>
+                </div>
+                <dl className="status-box-fields">
+                  <div className="status-field">
+                    <dt>Trigger</dt>
+                    <dd>{storyRoles![role].when === 'disabled' ? 'Disabled' : storyRoles![role].when.replace('_', ' ')}</dd>
+                  </div>
+                  <div className="status-field">
+                    <dt>Connection</dt>
+                    <dd>{info.connName || <span className="status-muted">not assigned</span>}</dd>
+                  </div>
+                  <div className="status-field">
+                    <dt>Status</dt>
+                    <dd>
+                      {info.executing && <span className="status-badge status-badge--running"><i className="fa-solid fa-spinner fa-spin" /> Running</span>}
+                      {!info.executing && !info.enabled && <span className="status-badge status-badge--off">Disabled</span>}
+                      {!info.executing && info.enabled && !info.assigned && <span className="status-badge status-badge--unassigned">No connection</span>}
+                      {!info.executing && info.enabled && info.assigned && info.status === 'ok' && <span className="status-badge status-badge--ok">Connected</span>}
+                      {!info.executing && info.enabled && info.assigned && info.status === 'error' && <span className="status-badge status-badge--error">Unreachable</span>}
+                      {!info.executing && info.enabled && info.assigned && info.status === 'checking' && <span className="status-badge status-badge--checking">Checking...</span>}
+                      {!info.executing && info.enabled && info.assigned && info.status === 'unknown' && <span className="status-badge status-badge--checking">Pending</span>}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -533,6 +682,10 @@ export default function AdventureView({ slug, kind, onWidthChange }: AdventureVi
           <AppSettings onWidthChange={onWidthChange} />
         )}
       </div>
+
+      {kind === 'adventure' && (
+        <StatusTabs storyRoles={storyRoles} loading={loading} />
+      )}
     </div>
   )
 }
