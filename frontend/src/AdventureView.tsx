@@ -133,13 +133,17 @@ function PromptHintsPanel({ showAfterNarration }: { showAfterNarration: boolean 
   }, [])
 
   useEffect(() => {
+    const el = document.documentElement
     if (open) {
-      document.documentElement.style.setProperty('--hint-panel-width', `${widthPct}%`)
+      el.style.setProperty('--hint-panel-width', `${widthPct}%`)
+      el.classList.add('hint-panel-open')
     } else {
-      document.documentElement.style.setProperty('--hint-panel-width', '0px')
+      el.style.setProperty('--hint-panel-width', '0px')
+      el.classList.remove('hint-panel-open')
     }
     return () => {
-      document.documentElement.style.setProperty('--hint-panel-width', '0px')
+      el.style.setProperty('--hint-panel-width', '0px')
+      el.classList.remove('hint-panel-open')
     }
   }, [open, widthPct])
 
