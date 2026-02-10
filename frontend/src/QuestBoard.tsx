@@ -20,9 +20,10 @@ export interface Adventure {
 interface QuestBoardProps {
   onSelectTemplate: (slug: string) => void
   onSelectAdventure: (slug: string) => void
+  onSettings: () => void
 }
 
-export default function QuestBoard({ onSelectTemplate, onSelectAdventure }: QuestBoardProps) {
+export default function QuestBoard({ onSelectTemplate, onSelectAdventure, onSettings }: QuestBoardProps) {
   const [templates, setTemplates] = useState<Template[]>([])
   const [adventures, setAdventures] = useState<Adventure[]>([])
   const [loading, setLoading] = useState(true)
@@ -94,11 +95,16 @@ export default function QuestBoard({ onSelectTemplate, onSelectAdventure }: Ques
           <h2 className="quest-board-title">Quest Board</h2>
           <p className="quest-board-subtitle">Choose your adventure, traveler</p>
         </div>
-        {!showCreate && (
-          <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-            New Template
+        <div className="quest-board-actions">
+          {!showCreate && (
+            <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+              New Template
+            </button>
+          )}
+          <button className="btn btn-ghost" onClick={onSettings} title="Global Settings">
+            <i className="fa-solid fa-gear" />
           </button>
-        )}
+        </div>
       </div>
 
       <hr className="divider" />

@@ -55,6 +55,7 @@ function App() {
   const goToTemplate = useCallback((slug: string) => navigate(`/tmpl/${slug}`), [])
   const goToAdventure = useCallback((slug: string) => navigate(`/advn/${slug}`), [])
   const goToBoard = useCallback(() => navigate('/'), [])
+  const goToSettings = useCallback(() => navigate('/global-settings'), [])
 
   const [appWidth, setAppWidth] = useState(100)
 
@@ -96,6 +97,7 @@ function App() {
         <QuestBoard
           onSelectTemplate={goToTemplate}
           onSelectAdventure={goToAdventure}
+          onSettings={goToSettings}
         />
       )}
       {route.page === 'global-settings' && (
