@@ -217,6 +217,19 @@ function StatusTabs({
   const [globalSettings, setGlobalSettings] = useState<GlobalSettings | null>(null)
   const [connStatus, setConnStatus] = useState<Record<string, ConnectionStatus>>({})
   const [openRole, setOpenRole] = useState<RoleName | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Close status box when clicking outside
+  useEffect(() => {
+    if (!openRole) return
+    function handleClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpenRole(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [openRole])
 
   useEffect(() => {
     fetch('/api/settings')
@@ -262,30 +275,61 @@ function StatusTabs({
 
   const roles = Object.keys(ROLE_LABELS) as RoleName[]
 
+  // Pipeline order: phase 1 (on_player_message) then phase 2 (after_narration),
+  // each in narrator → character_writer → extractor order.
+  const pipelineOrder: RoleName[] = []
+  const roleOrder: RoleName[] = ['narrator', 'character_writer', 'extractor']
+  for (const phase of ['on_player_message', 'after_narration'] as const) {
+    for (const r of roleOrder) {
+      if (storyRoles[r].when === phase) pipelineOrder.push(r)
+    }
+  }
+
+  // During loading, only one role per connection executes at a time.
+  // Walk the pipeline and mark the first pending role per connection as executing.
+  const executingSet = new Set<RoleName>()
+  const queuedSet = new Set<RoleName>()
+  if (loading) {
+    const busyConnections = new Set<string>()
+    for (const r of pipelineOrder) {
+      const connName = globalSettings.story_roles[r]
+      if (!connName) continue
+      if (busyConnections.has(connName)) {
+        queuedSet.add(r)
+      } else {
+        executingSet.add(r)
+        busyConnections.add(connName)
+      }
+    }
+  }
+
   function getStatusForRole(role: RoleName): {
     enabled: boolean
     assigned: boolean
     connName: string
     status: ConnectionStatus
     executing: boolean
+    queued: boolean
   } {
     const cfg = storyRoles![role]
     const enabled = cfg.when !== 'disabled'
     const connName = globalSettings!.story_roles[role] || ''
     const assigned = !!connName
     const status = connStatus[role] || 'unknown'
-    const executing = loading && enabled && assigned
-    return { enabled, assigned, connName, status, executing }
+    const executing = executingSet.has(role)
+    const queued = queuedSet.has(role)
+    return { enabled, assigned, connName, status, executing, queued }
   }
 
   return (
-    <div className="status-tabs">
+    <div className="status-tabs" ref={containerRef}>
       {roles.map(role => {
         const info = getStatusForRole(role)
         const isOpen = openRole === role
 
         let dotClass = 'status-dot--off'
         if (info.executing) dotClass = 'status-dot--running'
+        else if (info.queued) dotClass = 'status-dot--queued'
         else if (!info.enabled) dotClass = 'status-dot--off'
         else if (!info.assigned) dotClass = 'status-dot--unassigned'
         else if (info.status === 'ok') dotClass = 'status-dot--ok'
@@ -300,10 +344,7 @@ function StatusTabs({
               onClick={() => setOpenRole(isOpen ? null : role)}
               title={ROLE_LABELS[role]}
             >
-              {info.executing
-                ? <i className="fa-solid fa-spinner fa-spin status-tab-icon" />
-                : <i className={`${ROLE_ICONS[role]} status-tab-icon`} />
-              }
+              <i className={`${ROLE_ICONS[role]} status-tab-icon`} />
               <span className={`status-dot ${dotClass}`} />
             </button>
             {isOpen && (
@@ -325,12 +366,13 @@ function StatusTabs({
                     <dt>Status</dt>
                     <dd>
                       {info.executing && <span className="status-badge status-badge--running"><i className="fa-solid fa-spinner fa-spin" /> Running</span>}
-                      {!info.executing && !info.enabled && <span className="status-badge status-badge--off">Disabled</span>}
-                      {!info.executing && info.enabled && !info.assigned && <span className="status-badge status-badge--unassigned">No connection</span>}
-                      {!info.executing && info.enabled && info.assigned && info.status === 'ok' && <span className="status-badge status-badge--ok">Connected</span>}
-                      {!info.executing && info.enabled && info.assigned && info.status === 'error' && <span className="status-badge status-badge--error">Unreachable</span>}
-                      {!info.executing && info.enabled && info.assigned && info.status === 'checking' && <span className="status-badge status-badge--checking">Checking...</span>}
-                      {!info.executing && info.enabled && info.assigned && info.status === 'unknown' && <span className="status-badge status-badge--checking">Pending</span>}
+                      {info.queued && <span className="status-badge status-badge--queued">Queued</span>}
+                      {!info.executing && !info.queued && !info.enabled && <span className="status-badge status-badge--off">Disabled</span>}
+                      {!info.executing && !info.queued && info.enabled && !info.assigned && <span className="status-badge status-badge--unassigned">No connection</span>}
+                      {!info.executing && !info.queued && info.enabled && info.assigned && info.status === 'ok' && <span className="status-badge status-badge--ok">Connected</span>}
+                      {!info.executing && !info.queued && info.enabled && info.assigned && info.status === 'error' && <span className="status-badge status-badge--error">Unreachable</span>}
+                      {!info.executing && !info.queued && info.enabled && info.assigned && info.status === 'checking' && <span className="status-badge status-badge--checking">Checking...</span>}
+                      {!info.executing && !info.queued && info.enabled && info.assigned && info.status === 'unknown' && <span className="status-badge status-badge--checking">Pending</span>}
                     </dd>
                   </div>
                 </dl>

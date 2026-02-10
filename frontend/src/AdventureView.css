@@ -652,6 +652,10 @@
   animation: pulse-dot 0.8s infinite;
 }
 
+.status-dot--queued {
+  background: #7f8c8d;
+}
+
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
@@ -750,4 +754,9 @@
 .status-badge--checking {
   background: rgba(243, 156, 18, 0.15);
   color: #f39c12;
+}
+
+.status-badge--queued {
+  background: rgba(127, 140, 141, 0.15);
+  color: #7f8c8d;
 }
