@@ -120,75 +120,68 @@ const MESSAGE_FIELDS: { name: string; desc: string }[] = [
 
 function PromptHintsPanel({ showAfterNarration }: { showAfterNarration: boolean }) {
   const [open, setOpen] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [open])
 
   return (
-    <div className="hint-panel" ref={containerRef}>
-      <button
-        className={`hint-panel-toggle ${open ? 'hint-panel-toggle--open' : ''}`}
-        onClick={() => setOpen(!open)}
-        title="Template helpers"
-      >
-        <i className="fa-solid fa-code" />
-      </button>
-      {open && (
-        <div className="hint-panel-box">
-          <h4>Template Variables</h4>
-          <p className="hint-intro">Use Handlebars syntax in prompt templates.</p>
-          <dl className="hint-vars">
-            {TEMPLATE_VARS.map(v => (
-              <div key={v.name} className={`hint-var ${v.afterOnly && !showAfterNarration ? 'hint-var--dim' : ''}`}>
-                <dt>
-                  <code>{'{{' + v.name + '}}'}</code>
-                  <span className="hint-type">{v.type}</span>
-                </dt>
-                <dd>
-                  {v.desc}
-                  {v.afterOnly && <span className="hint-badge">after_narration only</span>}
-                </dd>
+    <div className={`hint-panel ${open ? 'hint-panel--open' : ''}`}>
+      {open ? (
+        <div className="hint-panel-slider">
+          <div className="hint-panel-header">
+            <h3>Template Help</h3>
+            <button className="hint-panel-close" onClick={() => setOpen(false)} title="Close">
+              <i className="fa-solid fa-xmark" />
+            </button>
+          </div>
+          <div className="hint-panel-body">
+            <h4>Template Variables</h4>
+            <p className="hint-intro">Use Handlebars syntax in prompt templates.</p>
+            <dl className="hint-vars">
+              {TEMPLATE_VARS.map(v => (
+                <div key={v.name} className={`hint-var ${v.afterOnly && !showAfterNarration ? 'hint-var--dim' : ''}`}>
+                  <dt>
+                    <code>{'{{' + v.name + '}}'}</code>
+                    <span className="hint-type">{v.type}</span>
+                  </dt>
+                  <dd>
+                    {v.desc}
+                    {v.afterOnly && <span className="hint-badge">after_narration only</span>}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+
+            <h4>Message Fields</h4>
+            <p className="hint-intro">Inside <code>{'{{#each messages}}'}</code>:</p>
+            <dl className="hint-vars">
+              {MESSAGE_FIELDS.map(f => (
+                <div key={f.name} className="hint-var">
+                  <dt><code>{f.name}</code></dt>
+                  <dd>{f.desc}</dd>
+                </div>
+              ))}
+            </dl>
+
+            <h4>Block Helpers</h4>
+            <dl className="hint-vars">
+              <div className="hint-var">
+                <dt><code>{'{{#take arr N}}...{{/take}}'}</code></dt>
+                <dd>Iterate over the first N items of an array</dd>
               </div>
-            ))}
-          </dl>
-
-          <h4>Message Fields</h4>
-          <p className="hint-intro">Inside <code>{'{{#each messages}}'}</code>:</p>
-          <dl className="hint-vars">
-            {MESSAGE_FIELDS.map(f => (
-              <div key={f.name} className="hint-var">
-                <dt><code>{f.name}</code></dt>
-                <dd>{f.desc}</dd>
+              <div className="hint-var">
+                <dt><code>{'{{#last arr N}}...{{/last}}'}</code></dt>
+                <dd>Iterate over the last N items of an array</dd>
               </div>
-            ))}
-          </dl>
+            </dl>
+            <pre className="hint-example">{'{{#last messages 5}}\n{{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}\n{{/last}}'}</pre>
 
-          <h4>Block Helpers</h4>
-          <dl className="hint-vars">
-            <div className="hint-var">
-              <dt><code>{'{{#take arr N}}...{{/take}}'}</code></dt>
-              <dd>Iterate over the first N items of an array</dd>
-            </div>
-            <div className="hint-var">
-              <dt><code>{'{{#last arr N}}...{{/last}}'}</code></dt>
-              <dd>Iterate over the last N items of an array</dd>
-            </div>
-          </dl>
-          <pre className="hint-example">{'{{#last messages 5}}\n{{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}\n{{/last}}'}</pre>
-
-          <h4>Examples</h4>
-          <pre className="hint-example">{'{{#each messages}}\n{{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}\n{{/each}}'}</pre>
-          <pre className="hint-example">{'{{#take characters 3}}\n{{name}}: {{descriptions}}\n{{/take}}'}</pre>
+            <h4>Examples</h4>
+            <pre className="hint-example">{'{{#each messages}}\n{{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}\n{{/each}}'}</pre>
+            <pre className="hint-example">{'{{#take characters 3}}\n{{name}}: {{descriptions}}\n{{/take}}'}</pre>
+          </div>
         </div>
+      ) : (
+        <button className="hint-panel-toggle" onClick={() => setOpen(true)} title="Template help">
+          <span className="hint-panel-label">Help</span>
+        </button>
       )}
     </div>
   )
