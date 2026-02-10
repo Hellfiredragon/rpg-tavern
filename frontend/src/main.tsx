@@ -12,6 +12,18 @@ document.addEventListener('focusin', (e) => {
   }
 })
 
+// Tab inserts two spaces in all textareas
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Tab' && e.target instanceof HTMLTextAreaElement) {
+    e.preventDefault()
+    const ta = e.target
+    const start = ta.selectionStart
+    const end = ta.selectionEnd
+    ta.setRangeText('  ', start, end, 'end')
+    ta.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+})
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
