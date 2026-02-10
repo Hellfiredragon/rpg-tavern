@@ -2,21 +2,24 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import Layout from './Layout'
 import QuestBoard from './QuestBoard'
 import AdventureView from './AdventureView'
+import AppSettings from './AppSettings'
 import './App.css'
 
 // ── URL-based routing ───────────────────────────────────────
 
 type Route =
   | { page: 'board' }
-  | { page: 'template'; slug: string }
-  | { page: 'adventure'; slug: string }
+  | { page: 'global-settings' }
+  | { page: 'template'; slug: string; tab?: string }
+  | { page: 'adventure'; slug: string; tab?: string }
 
 function parseRoute(): Route {
   const path = window.location.pathname
-  const tmpl = path.match(/^\/templates\/([^/]+)/)
-  if (tmpl) return { page: 'template', slug: tmpl[1] }
-  const adv = path.match(/^\/adventures\/([^/]+)/)
-  if (adv) return { page: 'adventure', slug: adv[1] }
+  if (path === '/global-settings') return { page: 'global-settings' }
+  const tmpl = path.match(/^\/tmpl\/([^/]+)(?:\/([^/]+))?/)
+  if (tmpl) return { page: 'template', slug: tmpl[1], tab: tmpl[2] }
+  const adv = path.match(/^\/advn\/([^/]+)(?:\/([^/]+))?/)
+  if (adv) return { page: 'adventure', slug: adv[1], tab: adv[2] }
   return { page: 'board' }
 }
 
@@ -49,8 +52,8 @@ function App() {
   const route = useSyncExternalStore(subscribeToLocation, getRouteSnapshot)
   const [title, setTitle] = useState<string | null>(null)
 
-  const goToTemplate = useCallback((slug: string) => navigate(`/templates/${slug}`), [])
-  const goToAdventure = useCallback((slug: string) => navigate(`/adventures/${slug}`), [])
+  const goToTemplate = useCallback((slug: string) => navigate(`/tmpl/${slug}`), [])
+  const goToAdventure = useCallback((slug: string) => navigate(`/advn/${slug}`), [])
   const goToBoard = useCallback(() => navigate('/'), [])
 
   const [appWidth, setAppWidth] = useState(100)
@@ -65,7 +68,7 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (route.page === 'board') {
+    if (route.page === 'board' || route.page === 'global-settings') {
       setTitle(null)
       return
     }
@@ -74,6 +77,12 @@ function App() {
       .then(res => res.json())
       .then(data => setTitle(data.title))
   }, [route])
+
+  const handleTabChange = useCallback((slug: string, kind: 'template' | 'adventure', tab: string) => {
+    const prefix = kind === 'template' ? '/tmpl' : '/advn'
+    const path = tab === 'chat' ? `${prefix}/${slug}` : `${prefix}/${slug}/${tab}`
+    window.history.replaceState(null, '', path)
+  }, [])
 
   const isDetail = route.page !== 'board'
 
@@ -89,11 +98,26 @@ function App() {
           onSelectAdventure={goToAdventure}
         />
       )}
+      {route.page === 'global-settings' && (
+        <AppSettings onWidthChange={setAppWidth} />
+      )}
       {route.page === 'template' && (
-        <AdventureView slug={route.slug} kind="template" onWidthChange={setAppWidth} />
+        <AdventureView
+          slug={route.slug}
+          kind="template"
+          initialTab={route.tab}
+          onTabChange={tab => handleTabChange(route.slug, 'template', tab)}
+          onWidthChange={setAppWidth}
+        />
       )}
       {route.page === 'adventure' && (
-        <AdventureView slug={route.slug} kind="adventure" onWidthChange={setAppWidth} />
+        <AdventureView
+          slug={route.slug}
+          kind="adventure"
+          initialTab={route.tab}
+          onTabChange={tab => handleTabChange(route.slug, 'adventure', tab)}
+          onWidthChange={setAppWidth}
+        />
       )}
     </Layout>
   )

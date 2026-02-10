@@ -59,7 +59,7 @@ backend/              Python backend (FastAPI)
 
 frontend/             React + TypeScript (Vite)
   src/
-    App.tsx            URL router: / → QuestBoard, /templates/:slug, /adventures/:slug
+    App.tsx            URL router (see "Frontend Routes" below)
     Layout.tsx         Shell with header breadcrumb (adventure name + back link)
     QuestBoard.tsx     Quest board with "Running Adventures" and "Templates" sections
     AdventureView.tsx  Tab-based view (Chat/World/Settings/Global Settings) for template or adventure
@@ -97,6 +97,19 @@ Configurable via `DATA_DIR` env or `--data-dir` flag. Tests use `data-tests/` wh
 ### Icons
 
 Use **Font Awesome Free** (`@fortawesome/fontawesome-free`) for all icons. Prefer `fa-solid` style. Usage: `<i className="fa-solid fa-gear" />`. Do not use inline SVGs or Unicode symbols for icons. The CSS is imported in `main.tsx`.
+
+### Frontend Routes
+
+| Route | Page |
+|-------|------|
+| `/` | Quest Board |
+| `/global-settings` | Standalone Global Settings |
+| `/tmpl/{slug}` | Template (default tab: chat) |
+| `/tmpl/{slug}/{tab}` | Template with specific tab |
+| `/advn/{slug}` | Adventure (default tab: chat) |
+| `/advn/{slug}/{tab}` | Adventure with specific tab |
+
+Valid tabs: `chat`, `characters` (adventures only), `world`, `settings`, `global-settings`. The active tab is reflected in the URL via `history.replaceState` and restored on page load.
 
 ### UI Settings
 

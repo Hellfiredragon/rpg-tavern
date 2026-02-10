@@ -5,6 +5,8 @@ import './AdventureView.css'
 interface AdventureViewProps {
   slug: string
   kind: 'template' | 'adventure'
+  initialTab?: string
+  onTabChange: (tab: string) => void
   onWidthChange: (percent: number) => void
 }
 
@@ -600,9 +602,13 @@ function CharacterPanel({ slug }: { slug: string }) {
   )
 }
 
-export default function AdventureView({ slug, kind, onWidthChange }: AdventureViewProps) {
+const VALID_TABS: Tab[] = ['chat', 'characters', 'world', 'settings', 'global-settings']
+
+export default function AdventureView({ slug, kind, initialTab, onTabChange, onWidthChange }: AdventureViewProps) {
   const [data, setData] = useState<ItemData | null>(null)
-  const [activeTab, setActiveTab] = useState<Tab>('chat')
+  const [activeTab, setActiveTab] = useState<Tab>(
+    VALID_TABS.includes(initialTab as Tab) ? initialTab as Tab : 'chat'
+  )
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -682,6 +688,11 @@ export default function AdventureView({ slug, kind, onWidthChange }: AdventureVi
     return <p className="loading-text">Loading...</p>
   }
 
+  function switchTab(tab: Tab) {
+    setActiveTab(tab)
+    onTabChange(tab)
+  }
+
   const isTemplate = kind === 'template'
   const chatLabel = isTemplate ? 'Test' : 'Chat'
 
@@ -700,7 +711,7 @@ export default function AdventureView({ slug, kind, onWidthChange }: AdventureVi
           <button
             key={tab.key}
             className={`tab-btn ${activeTab === tab.key ? 'tab-btn--active' : ''} ${tab.key === 'global-settings' ? 'tab-btn--push-right' : ''}`}
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => switchTab(tab.key)}
           >
             {tab.icon && <i className={tab.icon} />}
             {tab.label}
