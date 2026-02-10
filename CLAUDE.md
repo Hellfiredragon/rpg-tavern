@@ -113,3 +113,4 @@ In development, the Vite dev server proxies `/api/*` requests to the backend. In
 - Keep TODOS.md updated when completing items listed there
 - Update CLAUDE.md
 - Update `backend/demo.py` when data model or storage changes so `--demo` generates valid, representative demo data
+- Run `git done` when work is done — this stages all changes, commits with `.gitmessage`, and pushes
