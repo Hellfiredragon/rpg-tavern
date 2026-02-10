@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './AppSettings.css'
 
 interface LLMConnection {
@@ -30,12 +30,17 @@ function newConnection(): LLMConnection {
 
 export default function AppSettings({ onWidthChange }: AppSettingsProps) {
   const [settings, setSettings] = useState<Settings | null>(null)
+  const initialUiRef = useRef<{ app_width_percent: number; help_panel_width_percent: number } | null>(null)
 
   useEffect(() => {
     fetch('/api/settings')
       .then(res => res.json())
       .then((data: Settings) => {
         setSettings(data)
+        initialUiRef.current = {
+          app_width_percent: data.app_width_percent,
+          help_panel_width_percent: data.help_panel_width_percent,
+        }
         onWidthChange(data.app_width_percent)
       })
   }, [onWidthChange])
@@ -58,13 +63,12 @@ export default function AppSettings({ onWidthChange }: AppSettingsProps) {
     })
   }
 
-  function patchWidth(value: number) {
-    setSettings(prev => prev ? { ...prev, app_width_percent: value } : prev)
-    onWidthChange(value)
+  function patchUi(field: 'app_width_percent' | 'help_panel_width_percent', value: number) {
+    setSettings(prev => prev ? { ...prev, [field]: value } : prev)
     fetch('/api/settings', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ app_width_percent: value }),
+      body: JSON.stringify({ [field]: value }),
     })
   }
 
@@ -132,6 +136,11 @@ export default function AppSettings({ onWidthChange }: AppSettingsProps) {
   if (!settings) return <p className="loading-text">Loading...</p>
 
   const connectionNames = settings.llm_connections.map(c => c.name).filter(Boolean)
+
+  const uiDirty = initialUiRef.current != null && (
+    settings.app_width_percent !== initialUiRef.current.app_width_percent ||
+    settings.help_panel_width_percent !== initialUiRef.current.help_panel_width_percent
+  )
 
   function roleSelect(label: string, role: keyof StoryRoles) {
     return (
@@ -205,6 +214,7 @@ export default function AppSettings({ onWidthChange }: AppSettingsProps) {
 
       <div className="settings-section">
         <h3>UI Settings</h3>
+        <p className="settings-hint">Changes are saved immediately but take effect after reload.</p>
         <div className="settings-field">
           <label>App Width — {settings.app_width_percent}%</label>
           <input
@@ -213,7 +223,7 @@ export default function AppSettings({ onWidthChange }: AppSettingsProps) {
             max={100}
             step={5}
             value={settings.app_width_percent}
-            onChange={e => patchWidth(Number(e.target.value))}
+            onChange={e => patchUi('app_width_percent', Number(e.target.value))}
           />
         </div>
         <div className="settings-field">
@@ -224,17 +234,19 @@ export default function AppSettings({ onWidthChange }: AppSettingsProps) {
             max={50}
             step={5}
             value={settings.help_panel_width_percent}
-            onChange={e => {
-              const v = Number(e.target.value)
-              setSettings(prev => prev ? { ...prev, help_panel_width_percent: v } : prev)
-              fetch('/api/settings', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ help_panel_width_percent: v }),
-              })
-            }}
+            onChange={e => patchUi('help_panel_width_percent', Number(e.target.value))}
           />
         </div>
+        {uiDirty && (
+          <div className="settings-apply-bar">
+            <span className="settings-apply-hint">
+              <i className="fa-solid fa-circle-info" /> UI settings changed — reload to apply
+            </span>
+            <button className="btn btn-primary" onClick={() => window.location.reload()}>
+              <i className="fa-solid fa-rotate-right" /> Apply
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
