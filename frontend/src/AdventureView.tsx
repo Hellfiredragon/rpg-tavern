@@ -41,6 +41,7 @@ interface Character {
 }
 
 const CATEGORY_LIMITS: Record<StateCategory, number> = { core: 3, persistent: 10, temporal: 10 }
+const CATEGORY_DEFAULTS: Record<StateCategory, number> = { core: 30, persistent: 20, temporal: 6 }
 
 function stateLevel(value: number): string {
   if (value < 6) return 'silent'
@@ -50,7 +51,7 @@ function stateLevel(value: number): string {
   return 'overflow'
 }
 
-type Tab = 'chat' | 'world' | 'settings' | 'global-settings'
+type Tab = 'chat' | 'characters' | 'world' | 'settings' | 'global-settings'
 
 type WhenTrigger = 'on_player_message' | 'after_narration' | 'disabled'
 
@@ -193,12 +194,35 @@ function StoryRoleCard({
   )
 }
 
+function AddStateInput({ onAdd }: { onAdd: (label: string) => void }) {
+  const [label, setLabel] = useState('')
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const trimmed = label.trim()
+    if (!trimmed) return
+    onAdd(trimmed)
+    setLabel('')
+  }
+  return (
+    <form className="add-state-row" onSubmit={handleSubmit}>
+      <input
+        type="text"
+        value={label}
+        onChange={e => setLabel(e.target.value)}
+        placeholder="Add state..."
+      />
+      <button type="submit" disabled={!label.trim()}>
+        <i className="fa-solid fa-plus" />
+      </button>
+    </form>
+  )
+}
+
 function CharacterPanel({ slug }: { slug: string }) {
   const [characters, setCharacters] = useState<Character[]>([])
   const [newName, setNewName] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
-  const [addStateLabel, setAddStateLabel] = useState('')
-  const [addStateCategory, setAddStateCategory] = useState<StateCategory>('temporal')
+  const debounceRefs = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
   useEffect(() => {
     fetch(`/api/adventures/${slug}/characters`)
@@ -229,29 +253,37 @@ function CharacterPanel({ slug }: { slug: string }) {
     }
   }
 
-  async function patchStates(cslug: string, states: Partial<CharacterStates>) {
-    const res = await fetch(`/api/adventures/${slug}/characters/${cslug}`, {
+  function patchStates(cslug: string, states: Partial<CharacterStates>) {
+    fetch(`/api/adventures/${slug}/characters/${cslug}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ states }),
     })
-    if (res.ok) {
-      const updated = await res.json()
-      setCharacters(prev => prev.map(c => c.slug === cslug ? updated : c))
-    }
   }
 
   function removeState(char: Character, category: StateCategory, index: number) {
     const newList = char.states[category].filter((_, i) => i !== index)
+    setCharacters(prev => prev.map(c => c.slug === char.slug ? { ...c, states: { ...c.states, [category]: newList } } : c))
     patchStates(char.slug, { [category]: newList })
   }
 
-  function addState(char: Character) {
-    const label = addStateLabel.trim()
-    if (!label) return
-    const newList = [...char.states[addStateCategory], { label, value: 6 }]
-    patchStates(char.slug, { [addStateCategory]: newList })
-    setAddStateLabel('')
+  function addState(char: Character, category: StateCategory, label: string) {
+    const newList = [...char.states[category], { label, value: CATEGORY_DEFAULTS[category] }]
+    setCharacters(prev => prev.map(c => c.slug === char.slug ? { ...c, states: { ...c.states, [category]: newList } } : c))
+    patchStates(char.slug, { [category]: newList })
+  }
+
+  function changeStateValue(char: Character, category: StateCategory, index: number, value: number) {
+    const newList = char.states[category].map((s, i) => i === index ? { ...s, value } : s)
+    setCharacters(prev => prev.map(c => c.slug === char.slug ? { ...c, states: { ...c.states, [category]: newList } } : c))
+    // Debounce the PATCH
+    const key = `${char.slug}-${category}-${index}`
+    const existing = debounceRefs.current.get(key)
+    if (existing) clearTimeout(existing)
+    debounceRefs.current.set(key, setTimeout(() => {
+      patchStates(char.slug, { [category]: newList })
+      debounceRefs.current.delete(key)
+    }, 400))
   }
 
   return (
@@ -293,35 +325,23 @@ function CharacterPanel({ slug }: { slug: string }) {
                       {category}
                       <span className="slot-count">{char.states[category].length}/{CATEGORY_LIMITS[category]}</span>
                     </h5>
-                    {char.states[category].length === 0 && (
-                      <p className="states-empty">No {category} states</p>
-                    )}
                     {char.states[category].map((state, i) => (
                       <div key={i} className="state-row">
                         <span className="state-label">{state.label}</span>
-                        <span className={`state-value state-level--${stateLevel(state.value)}`}>{state.value}</span>
+                        <input
+                          type="number"
+                          className={`state-value-input state-level--${stateLevel(state.value)}`}
+                          value={state.value}
+                          onChange={e => changeStateValue(char, category, i, parseInt(e.target.value) || 0)}
+                        />
                         <button className="state-remove" onClick={() => removeState(char, category, i)} title="Remove state">
                           <i className="fa-solid fa-xmark" />
                         </button>
                       </div>
                     ))}
+                    <AddStateInput onAdd={label => addState(char, category, label)} />
                   </div>
                 ))}
-
-                <div className="add-state-row">
-                  <input
-                    type="text"
-                    value={addStateLabel}
-                    onChange={e => setAddStateLabel(e.target.value)}
-                    placeholder="State label..."
-                  />
-                  <select value={addStateCategory} onChange={e => setAddStateCategory(e.target.value as StateCategory)}>
-                    <option value="core">Core</option>
-                    <option value="persistent">Persistent</option>
-                    <option value="temporal">Temporal</option>
-                  </select>
-                  <button onClick={() => addState(char)} disabled={!addStateLabel.trim()}>Add</button>
-                </div>
 
                 <button className="character-delete" onClick={() => deleteCharacter(char.slug)}>
                   <i className="fa-solid fa-trash" /> Delete Character
@@ -422,6 +442,7 @@ export default function AdventureView({ slug, kind, onWidthChange }: AdventureVi
 
   const tabs: { key: Tab; label: string; icon?: string }[] = [
     { key: 'chat', label: chatLabel },
+    ...(!isTemplate ? [{ key: 'characters' as Tab, label: 'Characters' }] : []),
     { key: 'world', label: 'World' },
     { key: 'settings', label: 'Settings' },
     { key: 'global-settings', label: 'Global Settings', icon: 'fa-solid fa-gear' },
@@ -476,10 +497,10 @@ export default function AdventureView({ slug, kind, onWidthChange }: AdventureVi
             </form>
           </div>
         )}
-        {activeTab === 'world' && kind === 'adventure' && (
+        {activeTab === 'characters' && kind === 'adventure' && (
           <CharacterPanel slug={slug} />
         )}
-        {activeTab === 'world' && kind === 'template' && (
+        {activeTab === 'world' && (
           <div className="tab-placeholder">
             <p>World settings for <strong>{data.title}</strong>. (Coming soon)</p>
           </div>
