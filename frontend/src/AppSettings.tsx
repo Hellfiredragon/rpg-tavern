@@ -206,27 +206,26 @@ export default function AppSettings({ onWidthChange }: AppSettingsProps) {
       <div className="settings-section">
         <h3>UI Settings</h3>
         <div className="settings-field">
-          <label>App Width (%)</label>
+          <label>App Width — {settings.app_width_percent}%</label>
           <input
-            type="number"
+            type="range"
             min={50}
             max={100}
+            step={5}
             value={settings.app_width_percent}
-            onChange={e => {
-              const v = Math.max(50, Math.min(100, Number(e.target.value)))
-              patchWidth(v)
-            }}
+            onChange={e => patchWidth(Number(e.target.value))}
           />
         </div>
         <div className="settings-field">
-          <label>Help Panel Width (%)</label>
+          <label>Help Panel Width — {settings.help_panel_width_percent}%</label>
           <input
-            type="number"
+            type="range"
             min={15}
             max={50}
+            step={5}
             value={settings.help_panel_width_percent}
             onChange={e => {
-              const v = Math.max(15, Math.min(50, Number(e.target.value)))
+              const v = Number(e.target.value)
               setSettings(prev => prev ? { ...prev, help_panel_width_percent: v } : prev)
               fetch('/api/settings', {
                 method: 'PATCH',

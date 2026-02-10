@@ -56,6 +56,39 @@
   max-width: 120px;
 }
 
+.settings-field input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  max-width: 400px;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  border: none;
+  padding: 0;
+  outline: none;
+  cursor: pointer;
+}
+
+.settings-field input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+}
+
+.settings-field input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+}
+
 /* ── Connection Cards ────────────────────────────────────── */
 
 .connection-card {
