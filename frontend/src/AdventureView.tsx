@@ -52,6 +52,7 @@ interface LorebookEntryData {
 }
 
 const CATEGORY_LIMITS: Record<StateCategory, number> = { core: 3, persistent: 10, temporal: 10 }
+const CATEGORY_MAX_VALUES: Record<StateCategory, number | null> = { core: 30, persistent: 20, temporal: null }
 const CATEGORY_DEFAULTS: Record<StateCategory, number> = { core: 30, persistent: 20, temporal: 6 }
 
 function stateLevel(value: number): string {
@@ -556,7 +557,9 @@ function CharacterPanel({ slug }: { slug: string }) {
     patchCharacter(char.slug, { states: { [category]: newList } })
   }
 
-  function changeStateValue(char: Character, category: StateCategory, index: number, value: number) {
+  function changeStateValue(char: Character, category: StateCategory, index: number, rawValue: number) {
+    const cap = CATEGORY_MAX_VALUES[category]
+    const value = cap !== null && rawValue > cap ? cap : rawValue
     const newList = char.states[category].map((s, i) => i === index ? { ...s, value } : s)
     setCharacters(prev => prev.map(c => c.slug === char.slug ? { ...c, states: { ...c.states, [category]: newList } } : c))
     const key = `${char.slug}-${category}-${index}`

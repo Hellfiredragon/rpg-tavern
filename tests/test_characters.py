@@ -72,6 +72,36 @@ def test_tick_applies_rates():
     assert char["states"]["temporal"][0]["value"] == 9  # -1
 
 
+def test_tick_caps_core_at_30():
+    char = {
+        "name": "Test",
+        "slug": "test",
+        "states": {
+            "core": [{"label": "Loyal", "value": 29}],
+            "persistent": [],
+            "temporal": [],
+        },
+        "overflow_pending": False,
+    }
+    tick_character(char)
+    assert char["states"]["core"][0]["value"] == 30  # 29+2=31, capped to 30
+
+
+def test_tick_caps_persistent_at_20():
+    char = {
+        "name": "Test",
+        "slug": "test",
+        "states": {
+            "core": [],
+            "persistent": [{"label": "Grumpy", "value": 20}],
+            "temporal": [],
+        },
+        "overflow_pending": False,
+    }
+    tick_character(char)
+    assert char["states"]["persistent"][0]["value"] == 20  # 20+1=21, capped to 20
+
+
 def test_tick_removes_zeroed_states():
     char = {
         "name": "Test",

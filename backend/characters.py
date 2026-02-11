@@ -6,6 +6,8 @@ from backend.storage import slugify
 
 CATEGORY_LIMITS = {"core": 3, "persistent": 10, "temporal": 10}
 
+CATEGORY_MAX_VALUES = {"core": 30, "persistent": 20, "temporal": None}
+
 TICK_RATES = {"core": 2, "persistent": 1, "temporal": -1}
 
 # (min_value, max_value, template_string)  — max is inclusive
@@ -49,9 +51,12 @@ def tick_character(character: dict) -> dict:
 
     for category in ("core", "persistent", "temporal"):
         rate = TICK_RATES[category]
+        cap = CATEGORY_MAX_VALUES[category]
         new_list = []
         for state in states[category]:
             state["value"] = state["value"] + rate
+            if cap is not None and state["value"] > cap:
+                state["value"] = cap
             if state["value"] > 0:
                 new_list.append(state)
         states[category] = new_list

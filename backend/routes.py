@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from backend import llm, storage
 from backend.characters import (
+    CATEGORY_MAX_VALUES,
     activate_characters,
     character_prompt_context,
     new_character,
@@ -193,6 +194,9 @@ def _apply_extractor_output(slug: str, text: str) -> None:
                 if not label or not isinstance(value, (int, float)):
                     continue
                 value = int(value)
+                cap = CATEGORY_MAX_VALUES.get(category)
+                if cap is not None and value > cap:
+                    value = cap
                 # Update existing or add new
                 found = False
                 for state in char["states"][category]:

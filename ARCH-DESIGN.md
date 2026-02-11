@@ -262,11 +262,11 @@ Written automatically on embark as an empty array `[]`.
 
 ### State Categories
 
-| Category | Max Slots | Tick Rate | Description |
-|----------|-----------|-----------|-------------|
-| core | 3 | +2/round | Rarely change, life crisis if challenged |
-| persistent | 10 | +1/round | Current beliefs, relationships |
-| temporal | 10 | -1/round | Short-lived emotions, situations |
+| Category | Max Slots | Max Value | Tick Rate | Description |
+|----------|-----------|-----------|-----------|-------------|
+| core | 3 | 30 | +2/round | Rarely change, life crisis if challenged |
+| persistent | 10 | 20 | +1/round | Current beliefs, relationships |
+| temporal | 10 | — | -1/round | Short-lived emotions, situations (promotes to persistent at 20+) |
 
 ### Value Thresholds
 
@@ -281,9 +281,10 @@ Written automatically on embark as an empty array `[]`.
 ### Tick & Promotion Rules
 
 - **Per round**: after chat pipeline phases complete, all characters are ticked
+- **Value capping**: core states cap at 30, persistent states cap at 20 (applied after tick)
 - **Temporal tick**: -1 per round (states decay toward removal)
 - **Removal**: any state reaching value 0 is removed
-- **Temporal -> persistent promotion**: temporal state reaching value 20 moves to persistent (if slots available)
+- **Temporal -> persistent promotion**: temporal state reaching value 20+ moves to persistent (if slots available)
 - **Category overflow**: if a category exceeds max slots, `overflow_pending` is set to true
 
 ### Endpoints
