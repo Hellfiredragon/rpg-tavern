@@ -10,6 +10,11 @@ DEMO_TEMPLATES = [
         "title": "Dragon's Hollow",
         "description": "Deep in the mountain pass lies a village terrorized by a young dragon. "
         "The townsfolk need a hero — but things are not as simple as they seem.",
+        "intro": "You stand at the edge of Dragon's Hollow as dusk settles over the "
+        "mountain pass. Smoke curls from a handful of chimneys, but half the "
+        "village lies in charred ruins. The townsfolk eye you warily from behind "
+        "shuttered windows. A weathered signpost reads: 'Welcome to Dragon's "
+        "Hollow — Population: Declining.'",
     },
     {
         "title": "The Lost Caravan",
@@ -29,13 +34,17 @@ def create_demo_data() -> None:
     storage.adventures_dir().mkdir(parents=True, exist_ok=True)
 
     for tmpl in DEMO_TEMPLATES:
-        storage.create_template(tmpl["title"], tmpl["description"])
+        t = storage.create_template(tmpl["title"], tmpl["description"])
+        if "intro" in tmpl:
+            storage.update_template(t["slug"], {"intro": tmpl["intro"]})
 
     # Embark a demo adventure so story roles are visible out of the box
     adventure = storage.embark_template("dragons-hollow", "Dragon's Hollow Demo Run")
 
-    # Add demo characters with sample states
+    # Add demo characters with sample states, nicknames, and chattiness
     gareth = new_character("Gareth")
+    gareth["nicknames"] = ["Captain", "Cap"]
+    gareth["chattiness"] = 70
     gareth["states"]["core"] = [{"label": "Loyal to the King", "value": 18}]
     gareth["states"]["persistent"] = [
         {"label": "Loves Elena", "value": 12},
@@ -44,6 +53,8 @@ def create_demo_data() -> None:
     gareth["states"]["temporal"] = [{"label": "Angry", "value": 4}]
 
     elena = new_character("Elena")
+    elena["nicknames"] = ["Lena", "The Healer"]
+    elena["chattiness"] = 60
     elena["states"]["persistent"] = [
         {"label": "Healer's oath", "value": 14},
         {"label": "Curious about the dragon", "value": 9},
@@ -51,6 +62,8 @@ def create_demo_data() -> None:
     elena["states"]["temporal"] = [{"label": "Worried about Gareth", "value": 7}]
 
     thrak = new_character("Thrak")
+    thrak["nicknames"] = ["The Brute"]
+    thrak["chattiness"] = 30
     thrak["states"]["core"] = [{"label": "Survival instinct", "value": 19}]
     thrak["states"]["temporal"] = [
         {"label": "Hungry", "value": 6},
@@ -59,4 +72,30 @@ def create_demo_data() -> None:
 
     storage.save_characters(adventure["slug"], [gareth, elena, thrak])
 
-    print(f"Created {len(DEMO_TEMPLATES)} demo templates + 1 demo adventure + 3 demo characters.")
+    # Add demo lorebook entries
+    lorebook_entries = [
+        {
+            "title": "Fafnir the Dragon",
+            "content": "A young mountain dragon, barely a century old. Fafnir was driven from "
+            "his mother's lair and claimed Dragon's Hollow as his territory. He is more "
+            "frightened than fearsome, but his fire breath has already destroyed half the village.",
+            "keywords": ["fafnir", "dragon", "mountain"],
+        },
+        {
+            "title": "Dragon's Hollow Village",
+            "content": "A small mining village nestled in a mountain pass. Once prosperous from "
+            "iron ore trade, now half-ruined by dragon attacks. The remaining villagers are "
+            "desperate but resourceful.",
+            "keywords": ["village", "hollow", "mining", "iron"],
+        },
+        {
+            "title": "The Dragonbane Amulet",
+            "content": "An ancient artifact rumored to be hidden in the old mine shafts beneath "
+            "the village. Said to grant protection against dragonfire. The village elder "
+            "mentions it only in whispers.",
+            "keywords": ["amulet", "dragonbane", "artifact", "mine"],
+        },
+    ]
+    storage.save_lorebook(adventure["slug"], lorebook_entries)
+
+    print(f"Created {len(DEMO_TEMPLATES)} demo templates + 1 demo adventure + 3 characters + 3 lorebook entries.")

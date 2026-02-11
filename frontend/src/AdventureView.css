@@ -353,6 +353,13 @@
   font-size: 1rem;
 }
 
+.story-role-selectors {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.story-role-selectors select,
 .story-role-header select {
   padding: 0.4em 0.8em;
   font-family: var(--font-body);
@@ -366,6 +373,7 @@
   transition: border-color 0.2s;
 }
 
+.story-role-selectors select:focus,
 .story-role-header select:focus {
   border-color: var(--accent);
 }
@@ -805,4 +813,178 @@
 .status-badge--queued {
   background: rgba(127, 140, 141, 0.15);
   color: #7f8c8d;
+}
+
+/* ── Character Meta (nicknames, chattiness) ─────────────── */
+
+.character-meta-section {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.character-meta-label {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 0.4rem;
+}
+
+.character-meta-label input[type="text"] {
+  display: block;
+  width: 100%;
+  margin-top: 0.2rem;
+  font-size: 0.85rem;
+}
+
+.chattiness-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.2rem;
+}
+
+.chattiness-row input[type="range"] {
+  flex: 1;
+}
+
+.chattiness-value {
+  font-size: 0.82rem;
+  font-weight: 600;
+  min-width: 2.5em;
+  text-align: right;
+}
+
+/* ── Lorebook Panel ─────────────────────────────────────── */
+
+.lorebook-panel h3 {
+  font-size: 1.1rem;
+  color: var(--accent);
+  margin: 0;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.lorebook-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.lorebook-header button {
+  padding: 0.4em 0.8em;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.lorebook-empty {
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 2rem 1rem;
+}
+
+.lorebook-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  background: var(--bg-surface, var(--bg-deep));
+}
+
+.lorebook-form input,
+.lorebook-form textarea {
+  width: 100%;
+  font-size: 0.9rem;
+}
+
+.lorebook-form-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.lorebook-form-actions button {
+  padding: 0.4em 0.8em;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.lorebook-entry {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.5rem;
+  background: var(--bg-surface, var(--bg-deep));
+}
+
+.lorebook-entry-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.3rem;
+}
+
+.lorebook-entry-actions {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.lorebook-entry-actions button {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.2em 0.4em;
+  font-size: 0.82rem;
+}
+
+.lorebook-entry-actions button:hover {
+  color: var(--text);
+}
+
+.lorebook-entry-content {
+  margin: 0 0 0.3rem 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.lorebook-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.lorebook-keyword {
+  display: inline-block;
+  padding: 0.1em 0.5em;
+  font-size: 0.75rem;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-muted);
+}
+
+/* ── Template Settings ──────────────────────────────────── */
+
+.template-settings-panel h3 {
+  font-size: 1.1rem;
+  color: var(--accent);
+  margin-bottom: 1rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.template-intro-section label {
+  display: block;
+}
+
+.template-intro-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 0.2rem 0 0.5rem 0;
 }

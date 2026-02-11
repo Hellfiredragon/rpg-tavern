@@ -75,6 +75,7 @@ A template is an object under `templates/` (either `data/templates/` or `presets
 | `title` | string | Display name |
 | `slug` | string | Filesystem slug |
 | `description` | string | Adventure premise |
+| `intro` | string | Optional intro text — written as first narrator message on embark |
 | `source` | `"preset"` \| `"user"` | In-memory only — not stored on disk |
 | `created_at` | string | ISO 8601 timestamp (user templates only) |
 
@@ -179,17 +180,17 @@ Written automatically on embark with default values.
   "narrator": {
     "when": "on_player_message",
     "where": "chat",
-    "prompt": "{{description}}\n\n{{#each messages}}..."
+    "prompt": "You are the Game Master..."
   },
-  "character_writer": { "when": "disabled", "where": "chat", "prompt": "" },
-  "extractor": { "when": "disabled", "where": "chat", "prompt": "" }
+  "character_writer": { "when": "after_narration", "where": "chat", "prompt": "You write in-character dialog..." },
+  "extractor": { "when": "after_narration", "where": "system", "prompt": "You are a game state extractor..." }
 }
 ```
 
 | Field | Values | Description |
 |---|---|---|
 | `when` | `on_player_message`, `after_narration`, `disabled` | Trigger event |
-| `where` | `chat` | Context (future: `world`) |
+| `where` | `chat`, `system` | `chat` = visible in chat, `system` = parsed but hidden |
 | `prompt` | string | Handlebars template |
 
 ### Handlebars Template Variables
@@ -206,7 +207,11 @@ Written automatically on embark with default values.
 | `messages.[].ts` | string | — | ISO timestamp |
 | `messages.[].is_player` | boolean | — | Convenience flag |
 | `messages.[].is_narrator` | boolean | — | Convenience flag |
+| `lorebook` | string | always | Pre-formatted matched lorebook entries |
+| `lorebook_entries` | array | always | Matched lorebook entry objects |
 | `narration` | string | `after_narration` only | Narrator's response from current turn |
+| `active_characters` | array | `after_narration` only | Active character objects for this turn |
+| `active_characters_summary` | string | `after_narration` only | Pre-formatted active character states |
 
 ### Chat Pipeline
 
@@ -244,6 +249,8 @@ Written automatically on embark as an empty array `[]`.
 {
   "name": "Gareth",
   "slug": "gareth",
+  "nicknames": ["Cap", "Captain"],
+  "chattiness": 70,
   "states": {
     "core": [{ "label": "Loyal to the King", "value": 18 }],
     "persistent": [{ "label": "Loves Elena", "value": 12 }],
@@ -285,15 +292,77 @@ Written automatically on embark as an empty array `[]`.
 GET    /api/adventures/{slug}/characters           — list all characters
 POST   /api/adventures/{slug}/characters           — create { "name": "Gareth" }
 GET    /api/adventures/{slug}/characters/{cslug}   — get single character
-PATCH  /api/adventures/{slug}/characters/{cslug}   — update states (partial merge)
+PATCH  /api/adventures/{slug}/characters/{cslug}   — update states, nicknames, chattiness
 DELETE /api/adventures/{slug}/characters/{cslug}   — remove character
 ```
+
+### Character Activation
+
+Each turn, characters are evaluated for activation:
+1. **Name/nickname match** — if the character's name or any nickname appears (case-insensitive) in the narration or player message, the character is always activated
+2. **Chattiness roll** — otherwise, `random(0, 100) < chattiness` determines spontaneous activation
+
+Active characters are passed to `after_narration` roles via `active_characters` and `active_characters_summary` template variables.
 
 ### Prompt Context
 
 Characters are included in the Handlebars prompt context:
 - `characters` — array of character objects with enriched state descriptions
 - `characters_summary` — pre-formatted text block listing each character and their non-silent states
+
+## Lorebook
+
+Per-adventure lorebook for world knowledge that's injected into prompts when keywords match.
+
+### Storage
+
+```
+data/adventures/<slug>/lorebook.json   # Array of lorebook entry objects
+```
+
+Written automatically on embark as an empty array `[]`.
+
+### Entry Model
+
+```json
+{
+  "title": "The Dragon Fafnir",
+  "content": "A young mountain dragon, barely a century old...",
+  "keywords": ["fafnir", "dragon", "mountain"]
+}
+```
+
+### Keyword Matching
+
+Before building prompts each turn, the player message + last 5 messages are scanned for case-insensitive keyword substring matches. Matched entries are deduplicated and injected as `{{lorebook}}` (pre-formatted) and `{{lorebook_entries}}` (array).
+
+### Endpoints
+
+```
+GET    /api/adventures/{slug}/lorebook
+POST   /api/adventures/{slug}/lorebook
+PATCH  /api/adventures/{slug}/lorebook/{index}
+DELETE /api/adventures/{slug}/lorebook/{index}
+```
+
+## Extractor
+
+The extractor role (default: `where: "system"`) outputs structured JSON that is parsed to update game state automatically.
+
+### Output Format
+
+```json
+{
+  "state_changes": [
+    {"character": "Gareth", "updates": [{"category": "temporal", "label": "Impressed", "value": 8}]}
+  ],
+  "lorebook_entries": [
+    {"title": "Hidden Passage", "content": "...", "keywords": ["passage"]}
+  ]
+}
+```
+
+Best-effort parsing: markdown code fences are stripped, invalid JSON is logged and skipped. State changes update existing states by label match or add new ones. New lorebook entries are deduplicated by title.
 
 ## Messages
 
@@ -351,10 +420,13 @@ The `> ` prefix marks player lines; bare text is narration. The prompt ends with
 
 ### Flow
 
-1. Load adventure (404 if missing)
-2. Load config → find narrator role's connection name → find matching connection
-3. Load message history from `messages.json`
-4. Build prompt from description + history + new intent
-5. POST to `{provider_url}/api/v1/generate` with `{"prompt": prompt}` (KoboldCpp format)
-6. Persist both player message and narrator reply to `messages.json`
-7. Return `{"messages": [player_msg, narrator_msg]}`
+1. Load adventure, config, story roles, message history, characters, lorebook
+2. **Lorebook match**: scan player message + last 5 messages for keyword matches
+3. **Phase 1 (on_player_message)**: narrator as game master — validates actions, narrates outcomes
+4. **Character activation**: determine active characters from narration + player message
+5. **Phase 2 (after_narration)**:
+   - Character writer: generate dialog for active characters
+   - Extractor: output JSON → apply state changes + new lorebook entries
+6. **Character tick**: apply tick rates to all character states
+7. Persist messages (system-role outputs are parsed but not added to chat)
+8. Return `{"messages": [player_msg, narrator_msg, ...]}`

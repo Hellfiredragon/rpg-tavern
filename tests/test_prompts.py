@@ -148,9 +148,45 @@ def test_build_context_without_characters():
     assert "characters_summary" not in ctx
 
 
-def test_default_narrator_prompt_matches_legacy():
-    """The default Handlebars narrator prompt produces the same output
-    as the old _build_prompt() function."""
+def test_build_context_with_lorebook():
+    ctx = build_context(
+        {"title": "T", "description": "D"},
+        [],
+        "hello",
+        lorebook="[Dragon] A big dragon",
+        lorebook_entries=[{"title": "Dragon", "content": "A big dragon", "keywords": ["dragon"]}],
+    )
+    assert ctx["lorebook"] == "[Dragon] A big dragon"
+    assert len(ctx["lorebook_entries"]) == 1
+    assert ctx["lorebook_entries"][0]["title"] == "Dragon"
+
+
+def test_build_context_without_lorebook():
+    ctx = build_context({"title": "T", "description": "D"}, [], "hello")
+    assert "lorebook" not in ctx
+    assert "lorebook_entries" not in ctx
+
+
+def test_build_context_with_active_characters():
+    ctx = build_context(
+        {"title": "T", "description": "D"},
+        [],
+        "hello",
+        active_characters=[{"name": "Gareth", "descriptions": []}],
+        active_characters_summary="Gareth: (no notable states)",
+    )
+    assert len(ctx["active_characters"]) == 1
+    assert ctx["active_characters_summary"] == "Gareth: (no notable states)"
+
+
+def test_build_context_without_active_characters():
+    ctx = build_context({"title": "T", "description": "D"}, [], "hello")
+    assert "active_characters" not in ctx
+    assert "active_characters_summary" not in ctx
+
+
+def test_default_narrator_prompt_renders():
+    """The new default narrator prompt renders without errors."""
     from backend.storage import DEFAULT_NARRATOR_PROMPT
 
     adventure = {"title": "Quest", "description": "A dark forest"}
@@ -158,10 +194,47 @@ def test_default_narrator_prompt_matches_legacy():
         {"role": "player", "text": "I look around", "ts": "t1"},
         {"role": "narrator", "text": "You see trees.", "ts": "t2"},
     ]
-    ctx = build_context(adventure, messages, "I go north")
+    ctx = build_context(
+        adventure, messages, "I go north",
+        characters={
+            "characters": [{"name": "Gareth", "descriptions": ["Loyal"]}],
+            "characters_summary": "Gareth: Loyal",
+        },
+    )
     result = render_prompt(DEFAULT_NARRATOR_PROMPT, ctx)
+    assert "A dark forest" in result
+    assert "I go north" in result
+    assert "Gareth: Loyal" in result
 
-    # Legacy format:
-    # {description}\n\n> {player}\n\n{narrator}\n\n> {new_intent}\n
-    expected = "A dark forest\n\n> I look around\n\nYou see trees.\n\n> I go north\n"
-    assert result == expected
+
+def test_default_character_writer_prompt_renders():
+    from backend.storage import DEFAULT_CHARACTER_WRITER_PROMPT
+
+    ctx = build_context(
+        {"title": "T", "description": "D"},
+        [{"role": "narrator", "text": "The battle rages.", "ts": "t1"}],
+        "I attack",
+        narration="The enemy falls back.",
+        active_characters_summary="Gareth: Loyal drives their actions",
+    )
+    result = render_prompt(DEFAULT_CHARACTER_WRITER_PROMPT, ctx)
+    assert "Gareth: Loyal" in result
+    assert "The enemy falls back." in result
+
+
+def test_default_extractor_prompt_renders():
+    from backend.storage import DEFAULT_EXTRACTOR_PROMPT
+
+    ctx = build_context(
+        {"title": "T", "description": "D"},
+        [],
+        "I look around",
+        narration="You see a tavern.",
+        characters={
+            "characters": [{"name": "Gareth", "descriptions": []}],
+            "characters_summary": "Gareth: (no notable states)",
+        },
+    )
+    result = render_prompt(DEFAULT_EXTRACTOR_PROMPT, ctx)
+    assert "You see a tavern." in result
+    assert "state_changes" in result

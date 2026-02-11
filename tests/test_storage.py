@@ -330,9 +330,12 @@ def test_get_story_roles_defaults():
     adv = storage.embark_template("quest", "Run")
     roles = storage.get_story_roles(adv["slug"])
     assert roles["narrator"]["when"] == "on_player_message"
-    assert roles["character_writer"]["when"] == "disabled"
-    assert roles["extractor"]["when"] == "disabled"
+    assert roles["character_writer"]["when"] == "after_narration"
+    assert roles["extractor"]["when"] == "after_narration"
+    assert roles["extractor"]["where"] == "system"
     assert roles["narrator"]["prompt"] != ""
+    assert roles["character_writer"]["prompt"] != ""
+    assert roles["extractor"]["prompt"] != ""
 
 
 def test_embark_writes_story_roles():
@@ -435,3 +438,98 @@ def test_update_config_replaces_connections_array():
     config = storage.get_config()
     assert len(config["llm_connections"]) == 1
     assert config["llm_connections"][0]["name"] == "C"
+
+
+# ── Lorebook ────────────────────────────────────────────────
+
+
+def test_embark_writes_lorebook():
+    """Embarking writes lorebook.json automatically."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    path = storage.adventures_dir() / adv["slug"] / "lorebook.json"
+    assert path.is_file()
+
+
+def test_get_lorebook_empty():
+    """Returns [] for a new adventure."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    assert storage.get_lorebook(adv["slug"]) == []
+
+
+def test_save_and_get_lorebook():
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    entries = [
+        {"title": "Dragon", "content": "A big dragon", "keywords": ["dragon"]},
+    ]
+    storage.save_lorebook(adv["slug"], entries)
+    result = storage.get_lorebook(adv["slug"])
+    assert len(result) == 1
+    assert result[0]["title"] == "Dragon"
+
+
+def test_save_lorebook_overwrites():
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    storage.save_lorebook(adv["slug"], [
+        {"title": "A", "content": "x", "keywords": []},
+        {"title": "B", "content": "y", "keywords": []},
+    ])
+    storage.save_lorebook(adv["slug"], [
+        {"title": "C", "content": "z", "keywords": []},
+    ])
+    result = storage.get_lorebook(adv["slug"])
+    assert len(result) == 1
+    assert result[0]["title"] == "C"
+
+
+# ── Intro ───────────────────────────────────────────────────
+
+
+def test_update_template_intro():
+    storage.create_template("Quest", "Desc")
+    updated = storage.update_template("quest", {"intro": "Welcome to the quest."})
+    assert updated["intro"] == "Welcome to the quest."
+    reloaded = storage.get_template("quest")
+    assert reloaded["intro"] == "Welcome to the quest."
+
+
+def test_embark_with_intro_writes_message():
+    """Embarking a template with intro writes it as first narrator message."""
+    storage.create_template("Quest", "Desc")
+    storage.update_template("quest", {"intro": "The adventure begins."})
+    adv = storage.embark_template("quest", "Run")
+    msgs = storage.get_messages(adv["slug"])
+    assert len(msgs) == 1
+    assert msgs[0]["role"] == "narrator"
+    assert msgs[0]["text"] == "The adventure begins."
+
+
+def test_embark_without_intro_no_messages():
+    """Embarking a template without intro starts with empty messages."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    assert storage.get_messages(adv["slug"]) == []
+
+
+# ── Story Roles Defaults ────────────────────────────────────
+
+
+def test_default_story_roles_character_writer_enabled():
+    """Default story roles now have character_writer enabled."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    roles = storage.get_story_roles(adv["slug"])
+    assert roles["character_writer"]["when"] == "after_narration"
+    assert roles["character_writer"]["prompt"] != ""
+
+
+def test_default_story_roles_extractor_system():
+    """Default story roles have extractor in system mode."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    roles = storage.get_story_roles(adv["slug"])
+    assert roles["extractor"]["when"] == "after_narration"
+    assert roles["extractor"]["where"] == "system"

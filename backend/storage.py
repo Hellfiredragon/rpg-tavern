@@ -145,7 +145,7 @@ def update_template(slug: str, fields: dict[str, Any]) -> dict[str, Any] | None:
         (templates_dir() / slug).mkdir(exist_ok=True)
 
     # Now apply updates
-    allowed = {"title", "description"}
+    allowed = {"title", "description", "intro"}
     for key, value in fields.items():
         if key in allowed:
             template[key] = value
@@ -232,13 +232,83 @@ def append_messages(slug: str, messages: list[dict[str, Any]]) -> None:
 
 # ── Story Roles (per-adventure) ──────────────────────────
 
-DEFAULT_NARRATOR_PROMPT = (
-    "{{description}}\n\n"
-    "{{#each messages}}"
-    "{{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}\n\n"
-    "{{/each}}"
-    "> {{message}}\n"
-)
+DEFAULT_NARRATOR_PROMPT = """\
+You are the Game Master narrating an RPG adventure.
+
+## Setting
+{{description}}
+
+{{#if lorebook}}
+## Lorebook
+{{lorebook}}
+
+{{/if}}
+## Characters
+{{characters_summary}}
+
+## Recent History
+{{#last messages 10}}
+{{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}
+
+{{/last}}
+## Player Action
+> {{message}}
+
+Narrate what happens next. Validate the player's action against the world \
+state — if it's impossible or contradicts established facts, describe why it \
+fails. Do NOT write character dialog; only describe events, environments, and \
+outcomes.\
+"""
+
+DEFAULT_CHARACTER_WRITER_PROMPT = """\
+You write in-character dialog for NPCs in an RPG adventure.
+
+## Active Characters
+{{active_characters_summary}}
+
+## Recent History
+{{#last messages 6}}
+{{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}
+
+{{/last}}
+## Current Narration
+{{narration}}
+
+Write dialog for each active character listed above. Each character speaks in \
+their own voice, influenced by their current states. Use this format:
+
+Name: "Dialog here." *action description*
+
+Only write for the characters listed. Keep dialog concise and in character.\
+"""
+
+DEFAULT_EXTRACTOR_PROMPT = """\
+You are a game state extractor for an RPG adventure.
+
+## Characters
+{{characters_summary}}
+
+## Current Narration
+{{narration}}
+
+Analyze the narration and output a JSON object with state changes and new \
+lorebook entries. Use this exact format:
+
+```json
+{
+  "state_changes": [
+    {"character": "Name", "updates": [{"category": "temporal", "label": "State Label", "value": 8}]}
+  ],
+  "lorebook_entries": [
+    {"title": "Entry Title", "content": "Description...", "keywords": ["keyword1"]}
+  ]
+}
+```
+
+Only include changes that are clearly supported by the narration. Use \
+"temporal" for new emotions/situations, "persistent" for relationship changes, \
+"core" only for fundamental identity shifts. Output valid JSON only.\
+"""
 
 DEFAULT_STORY_ROLES: dict[str, Any] = {
     "narrator": {
@@ -247,14 +317,14 @@ DEFAULT_STORY_ROLES: dict[str, Any] = {
         "prompt": DEFAULT_NARRATOR_PROMPT,
     },
     "character_writer": {
-        "when": "disabled",
+        "when": "after_narration",
         "where": "chat",
-        "prompt": "",
+        "prompt": DEFAULT_CHARACTER_WRITER_PROMPT,
     },
     "extractor": {
-        "when": "disabled",
-        "where": "chat",
-        "prompt": "",
+        "when": "after_narration",
+        "where": "system",
+        "prompt": DEFAULT_EXTRACTOR_PROMPT,
     },
 }
 
@@ -328,7 +398,41 @@ def embark_template(
     )
     # Write empty characters list
     _characters_path(target_slug).write_text(json.dumps([], indent=2))
+    # Write empty lorebook
+    _lorebook_path(target_slug).write_text(json.dumps([], indent=2))
+    # Write intro as first narrator message if set
+    intro = template.get("intro", "")
+    if intro:
+        intro_msg = {
+            "role": "narrator",
+            "text": intro,
+            "ts": datetime.now(timezone.utc).isoformat(),
+        }
+        (adventures_dir() / target_slug / "messages.json").write_text(
+            json.dumps([intro_msg], indent=2)
+        )
     return adventure
+
+
+# ── Lorebook ──────────────────────────────────────────────
+
+
+def _lorebook_path(slug: str) -> Path:
+    return adventures_dir() / slug / "lorebook.json"
+
+
+def get_lorebook(slug: str) -> list[dict[str, Any]]:
+    """Load lorebook entries for an adventure. Returns [] if missing."""
+    path = _lorebook_path(slug)
+    if not path.is_file():
+        return []
+    return json.loads(path.read_text())
+
+
+def save_lorebook(slug: str, entries: list[dict[str, Any]]) -> None:
+    """Write lorebook entries for an adventure."""
+    path = _lorebook_path(slug)
+    path.write_text(json.dumps(entries, indent=2))
 
 
 # ── Characters ────────────────────────────────────────────

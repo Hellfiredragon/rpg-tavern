@@ -1,4 +1,5 @@
 from backend.characters import (
+    activate_characters,
     character_prompt_context,
     describe_state,
     new_character,
@@ -45,6 +46,8 @@ def test_new_character_structure():
     char = new_character("Gareth the Bold")
     assert char["name"] == "Gareth the Bold"
     assert char["slug"] == "gareth-the-bold"
+    assert char["nicknames"] == []
+    assert char["chattiness"] == 50
     assert char["states"] == {"core": [], "persistent": [], "temporal": []}
     assert char["overflow_pending"] is False
 
@@ -170,3 +173,87 @@ def test_prompt_context_empty_characters():
     ctx = character_prompt_context([])
     assert ctx["characters"] == []
     assert ctx["characters_summary"] == ""
+
+
+def test_prompt_context_includes_nicknames():
+    chars = [
+        {
+            "name": "Gareth",
+            "slug": "gareth",
+            "nicknames": ["Cap", "Captain"],
+            "states": {"core": [], "persistent": [], "temporal": []},
+            "overflow_pending": False,
+        }
+    ]
+    ctx = character_prompt_context(chars)
+    assert ctx["characters"][0]["nicknames"] == ["Cap", "Captain"]
+
+
+# ── activate_characters ───────────────────────────────────────
+
+
+def test_activate_by_name():
+    chars = [
+        {"name": "Gareth", "slug": "gareth", "nicknames": [], "chattiness": 0},
+    ]
+    active = activate_characters(chars, "Gareth draws his sword.", "I attack")
+    assert len(active) == 1
+    assert active[0]["name"] == "Gareth"
+
+
+def test_activate_by_nickname():
+    chars = [
+        {"name": "Gareth", "slug": "gareth", "nicknames": ["Cap"], "chattiness": 0},
+    ]
+    active = activate_characters(chars, "Cap steps forward.", "I look around")
+    assert len(active) == 1
+
+
+def test_activate_by_player_message():
+    chars = [
+        {"name": "Gareth", "slug": "gareth", "nicknames": [], "chattiness": 0},
+    ]
+    active = activate_characters(chars, "The wind blows.", "I talk to Gareth")
+    assert len(active) == 1
+
+
+def test_activate_name_case_insensitive():
+    chars = [
+        {"name": "Gareth", "slug": "gareth", "nicknames": [], "chattiness": 0},
+    ]
+    active = activate_characters(chars, "GARETH looks up.", "I wait")
+    assert len(active) == 1
+
+
+def test_activate_by_chattiness_100():
+    """Chattiness 100 should always activate (random < 100 is always true for 0-100)."""
+    chars = [
+        {"name": "Gareth", "slug": "gareth", "nicknames": [], "chattiness": 100},
+    ]
+    # Run 10 times — should always activate
+    for _ in range(10):
+        active = activate_characters(chars, "Nothing happens.", "I wait")
+        assert len(active) == 1
+
+
+def test_activate_by_chattiness_0():
+    """Chattiness 0 should never activate by random (only by name mention)."""
+    chars = [
+        {"name": "Gareth", "slug": "gareth", "nicknames": [], "chattiness": 0},
+    ]
+    active = activate_characters(chars, "Nothing happens.", "I wait")
+    assert len(active) == 0
+
+
+def test_activate_mixed():
+    """Name-mentioned always active, chattiness-0 inactive, chattiness-100 always."""
+    chars = [
+        {"name": "Gareth", "slug": "gareth", "nicknames": [], "chattiness": 0},
+        {"name": "Elena", "slug": "elena", "nicknames": [], "chattiness": 100},
+        {"name": "Thrak", "slug": "thrak", "nicknames": [], "chattiness": 0},
+    ]
+    active = activate_characters(chars, "Gareth nods.", "I look around")
+    names = [c["name"] for c in active]
+    assert "Gareth" in names
+    assert "Elena" in names
+    assert "Thrak" not in names

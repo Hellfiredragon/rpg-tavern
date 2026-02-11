@@ -60,6 +60,10 @@ def build_context(
     player_message: str,
     narration: str | None = None,
     characters: dict[str, Any] | None = None,
+    lorebook: str | None = None,
+    lorebook_entries: list[dict[str, Any]] | None = None,
+    active_characters: list[dict[str, Any]] | None = None,
+    active_characters_summary: str | None = None,
 ) -> dict[str, Any]:
     """Assemble template variables from adventure state.
 
@@ -96,4 +100,12 @@ def build_context(
     if characters is not None:
         ctx["characters"] = characters.get("characters", [])
         ctx["characters_summary"] = characters.get("characters_summary", "")
+    if lorebook is not None:
+        ctx["lorebook"] = lorebook
+    if lorebook_entries is not None:
+        ctx["lorebook_entries"] = lorebook_entries
+    if active_characters is not None:
+        ctx["active_characters"] = active_characters
+    if active_characters_summary is not None:
+        ctx["active_characters_summary"] = active_characters_summary
     return ctx

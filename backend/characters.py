@@ -1,5 +1,7 @@
 """Character state logic — categories, thresholds, ticking, and prompt context."""
 
+import random
+
 from backend.storage import slugify
 
 CATEGORY_LIMITS = {"core": 3, "persistent": 10, "temporal": 10}
@@ -34,6 +36,8 @@ def new_character(name: str) -> dict:
     return {
         "name": name,
         "slug": slugify(name),
+        "nicknames": [],
+        "chattiness": 50,
         "states": {"core": [], "persistent": [], "temporal": []},
         "overflow_pending": False,
     }
@@ -92,6 +96,7 @@ def character_prompt_context(characters: list[dict]) -> dict:
         enriched.append({
             "name": char["name"],
             "slug": char["slug"],
+            "nicknames": char.get("nicknames", []),
             "descriptions": char_descriptions,
         })
 
@@ -105,3 +110,23 @@ def character_prompt_context(characters: list[dict]) -> dict:
         "characters": enriched,
         "characters_summary": "\n".join(summary_parts),
     }
+
+
+def activate_characters(
+    characters: list[dict], narration: str, player_message: str
+) -> list[dict]:
+    """Determine which characters are active this turn.
+
+    1. Name or nickname appears in narration or player message → always active
+    2. Otherwise: random(0, 100) < chattiness → active
+    """
+    text = (narration + " " + player_message).lower()
+    active = []
+    for char in characters:
+        names = [char["name"].lower()]
+        names.extend(n.lower() for n in char.get("nicknames", []))
+        if any(name in text for name in names):
+            active.append(char)
+        elif random.randint(0, 100) < char.get("chattiness", 50):
+            active.append(char)
+    return active
