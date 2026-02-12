@@ -298,8 +298,8 @@ async def run_pipeline(
                 if any(name in narration_so_far.lower() for name in names):
                     ext_ctx = _base_ctx(
                         narration=narration_so_far,
-                        character_name=char["name"],
-                        character_all_states=extractor_prompt_context(char),
+                        char_name=char["name"],
+                        char_all_states=extractor_prompt_context(char),
                     )
                     try:
                         ext_prompt = render_prompt(char_extractor_tpl, ext_ctx)
@@ -340,9 +340,9 @@ async def run_pipeline(
             char_states_str = single_character_prompt_context(char)
             int_ctx = _base_ctx(
                 narration_so_far=narration_so_far,
-                character_name=char["name"],
-                character_description=char.get("description", ""),
-                character_states=char_states_str,
+                char_name=char["name"],
+                char_description=char.get("description", ""),
+                char_states=char_states_str,
             )
             try:
                 int_prompt = render_prompt(char_intention_tpl, int_ctx)
@@ -369,8 +369,8 @@ async def run_pipeline(
                 resolve_ctx = _base_ctx(
                     intention=f"{char['name']}: {intention_text.strip()}",
                     narration_so_far=narration_so_far,
-                    character_name=char["name"],
-                    character_states=char_states_str,
+                    char_name=char["name"],
+                    char_states=char_states_str,
                 )
                 try:
                     resolve_prompt = render_prompt(narrator_prompt_tpl, resolve_ctx)
@@ -397,8 +397,8 @@ async def run_pipeline(
                     if char_ext_tpl:
                         ext_ctx = _base_ctx(
                             narration=resolution_plain,
-                            character_name=char["name"],
-                            character_all_states=extractor_prompt_context(char),
+                            char_name=char["name"],
+                            char_all_states=extractor_prompt_context(char),
                         )
                         try:
                             ext_prompt = render_prompt(char_ext_tpl, ext_ctx)

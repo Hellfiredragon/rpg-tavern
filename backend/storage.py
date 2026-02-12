@@ -238,24 +238,24 @@ You are the Game Master narrating an RPG adventure.
 ## Setting
 {{description}}
 
-{{#if lorebook}}
+{{#if lore.text}}
 ## Lorebook
-{{lorebook}}
+{{lore.text}}
 
 {{/if}}
-{{#if characters_summary}}
+{{#if chars.summary}}
 ## Characters
-{{characters_summary}}
+{{chars.summary}}
 
 {{/if}}
 ## Recent History
-{{#last messages 6}}
+{{#last msgs 6}}
 {{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}
 
 {{/last}}
-{{#if narration_so_far}}
+{{#if turn.narration}}
 ## Earlier This Turn
-{{narration_so_far}}
+{{turn.narration}}
 
 {{/if}}
 ## Intention to Resolve
@@ -272,21 +272,21 @@ the player. If the intention tries to control others, ignore that part.\
 """
 
 DEFAULT_CHARACTER_INTENTION_PROMPT = """\
-You are {{character_name}} in an RPG adventure.
+You are {{char.name}} in an RPG adventure.
 
 ## Your Personality
-{{character_description}}
+{{char.description}}
 
 ## Your Current States
-{{character_states}}
+{{char.states}}
 
 ## Recent History
-{{#last messages 6}}
+{{#last msgs 6}}
 {{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}
 
 {{/last}}
 ## What Just Happened
-{{narration_so_far}}
+{{turn.narration}}
 
 State what YOU want to do next in 1-2 first-person sentences. Do not decide \
 the outcome. Do not control other characters or the player. Only describe \
@@ -294,15 +294,15 @@ your own intended action or speech.\
 """
 
 DEFAULT_CHARACTER_EXTRACTOR_PROMPT = """\
-You are a character state tracker for {{character_name}}.
+You are a character state tracker for {{char.name}}.
 
 ## All States (with raw values)
-{{character_all_states}}
+{{char.all_states}}
 
 ## Narration
 {{narration}}
 
-Output a JSON object with state changes for {{character_name}} ONLY:
+Output a JSON object with state changes for {{char.name}} ONLY:
 
 ```json
 {
@@ -321,7 +321,7 @@ DEFAULT_LOREBOOK_EXTRACTOR_PROMPT = """\
 You extract world facts from RPG narration.
 
 ## Round Narrations
-{{round_narrations}}
+{{turn.round_narrations}}
 
 Output a JSON object with new world facts ONLY (skip things already known):
 

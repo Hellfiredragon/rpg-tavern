@@ -178,7 +178,7 @@ Written automatically on embark with default values.
 ```json
 {
   "narrator": { "prompt": "You are the Game Master..." },
-  "character_intention": { "prompt": "You are {{character_name}}..." },
+  "character_intention": { "prompt": "You are {{char.name}}..." },
   "extractor": { "prompt": "You are a character state tracker..." },
   "lorebook_extractor": { "prompt": "You extract world facts..." },
   "max_rounds": 3,
@@ -197,25 +197,29 @@ Written automatically on embark with default values.
 
 ### Handlebars Template Variables
 
-| Variable | Type | Description |
-|---|---|---|
-| `description` | string | Adventure premise |
-| `title` | string | Adventure title |
-| `message` | string | Current player message |
-| `history` | string | Pre-formatted history (`> ` prefix for player lines) |
-| `messages` | array | Message objects for `{{#each}}` |
-| `lorebook` | string | Pre-formatted matched lorebook entries |
-| `lorebook_entries` | array | Matched lorebook entry objects |
-| `intention` | string | Current intention being resolved (narrator) |
-| `narration` | string | Narrator response text |
-| `narration_so_far` | string | All narration this turn so far |
-| `round_narrations` | string | All narrations from current round |
-| `characters` | array | Character objects with .name, .descriptions |
-| `characters_summary` | string | Pre-formatted character states |
-| `character_name` | string | Current character name |
-| `character_description` | string | Current character personality |
-| `character_states` | string | Visible states (≥6) for current character |
-| `character_all_states` | string | All states with raw values (extractor only) |
+New names use nested object paths; old flat names are kept as backward-compatible aliases.
+
+| Variable | Old Alias | Type | Description |
+|---|---|---|---|
+| `description` | — | string | Adventure premise |
+| `title` | — | string | Adventure title |
+| `message` | — | string | Current player message |
+| `history` | — | string | Pre-formatted history (`> ` prefix for player lines) |
+| `msgs` | `messages` | array | Message objects for `{{#each}}` |
+| `lore.text` | `lorebook` | string | Pre-formatted matched lorebook entries |
+| `lore.entries` | `lorebook_entries` | array | Matched lorebook entry objects |
+| `intention` | — | string | Current intention being resolved (narrator) |
+| `narration` | — | string | Narrator response text |
+| `turn.narration` | `narration_so_far` | string | All narration this turn so far |
+| `turn.round_narrations` | `round_narrations` | string | All narrations from current round |
+| `chars.list` | `characters` | array | Character objects with .name, .descriptions |
+| `chars.summary` | `characters_summary` | string | Pre-formatted character states |
+| `chars.active` | `active_characters` | array | Active characters this round |
+| `chars.active_summary` | `active_characters_summary` | string | Active characters summary |
+| `char.name` | `character_name` | string | Current character name |
+| `char.description` | `character_description` | string | Current character personality |
+| `char.states` | `character_states` | string | Visible states (≥6) for current character |
+| `char.all_states` | `character_all_states` | string | All states with raw values (extractor only) |
 
 ### Chat Pipeline (Intention/Resolution)
 
@@ -324,9 +328,9 @@ Active characters each generate an intention and have it resolved by the narrato
 ### Prompt Context
 
 Characters are included in the Handlebars prompt context:
-- `characters` / `characters_summary` — all characters with visible states (for narrator)
-- `character_name` / `character_states` — single character's visible states (for intentions)
-- `character_all_states` — all states with raw values (for extractor)
+- `chars.list` / `chars.summary` — all characters with visible states (for narrator)
+- `char.name` / `char.states` — single character's visible states (for intentions)
+- `char.all_states` — all states with raw values (for extractor)
 
 ## Lorebook
 
@@ -352,7 +356,7 @@ Written automatically on embark as an empty array `[]`.
 
 ### Keyword Matching
 
-Before building prompts each turn, the player message + last 5 messages are scanned for case-insensitive keyword substring matches. Matched entries are deduplicated and injected as `{{lorebook}}` (pre-formatted) and `{{lorebook_entries}}` (array).
+Before building prompts each turn, the player message + last 5 messages are scanned for case-insensitive keyword substring matches. Matched entries are deduplicated and injected as `{{lore.text}}` (pre-formatted) and `{{lore.entries}}` (array).
 
 ### Endpoints
 

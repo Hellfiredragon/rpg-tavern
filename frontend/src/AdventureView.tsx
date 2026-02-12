@@ -121,19 +121,19 @@ const TEMPLATE_VARS: TemplateVar[] = [
   { name: 'title', type: 'string', desc: 'Adventure title' },
   { name: 'message', type: 'string', desc: 'Current player message' },
   { name: 'history', type: 'string', desc: 'Pre-formatted history' },
-  { name: 'messages', type: 'array', desc: 'Message objects for {{#each}}' },
-  { name: 'lorebook', type: 'string', desc: 'Pre-formatted matched lorebook entries' },
-  { name: 'lorebook_entries', type: 'array', desc: 'Matched lorebook entry objects' },
+  { name: 'msgs', type: 'array', desc: 'Message objects for {{#each}} (also: messages)' },
+  { name: 'lore.text', type: 'string', desc: 'Pre-formatted matched lorebook entries (also: lorebook)' },
+  { name: 'lore.entries', type: 'array', desc: 'Matched lorebook entry objects (also: lorebook_entries)' },
   { name: 'intention', type: 'string', desc: 'Current intention being resolved' },
   { name: 'narration', type: 'string', desc: 'Narrator response text' },
-  { name: 'narration_so_far', type: 'string', desc: 'All narration this turn so far' },
-  { name: 'round_narrations', type: 'string', desc: 'All narrations from this round' },
-  { name: 'characters', type: 'array', desc: 'Character objects with .name, .descriptions' },
-  { name: 'characters_summary', type: 'string', desc: 'Pre-formatted character states' },
-  { name: 'character_name', type: 'string', desc: 'Current character name' },
-  { name: 'character_description', type: 'string', desc: 'Current character personality' },
-  { name: 'character_states', type: 'string', desc: 'Visible states (≥6) for current character' },
-  { name: 'character_all_states', type: 'string', desc: 'All states with raw values (extractor)' },
+  { name: 'turn.narration', type: 'string', desc: 'All narration this turn so far (also: narration_so_far)' },
+  { name: 'turn.round_narrations', type: 'string', desc: 'All narrations from this round (also: round_narrations)' },
+  { name: 'chars.list', type: 'array', desc: 'Character objects with .name, .descriptions (also: characters)' },
+  { name: 'chars.summary', type: 'string', desc: 'Pre-formatted character states (also: characters_summary)' },
+  { name: 'char.name', type: 'string', desc: 'Current character name (also: character_name)' },
+  { name: 'char.description', type: 'string', desc: 'Current character personality (also: character_description)' },
+  { name: 'char.states', type: 'string', desc: 'Visible states (≥6) for current character (also: character_states)' },
+  { name: 'char.all_states', type: 'string', desc: 'All states with raw values (extractor) (also: character_all_states)' },
 ]
 
 const MESSAGE_FIELDS: { name: string; desc: string }[] = [
@@ -205,7 +205,7 @@ function PromptHintsPanel() {
         </dl>
 
         <h4>Message Fields</h4>
-        <p className="hint-intro">Inside <code>{'{{#each messages}}'}</code>:</p>
+        <p className="hint-intro">Inside <code>{'{{#each msgs}}'}</code>:</p>
         <dl className="hint-vars">
           {MESSAGE_FIELDS.map(f => (
             <div key={f.name} className="hint-var">
@@ -226,11 +226,11 @@ function PromptHintsPanel() {
             <dd>Iterate over the last N items of an array</dd>
           </div>
         </dl>
-        <pre className="hint-example">{'{{#last messages 5}}\n{{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}\n{{/last}}'}</pre>
+        <pre className="hint-example">{'{{#last msgs 5}}\n{{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}\n{{/last}}'}</pre>
 
         <h4>Examples</h4>
-        <pre className="hint-example">{'{{#each messages}}\n{{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}\n{{/each}}'}</pre>
-        <pre className="hint-example">{'{{#take characters 3}}\n{{name}}: {{descriptions}}\n{{/take}}'}</pre>
+        <pre className="hint-example">{'{{#each msgs}}\n{{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}\n{{/each}}'}</pre>
+        <pre className="hint-example">{'{{#take chars.list 3}}\n{{name}}: {{descriptions}}\n{{/take}}'}</pre>
       </div>
     </div>
   )

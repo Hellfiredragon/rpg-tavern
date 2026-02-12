@@ -47,11 +47,14 @@ def test_build_context_basic():
     assert ctx["title"] == "My Quest"
     assert ctx["description"] == "A great adventure"
     assert ctx["message"] == "I enter the tavern"
-    assert len(ctx["messages"]) == 2
-    assert ctx["messages"][0]["is_player"] is True
-    assert ctx["messages"][0]["is_narrator"] is False
-    assert ctx["messages"][1]["is_player"] is False
-    assert ctx["messages"][1]["is_narrator"] is True
+    # New short name
+    assert len(ctx["msgs"]) == 2
+    assert ctx["msgs"][0]["is_player"] is True
+    assert ctx["msgs"][0]["is_narrator"] is False
+    assert ctx["msgs"][1]["is_player"] is False
+    assert ctx["msgs"][1]["is_narrator"] is True
+    # Backward compat alias
+    assert ctx["messages"] is ctx["msgs"]
     assert "narration" not in ctx
 
 
@@ -81,7 +84,8 @@ def test_build_context_history_format():
 
 def test_build_context_empty_messages():
     ctx = build_context({"title": "T", "description": "D"}, [], "hello")
-    assert ctx["messages"] == []
+    assert ctx["msgs"] == []
+    assert ctx["messages"] == []  # backward compat
     assert ctx["history"] == ""
 
 
@@ -138,6 +142,10 @@ def test_build_context_with_characters():
         "hello",
         characters=char_ctx,
     )
+    # New nested names
+    assert ctx["chars"]["list"] == char_ctx["characters"]
+    assert ctx["chars"]["summary"] == char_ctx["characters_summary"]
+    # Backward compat aliases
     assert ctx["characters"] == char_ctx["characters"]
     assert ctx["characters_summary"] == char_ctx["characters_summary"]
 
@@ -145,7 +153,7 @@ def test_build_context_with_characters():
 def test_build_context_without_characters():
     ctx = build_context({"title": "T", "description": "D"}, [], "hello")
     assert "characters" not in ctx
-    assert "characters_summary" not in ctx
+    assert "chars" not in ctx
 
 
 def test_build_context_with_lorebook():
@@ -156,15 +164,19 @@ def test_build_context_with_lorebook():
         lorebook="[Dragon] A big dragon",
         lorebook_entries=[{"title": "Dragon", "content": "A big dragon", "keywords": ["dragon"]}],
     )
+    # New nested names
+    assert ctx["lore"]["text"] == "[Dragon] A big dragon"
+    assert len(ctx["lore"]["entries"]) == 1
+    assert ctx["lore"]["entries"][0]["title"] == "Dragon"
+    # Backward compat aliases
     assert ctx["lorebook"] == "[Dragon] A big dragon"
-    assert len(ctx["lorebook_entries"]) == 1
     assert ctx["lorebook_entries"][0]["title"] == "Dragon"
 
 
 def test_build_context_without_lorebook():
     ctx = build_context({"title": "T", "description": "D"}, [], "hello")
     assert "lorebook" not in ctx
-    assert "lorebook_entries" not in ctx
+    assert "lore" not in ctx
 
 
 def test_build_context_with_active_characters():
@@ -175,6 +187,10 @@ def test_build_context_with_active_characters():
         active_characters=[{"name": "Gareth", "descriptions": []}],
         active_characters_summary="Gareth: (no notable states)",
     )
+    # New nested names
+    assert len(ctx["chars"]["active"]) == 1
+    assert ctx["chars"]["active_summary"] == "Gareth: (no notable states)"
+    # Backward compat aliases
     assert len(ctx["active_characters"]) == 1
     assert ctx["active_characters_summary"] == "Gareth: (no notable states)"
 
@@ -216,9 +232,9 @@ def test_default_character_intention_prompt_renders():
         [{"role": "narrator", "text": "The battle rages.", "ts": "t1"}],
         "I attack",
         narration_so_far="The enemy falls back.",
-        character_name="Gareth",
-        character_description="A loyal knight",
-        character_states="Loyal drives their actions",
+        char_name="Gareth",
+        char_description="A loyal knight",
+        char_states="Loyal drives their actions",
     )
     result = render_prompt(DEFAULT_CHARACTER_INTENTION_PROMPT, ctx)
     assert "Gareth" in result
@@ -233,8 +249,8 @@ def test_default_character_extractor_prompt_renders():
         [],
         "I look around",
         narration="You see a tavern.",
-        character_name="Gareth",
-        character_all_states="Character: Gareth\n  core: (none)\n  persistent: (none)\n  temporal: (none)",
+        char_name="Gareth",
+        char_all_states="Character: Gareth\n  core: (none)\n  persistent: (none)\n  temporal: (none)",
     )
     result = render_prompt(DEFAULT_CHARACTER_EXTRACTOR_PROMPT, ctx)
     assert "You see a tavern." in result
