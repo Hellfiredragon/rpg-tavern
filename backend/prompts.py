@@ -66,8 +66,8 @@ def build_context(
     intention: str | None = None,
     char_name: str | None = None,
     char_description: str | None = None,
-    char_states: str | None = None,
-    char_all_states: str | None = None,
+    char_states: list[dict[str, Any]] | None = None,
+    char_all_states: list[dict[str, Any]] | None = None,
     narration_so_far: str | None = None,
     round_narrations: str | None = None,
 ) -> dict[str, Any]:

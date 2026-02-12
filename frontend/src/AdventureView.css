@@ -688,22 +688,22 @@
   color: var(--text-muted);
 }
 
-.state-level--urge {
+.state-level--subconscious {
   background: #2c3e50;
   color: #bdc3c7;
 }
 
-.state-level--driver {
+.state-level--manifest {
   background: #1a5276;
   color: #85c1e9;
 }
 
-.state-level--important {
+.state-level--dominant {
   background: #7d3c98;
   color: #d7bde2;
 }
 
-.state-level--overflow {
+.state-level--definitive {
   background: var(--danger, #e74c3c);
   color: #fff;
 }

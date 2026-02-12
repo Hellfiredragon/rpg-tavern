@@ -287,10 +287,10 @@ Written automatically on embark as an empty array `[]`.
 | Range | Level | Description Template |
 |-------|-------|---------------------|
 | < 6 | silent | (not mentioned in prompts) |
-| 6-10 | urge | "feels an urge related to {label}" |
-| 11-16 | driver | "{label} drives their actions" |
-| 17-20 | important | "{label} is very important to them" |
-| 21+ | overflow | "{label} is their absolute focus" |
+| 6–10 | subconscious | "feels a subconscious nudge related to {label}" |
+| 11–15 | manifest | "{label} is manifest in their body language" |
+| 16–20 | dominant | "{label} dominates their current priorities" |
+| 21–30 | definitive | "{label} is a core truth they would die for" |
 
 ### Tick & Promotion Rules
 

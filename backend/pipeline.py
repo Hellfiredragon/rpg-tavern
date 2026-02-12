@@ -19,8 +19,7 @@ from backend.characters import (
     CATEGORY_MAX_VALUES,
     activate_characters,
     character_prompt_context,
-    extractor_prompt_context,
-    single_character_prompt_context,
+    enrich_states,
     tick_character,
 )
 from backend.lorebook import format_lorebook, match_lorebook_entries
@@ -299,7 +298,7 @@ async def run_pipeline(
                     ext_ctx = _base_ctx(
                         narration=narration_so_far,
                         char_name=char["name"],
-                        char_all_states=extractor_prompt_context(char),
+                        char_all_states=enrich_states(char, include_silent=True),
                     )
                     try:
                         ext_prompt = render_prompt(char_extractor_tpl, ext_ctx)
@@ -337,12 +336,12 @@ async def run_pipeline(
             if not char_intention_tpl:
                 continue
 
-            char_states_str = single_character_prompt_context(char)
+            char_states_list = enrich_states(char)
             int_ctx = _base_ctx(
                 narration_so_far=narration_so_far,
                 char_name=char["name"],
                 char_description=char.get("description", ""),
-                char_states=char_states_str,
+                char_states=char_states_list,
             )
             try:
                 int_prompt = render_prompt(char_intention_tpl, int_ctx)
@@ -370,7 +369,7 @@ async def run_pipeline(
                     intention=f"{char['name']}: {intention_text.strip()}",
                     narration_so_far=narration_so_far,
                     char_name=char["name"],
-                    char_states=char_states_str,
+                    char_states=char_states_list,
                 )
                 try:
                     resolve_prompt = render_prompt(narrator_prompt_tpl, resolve_ctx)
@@ -398,7 +397,7 @@ async def run_pipeline(
                         ext_ctx = _base_ctx(
                             narration=resolution_plain,
                             char_name=char["name"],
-                            char_all_states=extractor_prompt_context(char),
+                            char_all_states=enrich_states(char, include_silent=True),
                         )
                         try:
                             ext_prompt = render_prompt(char_ext_tpl, ext_ctx)

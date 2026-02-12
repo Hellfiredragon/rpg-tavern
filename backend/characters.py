@@ -13,10 +13,10 @@ TICK_RATES = {"core": 2, "persistent": 1, "temporal": -1}
 # (min_value, max_value, template_string)  — max is inclusive
 THRESHOLD_LEVELS = [
     (0, 5, None),  # silent
-    (6, 10, "feels an urge related to {label}"),
-    (11, 16, "{label} drives their actions"),
-    (17, 20, "{label} is very important to them"),
-    (21, None, "{label} is their absolute focus"),
+    (6, 10, "feels a subconscious nudge related to {label}"),
+    (11, 15, "{label} is manifest in their body language"),
+    (16, 20, "{label} dominates their current priorities"),
+    (21, 30, "{label} is a core truth they would die for"),
 ]
 
 
@@ -81,45 +81,55 @@ def tick_character(character: dict) -> dict:
     return character
 
 
-def extractor_prompt_context(character: dict) -> str:
-    """Build extractor context showing ALL states with raw numeric values.
+def _state_level(value: int) -> str:
+    """Return the threshold level name for a numeric value."""
+    if value < 6:
+        return "silent"
+    if value <= 10:
+        return "subconscious"
+    if value <= 15:
+        return "manifest"
+    if value <= 20:
+        return "dominant"
+    return "definitive"
 
-    Unlike character_prompt_context (which hides silent states), this exposes
-    everything so the extractor can track subconscious states precisely.
+
+def enrich_states(character: dict, *, include_silent: bool = False) -> list[dict]:
+    """Return state objects with level flags for Handlebars templates.
+
+    Each object has: label, value, category, level, description,
+    and boolean flags: is_silent, is_subconscious, is_manifest,
+    is_dominant, is_definitive.
+
+    When include_silent=False (default), states with value < 6 are omitted.
     """
-    lines: list[str] = [f"Character: {character['name']}"]
-    for category in ("core", "persistent", "temporal"):
-        states = character["states"].get(category, [])
-        if states:
-            state_strs = [f"{s['label']}={s['value']}" for s in states]
-            lines.append(f"  {category}: {', '.join(state_strs)}")
-        else:
-            lines.append(f"  {category}: (none)")
-    return "\n".join(lines)
-
-
-def single_character_prompt_context(character: dict) -> str:
-    """Build prompt context for a single character showing only visible states (≥6).
-
-    Used for character intention prompts where the character sees their own
-    conscious states.
-    """
-    lines: list[str] = []
+    result = []
     for category in ("core", "persistent", "temporal"):
         for state in character["states"].get(category, []):
-            desc = describe_state(state["label"], state["value"])
-            if desc is not None:
-                lines.append(desc)
-    if not lines:
-        return "(no notable states)"
-    return "; ".join(lines)
+            value = state["value"]
+            level = _state_level(value)
+            if not include_silent and level == "silent":
+                continue
+            result.append({
+                "label": state["label"],
+                "value": value,
+                "category": category,
+                "level": level,
+                "description": describe_state(state["label"], value) or "",
+                "is_silent": level == "silent",
+                "is_subconscious": level == "subconscious",
+                "is_manifest": level == "manifest",
+                "is_dominant": level == "dominant",
+                "is_definitive": level == "definitive",
+            })
+    return result
 
 
 def character_prompt_context(characters: list[dict]) -> dict:
-    """Build Handlebars context for characters.
+    """Build Handlebars context for the chars object.
 
-    Returns {"characters": [...], "characters_summary": "..."} where summary
-    lists each character with their non-silent states described at threshold level.
+    Returns {"list": [...], "summary": "..."} where summary lists each
+    character with their non-silent states described at threshold level.
     """
     enriched = []
     summary_parts: list[str] = []

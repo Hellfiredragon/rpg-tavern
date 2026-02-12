@@ -278,7 +278,9 @@ You are {{char.name}} in an RPG adventure.
 {{char.description}}
 
 ## Your Current States
-{{char.states}}
+{{#each char.states}}
+- {{description}}
+{{/each}}
 
 ## Recent History
 {{#last msgs 6}}
@@ -297,7 +299,9 @@ DEFAULT_CHARACTER_EXTRACTOR_PROMPT = """\
 You are a character state tracker for {{char.name}}.
 
 ## All States (with raw values)
-{{char.all_states}}
+{{#each char.all_states}}
+- {{category}}/{{label}} = {{value}} ({{level}})
+{{/each}}
 
 ## Narration
 {{narration}}

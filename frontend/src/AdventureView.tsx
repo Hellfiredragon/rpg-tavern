@@ -66,10 +66,10 @@ const CATEGORY_DEFAULTS: Record<StateCategory, number> = { core: 30, persistent:
 
 function stateLevel(value: number): string {
   if (value < 6) return 'silent'
-  if (value <= 10) return 'urge'
-  if (value <= 16) return 'driver'
-  if (value <= 20) return 'important'
-  return 'overflow'
+  if (value <= 10) return 'subconscious'
+  if (value <= 15) return 'manifest'
+  if (value <= 20) return 'dominant'
+  return 'definitive'
 }
 
 type Tab = 'chat' | 'characters' | 'world' | 'settings' | 'global-settings'
@@ -114,6 +114,7 @@ interface VarLeaf {
   name: string
   type: string
   desc: string
+  subfields?: VarLeaf[]
 }
 
 interface VarGroup {
@@ -138,8 +139,24 @@ const VAR_GROUPS: VarGroup[] = [
     children: [
       { name: 'char.name', type: 'string', desc: 'Character name' },
       { name: 'char.description', type: 'string', desc: 'Character personality' },
-      { name: 'char.states', type: 'string', desc: 'Visible states (value ≥ 6)' },
-      { name: 'char.all_states', type: 'string', desc: 'All states with raw values (extractor)' },
+      { name: 'char.states', type: 'array', desc: 'Visible states (value ≥ 6)', subfields: [
+        { name: '.label', type: 'string', desc: 'State name' },
+        { name: '.value', type: 'number', desc: 'Numeric value' },
+        { name: '.category', type: 'string', desc: '"core", "persistent", or "temporal"' },
+        { name: '.level', type: 'string', desc: '"subconscious", "manifest", "dominant", "definitive"' },
+        { name: '.description', type: 'string', desc: 'Threshold description text' },
+        { name: '.is_subconscious', type: 'boolean', desc: 'Value 6\u201310' },
+        { name: '.is_manifest', type: 'boolean', desc: 'Value 11\u201315' },
+        { name: '.is_dominant', type: 'boolean', desc: 'Value 16\u201320' },
+        { name: '.is_definitive', type: 'boolean', desc: 'Value 21\u201330' },
+      ]},
+      { name: 'char.all_states', type: 'array', desc: 'All states incl. silent (extractor)', subfields: [
+        { name: '.label', type: 'string', desc: 'State name' },
+        { name: '.value', type: 'number', desc: 'Numeric value' },
+        { name: '.category', type: 'string', desc: '"core", "persistent", or "temporal"' },
+        { name: '.level', type: 'string', desc: '"silent", "subconscious", "manifest", "dominant", "definitive"' },
+        { name: '.is_silent', type: 'boolean', desc: 'Value 0\u20135' },
+      ]},
     ],
   },
   {
@@ -197,6 +214,19 @@ function HintGroup({ group }: { group: VarGroup }) {
                 <span className="hint-type">{v.type}</span>
               </dt>
               <dd>{v.desc}</dd>
+              {v.subfields && (
+                <dl className="hint-vars hint-vars--nested">
+                  {v.subfields.map(sf => (
+                    <div key={sf.name} className="hint-var">
+                      <dt>
+                        <code>{sf.name}</code>
+                        <span className="hint-type">{sf.type}</span>
+                      </dt>
+                      <dd>{sf.desc}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
             </div>
           ))}
         </dl>

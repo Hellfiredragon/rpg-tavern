@@ -2,9 +2,8 @@ from backend.characters import (
     activate_characters,
     character_prompt_context,
     describe_state,
-    extractor_prompt_context,
+    enrich_states,
     new_character,
-    single_character_prompt_context,
     tick_character,
 )
 
@@ -17,28 +16,28 @@ def test_describe_state_silent():
     assert describe_state("Angry", 5) is None
 
 
-def test_describe_state_urge():
+def test_describe_state_subconscious():
     result = describe_state("Angry", 6)
-    assert result == "feels an urge related to Angry"
+    assert result == "feels a subconscious nudge related to Angry"
     assert describe_state("Angry", 10) is not None
 
 
-def test_describe_state_driver():
+def test_describe_state_manifest():
     result = describe_state("Loyal", 11)
-    assert result == "Loyal drives their actions"
-    assert describe_state("Loyal", 16) is not None
+    assert result == "Loyal is manifest in their body language"
+    assert describe_state("Loyal", 15) is not None
 
 
-def test_describe_state_important():
-    result = describe_state("Loves Elena", 17)
-    assert result == "Loves Elena is very important to them"
+def test_describe_state_dominant():
+    result = describe_state("Loves Elena", 16)
+    assert result == "Loves Elena dominates their current priorities"
     assert describe_state("Loves Elena", 20) is not None
 
 
-def test_describe_state_overflow():
+def test_describe_state_definitive():
     result = describe_state("Rage", 21)
-    assert result == "Rage is their absolute focus"
-    assert describe_state("Rage", 99) is not None
+    assert result == "Rage is a core truth they would die for"
+    assert describe_state("Rage", 30) is not None
 
 
 # ── new_character ───────────────────────────────────────────
@@ -291,11 +290,10 @@ def test_activate_mixed():
     assert "Thrak" not in names
 
 
-# ── extractor_prompt_context ──────────────────────────────────
+# ── enrich_states ────────────────────────────────────────────
 
 
-def test_extractor_prompt_context_shows_all_states():
-    """Extractor context shows ALL states with raw values, including silent ones."""
+def test_enrich_states_hides_silent_by_default():
     char = {
         "name": "Gareth",
         "slug": "gareth",
@@ -305,47 +303,76 @@ def test_extractor_prompt_context_shows_all_states():
             "temporal": [{"label": "Sleepy", "value": 3}],  # silent
         },
     }
-    ctx = extractor_prompt_context(char)
-    assert "Gareth" in ctx
-    assert "Loyal=18" in ctx
-    assert "Grumpy=8" in ctx
-    assert "Sleepy=3" in ctx  # silent states visible to extractor
+    states = enrich_states(char)
+    labels = [s["label"] for s in states]
+    assert "Loyal" in labels
+    assert "Grumpy" in labels
+    assert "Sleepy" not in labels
 
 
-def test_extractor_prompt_context_empty_states():
-    char = {
-        "name": "Elena",
-        "slug": "elena",
-        "states": {"core": [], "persistent": [], "temporal": []},
-    }
-    ctx = extractor_prompt_context(char)
-    assert "Elena" in ctx
-    assert "(none)" in ctx
-
-
-# ── single_character_prompt_context ───────────────────────────
-
-
-def test_single_character_context_hides_silent():
+def test_enrich_states_include_silent():
     char = {
         "name": "Gareth",
         "slug": "gareth",
         "states": {
             "core": [{"label": "Loyal", "value": 18}],
             "persistent": [],
-            "temporal": [{"label": "Sleepy", "value": 3}],  # silent
+            "temporal": [{"label": "Sleepy", "value": 3}],
         },
     }
-    ctx = single_character_prompt_context(char)
-    assert "Loyal" in ctx
-    assert "Sleepy" not in ctx
+    states = enrich_states(char, include_silent=True)
+    labels = [s["label"] for s in states]
+    assert "Loyal" in labels
+    assert "Sleepy" in labels
+    sleepy = [s for s in states if s["label"] == "Sleepy"][0]
+    assert sleepy["is_silent"] is True
+    assert sleepy["level"] == "silent"
 
 
-def test_single_character_context_no_notable():
+def test_enrich_states_level_flags():
+    char = {
+        "name": "Test",
+        "slug": "test",
+        "states": {
+            "core": [{"label": "A", "value": 8}, {"label": "B", "value": 12}],
+            "persistent": [{"label": "C", "value": 18}],
+            "temporal": [{"label": "D", "value": 25}],
+        },
+    }
+    states = enrich_states(char)
+    by_label = {s["label"]: s for s in states}
+    assert by_label["A"]["level"] == "subconscious"
+    assert by_label["A"]["is_subconscious"] is True
+    assert by_label["B"]["level"] == "manifest"
+    assert by_label["B"]["is_manifest"] is True
+    assert by_label["C"]["level"] == "dominant"
+    assert by_label["C"]["is_dominant"] is True
+    assert by_label["D"]["level"] == "definitive"
+    assert by_label["D"]["is_definitive"] is True
+
+
+def test_enrich_states_has_category_and_description():
+    char = {
+        "name": "Test",
+        "slug": "test",
+        "states": {
+            "core": [],
+            "persistent": [{"label": "Grumpy", "value": 8}],
+            "temporal": [],
+        },
+    }
+    states = enrich_states(char)
+    assert len(states) == 1
+    assert states[0]["category"] == "persistent"
+    assert states[0]["description"] != ""
+    assert "Grumpy" in states[0]["description"]
+
+
+def test_enrich_states_empty():
     char = {
         "name": "Elena",
         "slug": "elena",
-        "states": {"core": [], "persistent": [], "temporal": [{"label": "Calm", "value": 2}]},
+        "states": {"core": [], "persistent": [], "temporal": []},
     }
-    ctx = single_character_prompt_context(char)
-    assert ctx == "(no notable states)"
+    assert enrich_states(char) == []
+    assert enrich_states(char, include_silent=True) == []
