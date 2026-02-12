@@ -327,12 +327,14 @@
   padding: 0;
 }
 
-.hint-var {
-  margin-bottom: 0.4rem;
+.hint-vars--nested {
+  padding-left: 1rem;
+  border-left: 1px solid var(--border);
+  margin: 0.3rem 0 0.3rem 0.5rem;
 }
 
-.hint-var--dim {
-  opacity: 0.45;
+.hint-var {
+  margin-bottom: 0.4rem;
 }
 
 .hint-var dt {
@@ -357,12 +359,44 @@
   font-size: 0.78rem;
 }
 
-.hint-badge {
-  display: inline-block;
-  margin-left: 0.3em;
-  font-size: 0.68rem;
+/* ── Foldable hint groups ─────────────────────────────── */
+
+.hint-group {
+  margin-bottom: 0.3rem;
+}
+
+.hint-group-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4em;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0.25rem 0;
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--text);
+  text-align: left;
+}
+
+.hint-group-toggle:hover {
   color: var(--accent);
-  opacity: 0.8;
+}
+
+.hint-group-chevron {
+  font-size: 0.6rem;
+  width: 0.8em;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.hint-group-toggle code {
+  font-size: 0.8rem;
+}
+
+.hint-group-desc {
+  color: var(--text-muted);
+  font-size: 0.78rem;
 }
 
 .hint-example {

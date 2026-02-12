@@ -110,39 +110,100 @@ interface GlobalSettings {
   story_roles: Record<RoleName, string>
 }
 
-interface TemplateVar {
+interface VarLeaf {
   name: string
   type: string
   desc: string
 }
 
-const TEMPLATE_VARS: TemplateVar[] = [
-  { name: 'description', type: 'string', desc: 'Adventure premise' },
+interface VarGroup {
+  key: string
+  label: string
+  desc: string
+  children: VarLeaf[]
+}
+
+const TOP_LEVEL_VARS: VarLeaf[] = [
   { name: 'title', type: 'string', desc: 'Adventure title' },
+  { name: 'description', type: 'string', desc: 'Adventure premise' },
   { name: 'message', type: 'string', desc: 'Current player message' },
   { name: 'history', type: 'string', desc: 'Pre-formatted history' },
-  { name: 'msgs', type: 'array', desc: 'Message objects for {{#each}} (also: messages)' },
-  { name: 'lore.text', type: 'string', desc: 'Pre-formatted matched lorebook entries (also: lorebook)' },
-  { name: 'lore.entries', type: 'array', desc: 'Matched lorebook entry objects (also: lorebook_entries)' },
   { name: 'intention', type: 'string', desc: 'Current intention being resolved' },
   { name: 'narration', type: 'string', desc: 'Narrator response text' },
-  { name: 'turn.narration', type: 'string', desc: 'All narration this turn so far (also: narration_so_far)' },
-  { name: 'turn.round_narrations', type: 'string', desc: 'All narrations from this round (also: round_narrations)' },
-  { name: 'chars.list', type: 'array', desc: 'Character objects with .name, .descriptions (also: characters)' },
-  { name: 'chars.summary', type: 'string', desc: 'Pre-formatted character states (also: characters_summary)' },
-  { name: 'char.name', type: 'string', desc: 'Current character name (also: character_name)' },
-  { name: 'char.description', type: 'string', desc: 'Current character personality (also: character_description)' },
-  { name: 'char.states', type: 'string', desc: 'Visible states (≥6) for current character (also: character_states)' },
-  { name: 'char.all_states', type: 'string', desc: 'All states with raw values (extractor) (also: character_all_states)' },
 ]
 
-const MESSAGE_FIELDS: { name: string; desc: string }[] = [
-  { name: '.role', desc: '"player" or "narrator"' },
-  { name: '.text', desc: 'Content' },
-  { name: '.ts', desc: 'ISO timestamp' },
-  { name: '.is_player', desc: 'Boolean flag' },
-  { name: '.is_narrator', desc: 'Boolean flag' },
+const VAR_GROUPS: VarGroup[] = [
+  {
+    key: 'char', label: 'char', desc: 'Current character',
+    children: [
+      { name: 'char.name', type: 'string', desc: 'Character name' },
+      { name: 'char.description', type: 'string', desc: 'Character personality' },
+      { name: 'char.states', type: 'string', desc: 'Visible states (value ≥ 6)' },
+      { name: 'char.all_states', type: 'string', desc: 'All states with raw values (extractor)' },
+    ],
+  },
+  {
+    key: 'chars', label: 'chars', desc: 'All characters',
+    children: [
+      { name: 'chars.list', type: 'array', desc: 'Character objects (.name, .descriptions)' },
+      { name: 'chars.summary', type: 'string', desc: 'Pre-formatted character states' },
+      { name: 'chars.active', type: 'array', desc: 'Active characters this round' },
+      { name: 'chars.active_summary', type: 'string', desc: 'Active characters summary' },
+    ],
+  },
+  {
+    key: 'turn', label: 'turn', desc: 'Current turn',
+    children: [
+      { name: 'turn.narration', type: 'string', desc: 'All narration this turn so far' },
+      { name: 'turn.round_narrations', type: 'string', desc: 'All round narrations' },
+    ],
+  },
+  {
+    key: 'lore', label: 'lore', desc: 'Lorebook',
+    children: [
+      { name: 'lore.text', type: 'string', desc: 'Pre-formatted matched entries' },
+      { name: 'lore.entries', type: 'array', desc: 'Matched entry objects' },
+    ],
+  },
+  {
+    key: 'msgs', label: 'msgs', desc: 'Message history (array)',
+    children: [
+      { name: '.role', type: 'string', desc: '"player" or "narrator"' },
+      { name: '.text', type: 'string', desc: 'Content' },
+      { name: '.ts', type: 'string', desc: 'ISO timestamp' },
+      { name: '.is_player', type: 'boolean', desc: 'Boolean flag' },
+      { name: '.is_narrator', type: 'boolean', desc: 'Boolean flag' },
+    ],
+  },
 ]
+
+function HintGroup({ group }: { group: VarGroup }) {
+  const [expanded, setExpanded] = useState(false)
+  const isArray = group.desc.includes('array')
+  return (
+    <div className="hint-group">
+      <button className="hint-group-toggle" onClick={() => setExpanded(!expanded)}>
+        <i className={`fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} hint-group-chevron`} />
+        <code>{'{{' + group.label + '}}'}</code>
+        <span className="hint-type">{isArray ? 'array' : 'object'}</span>
+        <span className="hint-group-desc">{group.desc}</span>
+      </button>
+      {expanded && (
+        <dl className="hint-vars hint-vars--nested">
+          {group.children.map(v => (
+            <div key={v.name} className="hint-var">
+              <dt>
+                <code>{v.name.startsWith('.') ? v.name : '{{' + v.name + '}}'}</code>
+                <span className="hint-type">{v.type}</span>
+              </dt>
+              <dd>{v.desc}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </div>
+  )
+}
 
 function PromptHintsPanel() {
   const [open, setOpen] = useState(false)
@@ -192,8 +253,9 @@ function PromptHintsPanel() {
       <div className="hint-panel-body">
         <h4>Template Variables</h4>
         <p className="hint-intro">Use Handlebars syntax in prompt templates.</p>
+
         <dl className="hint-vars">
-          {TEMPLATE_VARS.map(v => (
+          {TOP_LEVEL_VARS.map(v => (
             <div key={v.name} className="hint-var">
               <dt>
                 <code>{'{{' + v.name + '}}'}</code>
@@ -204,16 +266,7 @@ function PromptHintsPanel() {
           ))}
         </dl>
 
-        <h4>Message Fields</h4>
-        <p className="hint-intro">Inside <code>{'{{#each msgs}}'}</code>:</p>
-        <dl className="hint-vars">
-          {MESSAGE_FIELDS.map(f => (
-            <div key={f.name} className="hint-var">
-              <dt><code>{f.name}</code></dt>
-              <dd>{f.desc}</dd>
-            </div>
-          ))}
-        </dl>
+        {VAR_GROUPS.map(g => <HintGroup key={g.key} group={g} />)}
 
         <h4>Block Helpers</h4>
         <dl className="hint-vars">
