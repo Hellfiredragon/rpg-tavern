@@ -197,29 +197,29 @@ Written automatically on embark with default values.
 
 ### Handlebars Template Variables
 
-New names use nested object paths; old flat names are kept as backward-compatible aliases.
+Variables use nested object paths (e.g. `{{char.name}}`).
 
-| Variable | Old Alias | Type | Description |
-|---|---|---|---|
-| `description` | — | string | Adventure premise |
-| `title` | — | string | Adventure title |
-| `message` | — | string | Current player message |
-| `history` | — | string | Pre-formatted history (`> ` prefix for player lines) |
-| `msgs` | `messages` | array | Message objects for `{{#each}}` |
-| `lore.text` | `lorebook` | string | Pre-formatted matched lorebook entries |
-| `lore.entries` | `lorebook_entries` | array | Matched lorebook entry objects |
-| `intention` | — | string | Current intention being resolved (narrator) |
-| `narration` | — | string | Narrator response text |
-| `turn.narration` | `narration_so_far` | string | All narration this turn so far |
-| `turn.round_narrations` | `round_narrations` | string | All narrations from current round |
-| `chars.list` | `characters` | array | Character objects with .name, .descriptions |
-| `chars.summary` | `characters_summary` | string | Pre-formatted character states |
-| `chars.active` | `active_characters` | array | Active characters this round |
-| `chars.active_summary` | `active_characters_summary` | string | Active characters summary |
-| `char.name` | `character_name` | string | Current character name |
-| `char.description` | `character_description` | string | Current character personality |
-| `char.states` | `character_states` | string | Visible states (≥6) for current character |
-| `char.all_states` | `character_all_states` | string | All states with raw values (extractor only) |
+| Variable | Type | Description |
+|---|---|---|
+| `title` | string | Adventure title |
+| `description` | string | Adventure premise |
+| `message` | string | Current player message |
+| `history` | string | Pre-formatted history (`> ` prefix for player lines) |
+| `intention` | string | Current intention being resolved (narrator) |
+| `narration` | string | Narrator response text |
+| `msgs` | array | Message objects for `{{#each}}` (.role, .text, .ts, .is_player, .is_narrator) |
+| `char.name` | string | Current character name |
+| `char.description` | string | Current character personality |
+| `char.states` | string | Visible states (≥6) for current character |
+| `char.all_states` | string | All states with raw values (extractor only) |
+| `chars.list` | array | Character objects with .name, .descriptions |
+| `chars.summary` | string | Pre-formatted character states |
+| `chars.active` | array | Active characters this round |
+| `chars.active_summary` | string | Active characters summary |
+| `turn.narration` | string | All narration this turn so far |
+| `turn.round_narrations` | string | All narrations from current round |
+| `lore.text` | string | Pre-formatted matched lorebook entries |
+| `lore.entries` | array | Matched lorebook entry objects |
 
 ### Chat Pipeline (Intention/Resolution)
 

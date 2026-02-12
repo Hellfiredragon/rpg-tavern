@@ -146,8 +146,8 @@ def character_prompt_context(characters: list[dict]) -> dict:
             summary_parts.append(f"{char['name']}: (no notable states)")
 
     return {
-        "characters": enriched,
-        "characters_summary": "\n".join(summary_parts),
+        "list": enriched,
+        "summary": "\n".join(summary_parts),
     }
 
 

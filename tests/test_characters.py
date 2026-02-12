@@ -189,22 +189,22 @@ def test_prompt_context_builds_summary():
         }
     ]
     ctx = character_prompt_context(chars)
-    assert len(ctx["characters"]) == 1
-    assert ctx["characters"][0]["name"] == "Gareth"
+    assert len(ctx["list"]) == 1
+    assert ctx["list"][0]["name"] == "Gareth"
     # Silent state (Sleepy=3) should not appear in descriptions
-    descs = ctx["characters"][0]["descriptions"]
+    descs = ctx["list"][0]["descriptions"]
     assert any("Loyal" in d for d in descs)
     assert any("Grumpy" in d for d in descs)
     assert not any("Sleepy" in d for d in descs)
     # Summary includes non-silent
-    assert "Gareth" in ctx["characters_summary"]
-    assert "Loyal" in ctx["characters_summary"]
+    assert "Gareth" in ctx["summary"]
+    assert "Loyal" in ctx["summary"]
 
 
 def test_prompt_context_empty_characters():
     ctx = character_prompt_context([])
-    assert ctx["characters"] == []
-    assert ctx["characters_summary"] == ""
+    assert ctx["list"] == []
+    assert ctx["summary"] == ""
 
 
 def test_prompt_context_includes_nicknames():
@@ -218,7 +218,7 @@ def test_prompt_context_includes_nicknames():
         }
     ]
     ctx = character_prompt_context(chars)
-    assert ctx["characters"][0]["nicknames"] == ["Cap", "Captain"]
+    assert ctx["list"][0]["nicknames"] == ["Cap", "Captain"]
 
 
 # ── activate_characters ───────────────────────────────────────

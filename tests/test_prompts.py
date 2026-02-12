@@ -47,14 +47,11 @@ def test_build_context_basic():
     assert ctx["title"] == "My Quest"
     assert ctx["description"] == "A great adventure"
     assert ctx["message"] == "I enter the tavern"
-    # New short name
     assert len(ctx["msgs"]) == 2
     assert ctx["msgs"][0]["is_player"] is True
     assert ctx["msgs"][0]["is_narrator"] is False
     assert ctx["msgs"][1]["is_player"] is False
     assert ctx["msgs"][1]["is_narrator"] is True
-    # Backward compat alias
-    assert ctx["messages"] is ctx["msgs"]
     assert "narration" not in ctx
 
 
@@ -85,7 +82,6 @@ def test_build_context_history_format():
 def test_build_context_empty_messages():
     ctx = build_context({"title": "T", "description": "D"}, [], "hello")
     assert ctx["msgs"] == []
-    assert ctx["messages"] == []  # backward compat
     assert ctx["history"] == ""
 
 
@@ -133,26 +129,21 @@ def test_last_with_objects():
 
 def test_build_context_with_characters():
     char_ctx = {
-        "characters": [{"name": "Gareth", "slug": "gareth", "descriptions": ["Loyal drives their actions"]}],
-        "characters_summary": "Gareth: Loyal drives their actions",
+        "list": [{"name": "Gareth", "slug": "gareth", "descriptions": ["Loyal drives their actions"]}],
+        "summary": "Gareth: Loyal drives their actions",
     }
     ctx = build_context(
         {"title": "T", "description": "D"},
         [],
         "hello",
-        characters=char_ctx,
+        chars=char_ctx,
     )
-    # New nested names
-    assert ctx["chars"]["list"] == char_ctx["characters"]
-    assert ctx["chars"]["summary"] == char_ctx["characters_summary"]
-    # Backward compat aliases
-    assert ctx["characters"] == char_ctx["characters"]
-    assert ctx["characters_summary"] == char_ctx["characters_summary"]
+    assert ctx["chars"]["list"] == char_ctx["list"]
+    assert ctx["chars"]["summary"] == char_ctx["summary"]
 
 
 def test_build_context_without_characters():
     ctx = build_context({"title": "T", "description": "D"}, [], "hello")
-    assert "characters" not in ctx
     assert "chars" not in ctx
 
 
@@ -161,44 +152,35 @@ def test_build_context_with_lorebook():
         {"title": "T", "description": "D"},
         [],
         "hello",
-        lorebook="[Dragon] A big dragon",
-        lorebook_entries=[{"title": "Dragon", "content": "A big dragon", "keywords": ["dragon"]}],
+        lore_text="[Dragon] A big dragon",
+        lore_entries=[{"title": "Dragon", "content": "A big dragon", "keywords": ["dragon"]}],
     )
-    # New nested names
     assert ctx["lore"]["text"] == "[Dragon] A big dragon"
     assert len(ctx["lore"]["entries"]) == 1
     assert ctx["lore"]["entries"][0]["title"] == "Dragon"
-    # Backward compat aliases
-    assert ctx["lorebook"] == "[Dragon] A big dragon"
-    assert ctx["lorebook_entries"][0]["title"] == "Dragon"
 
 
 def test_build_context_without_lorebook():
     ctx = build_context({"title": "T", "description": "D"}, [], "hello")
-    assert "lorebook" not in ctx
     assert "lore" not in ctx
 
 
-def test_build_context_with_active_characters():
+def test_build_context_with_chars_extra_fields():
+    """chars dict is passed through directly, supporting any keys."""
+    chars_ctx = {
+        "list": [{"name": "Gareth", "descriptions": []}],
+        "summary": "Gareth: (no notable states)",
+        "active": [{"name": "Gareth"}],
+        "active_summary": "Gareth: (no notable states)",
+    }
     ctx = build_context(
         {"title": "T", "description": "D"},
         [],
         "hello",
-        active_characters=[{"name": "Gareth", "descriptions": []}],
-        active_characters_summary="Gareth: (no notable states)",
+        chars=chars_ctx,
     )
-    # New nested names
     assert len(ctx["chars"]["active"]) == 1
     assert ctx["chars"]["active_summary"] == "Gareth: (no notable states)"
-    # Backward compat aliases
-    assert len(ctx["active_characters"]) == 1
-    assert ctx["active_characters_summary"] == "Gareth: (no notable states)"
-
-
-def test_build_context_without_active_characters():
-    ctx = build_context({"title": "T", "description": "D"}, [], "hello")
-    assert "active_characters" not in ctx
-    assert "active_characters_summary" not in ctx
 
 
 def test_default_narrator_prompt_renders():
@@ -213,9 +195,9 @@ def test_default_narrator_prompt_renders():
     ctx = build_context(
         adventure, messages, "I go north",
         intention="I go north",
-        characters={
-            "characters": [{"name": "Gareth", "descriptions": ["Loyal"]}],
-            "characters_summary": "Gareth: Loyal",
+        chars={
+            "list": [{"name": "Gareth", "descriptions": ["Loyal"]}],
+            "summary": "Gareth: Loyal",
         },
     )
     result = render_prompt(DEFAULT_NARRATOR_PROMPT, ctx)

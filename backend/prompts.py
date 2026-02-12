@@ -58,12 +58,11 @@ def build_context(
     adventure: dict[str, Any],
     messages: list[dict[str, Any]],
     player_message: str,
+    *,
     narration: str | None = None,
-    characters: dict[str, Any] | None = None,
-    lorebook: str | None = None,
-    lorebook_entries: list[dict[str, Any]] | None = None,
-    active_characters: list[dict[str, Any]] | None = None,
-    active_characters_summary: str | None = None,
+    chars: dict[str, Any] | None = None,
+    lore_text: str | None = None,
+    lore_entries: list[dict[str, Any]] | None = None,
     intention: str | None = None,
     char_name: str | None = None,
     char_description: str | None = None,
@@ -75,8 +74,7 @@ def build_context(
     """Assemble template variables from adventure state.
 
     Returns a dict suitable for passing to render_prompt().
-    Builds nested objects (char, chars, turn, lore, msgs) for short
-    Handlebars paths, and keeps old flat keys as backward-compat aliases.
+    Nested objects: char, chars, turn, lore, msgs.
     """
     enriched = []
     for msg in messages:
@@ -88,7 +86,6 @@ def build_context(
             "is_narrator": msg["role"] == "narrator",
         })
 
-    # Pre-formatted history string (> for player, bare for narrator)
     history_parts: list[str] = []
     for msg in messages:
         if msg["role"] == "player":
@@ -101,60 +98,40 @@ def build_context(
         "title": adventure.get("title", ""),
         "description": adventure.get("description", ""),
         "message": player_message,
-        "messages": enriched,  # backward compat alias
-        "msgs": enriched,      # new short name
+        "msgs": enriched,
         "history": "\n".join(history_parts),
     }
     if narration is not None:
         ctx["narration"] = narration
-
-    # ── chars (characters collection) ──
-    if characters is not None:
-        chars_list = characters.get("characters", [])
-        chars_summary = characters.get("characters_summary", "")
-        ctx["chars"] = {"list": chars_list, "summary": chars_summary}
-        # backward compat
-        ctx["characters"] = chars_list
-        ctx["characters_summary"] = chars_summary
-    if active_characters is not None:
-        ctx.setdefault("chars", {})["active"] = active_characters
-        ctx["active_characters"] = active_characters  # backward compat
-    if active_characters_summary is not None:
-        ctx.setdefault("chars", {})["active_summary"] = active_characters_summary
-        ctx["active_characters_summary"] = active_characters_summary  # backward compat
-
-    # ── lore (lorebook) ──
-    if lorebook is not None:
-        ctx.setdefault("lore", {})["text"] = lorebook
-        ctx["lorebook"] = lorebook  # backward compat
-    if lorebook_entries is not None:
-        ctx.setdefault("lore", {})["entries"] = lorebook_entries
-        ctx["lorebook_entries"] = lorebook_entries  # backward compat
-
-    # ── Pipeline-specific context ──
+    if chars is not None:
+        ctx["chars"] = chars
+    if lore_text is not None or lore_entries is not None:
+        lore: dict[str, Any] = {}
+        if lore_text is not None:
+            lore["text"] = lore_text
+        if lore_entries is not None:
+            lore["entries"] = lore_entries
+        ctx["lore"] = lore
     if intention is not None:
         ctx["intention"] = intention
-
-    # ── char (single character) ──
-    if char_name is not None:
-        ctx.setdefault("char", {})["name"] = char_name
-        ctx["character_name"] = char_name  # backward compat
-    if char_description is not None:
-        ctx.setdefault("char", {})["description"] = char_description
-        ctx["character_description"] = char_description  # backward compat
-    if char_states is not None:
-        ctx.setdefault("char", {})["states"] = char_states
-        ctx["character_states"] = char_states  # backward compat
-    if char_all_states is not None:
-        ctx.setdefault("char", {})["all_states"] = char_all_states
-        ctx["character_all_states"] = char_all_states  # backward compat
-
-    # ── turn (current turn context) ──
-    if narration_so_far is not None:
-        ctx.setdefault("turn", {})["narration"] = narration_so_far
-        ctx["narration_so_far"] = narration_so_far  # backward compat
-    if round_narrations is not None:
-        ctx.setdefault("turn", {})["round_narrations"] = round_narrations
-        ctx["round_narrations"] = round_narrations  # backward compat
+    if char_name is not None or char_description is not None \
+            or char_states is not None or char_all_states is not None:
+        char: dict[str, Any] = {}
+        if char_name is not None:
+            char["name"] = char_name
+        if char_description is not None:
+            char["description"] = char_description
+        if char_states is not None:
+            char["states"] = char_states
+        if char_all_states is not None:
+            char["all_states"] = char_all_states
+        ctx["char"] = char
+    if narration_so_far is not None or round_narrations is not None:
+        turn: dict[str, Any] = {}
+        if narration_so_far is not None:
+            turn["narration"] = narration_so_far
+        if round_narrations is not None:
+            turn["round_narrations"] = round_narrations
+        ctx["turn"] = turn
 
     return ctx

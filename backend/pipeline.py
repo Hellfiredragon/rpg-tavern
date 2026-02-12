@@ -258,9 +258,9 @@ async def run_pipeline(
     def _base_ctx(**extra: Any) -> dict:
         return build_context(
             adventure, history, player_message,
-            characters=char_ctx,
-            lorebook=lorebook_str if lorebook_str else None,
-            lorebook_entries=matched_entries if matched_entries else None,
+            chars=char_ctx,
+            lore_text=lorebook_str if lorebook_str else None,
+            lore_entries=matched_entries if matched_entries else None,
             **extra,
         )
 
