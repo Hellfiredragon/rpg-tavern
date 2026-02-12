@@ -1,6 +1,8 @@
 """Create demo templates for development/testing."""
 
+import json
 import shutil
+from datetime import datetime, timezone
 
 from backend import storage
 from backend.characters import new_character
@@ -98,4 +100,27 @@ def create_demo_data() -> None:
     ]
     storage.save_lorebook(adventure["slug"], lorebook_entries)
 
-    print(f"Created {len(DEMO_TEMPLATES)} demo templates + 1 demo adventure + 3 characters + 3 lorebook entries.")
+    # Add demo messages with segment format
+    now = datetime.now(timezone.utc).isoformat()
+    demo_messages = [
+        {
+            "role": "player",
+            "text": "I approach the village elder",
+            "ts": now,
+        },
+        {
+            "role": "narrator",
+            "text": "The elder rises from his bench, eyes narrowing.\n"
+            "Gareth(stern): Another adventurer? We've had enough of those.\n"
+            "Elena(hopeful): Wait, Gareth. Maybe this one can help.",
+            "segments": [
+                {"type": "narration", "text": "The elder rises from his bench, eyes narrowing."},
+                {"type": "dialog", "character": "Gareth", "emotion": "stern", "text": "Another adventurer? We've had enough of those."},
+                {"type": "dialog", "character": "Elena", "emotion": "hopeful", "text": "Wait, Gareth. Maybe this one can help."},
+            ],
+            "ts": now,
+        },
+    ]
+    storage.append_messages(adventure["slug"], demo_messages)
+
+    print(f"Created {len(DEMO_TEMPLATES)} demo templates + 1 demo adventure + 3 characters + 3 lorebook entries + demo messages.")

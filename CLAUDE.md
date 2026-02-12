@@ -51,6 +51,7 @@ cd frontend && bun run lint      # ESLint
 backend/              Python backend (FastAPI)
   app.py              App factory (create_app with configurable data_dir)
   routes.py           API endpoints under /api (/templates, /adventures, /settings, /name-suggestion, /lorebook)
+  pipeline.py         Intention/resolution chat pipeline (run_pipeline, parser, extractors)
   storage.py          File-based JSON storage (split templates + adventures, preset merging, config, lorebook)
   prompts.py          Handlebars prompt rendering + context builder for story roles
   characters.py       Character state logic (categories, thresholds, ticking, activation, prompt context)
@@ -115,6 +116,45 @@ Valid tabs: `chat`, `characters` (adventures only), `world`, `settings`, `global
 ### UI Settings
 
 All UI-related settings (layout dimensions, panel sizes, display preferences) belong in Global Settings under the "UI Settings" section. These are stored in `data/config.json` via the `GET/PATCH /api/settings` endpoints and managed in `AppSettings.tsx`.
+
+### Chat Pipeline (Intention/Resolution)
+
+The chat pipeline in `backend/pipeline.py` uses an intention/resolution loop:
+
+1. **Player intention** → Narrator resolves → segments (narration + dialog)
+2. **Character extractor** runs for each character named in the narration
+3. **Round loop** (up to `max_rounds`, default 3):
+   - Activate characters (name matching + chattiness roll)
+   - Each active character generates an **intention** (1 LLM call)
+   - Narrator **resolves** the intention → segments (1 LLM call)
+   - Character extractor updates that character's states (1 LLM call)
+4. **Lorebook extractor** runs once per turn for new world facts
+5. Tick all character states, combine all segments into one narrator message
+
+**Story Roles** (4 LLM connection assignments in Global Settings):
+
+| Role | Purpose |
+|------|---------|
+| `narrator` | Resolves intentions → narration + dialog |
+| `character_intention` | Generates character intentions |
+| `extractor` | Updates character states after each resolution |
+| `lorebook_extractor` | Extracts new world facts (uses extractor connection) |
+
+**Narrator output format** — parsed by `parse_narrator_output()`:
+```
+Narration text here.
+CharacterName(emotion): Dialog text here.
+More narration.
+```
+
+**Message format** — messages have a `segments` field for structured rendering:
+```json
+{"role": "narrator", "text": "raw text", "segments": [{"type": "narration", "text": "..."}, {"type": "dialog", "character": "Name", "emotion": "happy", "text": "..."}]}
+```
+
+Frontend renders segments as inline dialog cards within narration. Falls back to plain `text` for old messages without segments.
+
+**Sandbox mode** — per-adventure toggle shows character intention messages in chat.
 
 ### Dev proxy setup
 

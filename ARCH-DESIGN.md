@@ -120,7 +120,7 @@ App settings are stored in `data/config.json` (not under presets — no merging 
 ```json
 {
   "llm_connections": [ ... ],
-  "story_roles": { "narrator": "", "character_writer": "", "extractor": "" },
+  "story_roles": { "narrator": "", "character_intention": "", "extractor": "" },
   "app_width_percent": 100
 }
 ```
@@ -141,9 +141,9 @@ Maps story-telling roles to connection names. Merged key-by-key on partial updat
 
 | Role | Description |
 |---|---|
-| `narrator` | Narrates the story and describes world events |
-| `character_writer` | Writes NPC dialogue and character actions |
-| `extractor` | Extracts structured data from narrative text |
+| `narrator` | Resolves intentions into narration + dialog |
+| `character_intention` | Generates character intentions |
+| `extractor` | Updates character states after each resolution |
 
 Empty string means "not assigned".
 
@@ -163,7 +163,7 @@ Empty string means "not assigned".
 
 ## Story Roles (per-adventure)
 
-Each adventure has per-role settings stored in `data/adventures/<slug>/story-roles.json`. These configure **when** each role triggers, **where** it acts, and the **Handlebars prompt template** used to build the LLM prompt.
+Each adventure has per-role settings stored in `data/adventures/<slug>/story-roles.json`. These configure the **Handlebars prompt template** for each role, plus pipeline settings.
 
 ### Storage
 
@@ -177,52 +177,62 @@ Written automatically on embark with default values.
 
 ```json
 {
-  "narrator": {
-    "when": "on_player_message",
-    "where": "chat",
-    "prompt": "You are the Game Master..."
-  },
-  "character_writer": { "when": "after_narration", "where": "chat", "prompt": "You write in-character dialog..." },
-  "extractor": { "when": "after_narration", "where": "system", "prompt": "You are a game state extractor..." }
+  "narrator": { "prompt": "You are the Game Master..." },
+  "character_intention": { "prompt": "You are {{character_name}}..." },
+  "extractor": { "prompt": "You are a character state tracker..." },
+  "lorebook_extractor": { "prompt": "You extract world facts..." },
+  "max_rounds": 3,
+  "sandbox": false
 }
 ```
 
-| Field | Values | Description |
+| Field | Type | Description |
 |---|---|---|
-| `when` | `on_player_message`, `after_narration`, `disabled` | Trigger event |
-| `where` | `chat`, `system` | `chat` = visible in chat, `system` = parsed but hidden |
-| `prompt` | string | Handlebars template |
+| `narrator.prompt` | string | Handlebars template for resolving intentions |
+| `character_intention.prompt` | string | Handlebars template for character intentions |
+| `extractor.prompt` | string | Handlebars template for character state extraction |
+| `lorebook_extractor.prompt` | string | Handlebars template for lorebook extraction |
+| `max_rounds` | number | Maximum character intention/resolution rounds per turn |
+| `sandbox` | boolean | Show character intention messages in chat |
 
 ### Handlebars Template Variables
 
-| Variable | Type | Available | Description |
-|---|---|---|---|
-| `description` | string | always | Adventure premise |
-| `title` | string | always | Adventure title |
-| `message` | string | always | Current player message |
-| `history` | string | always | Pre-formatted history (`> ` prefix for player lines) |
-| `messages` | array | always | Message objects for `{{#each}}` |
-| `messages.[].role` | string | — | `"player"` or `"narrator"` |
-| `messages.[].text` | string | — | Content |
-| `messages.[].ts` | string | — | ISO timestamp |
-| `messages.[].is_player` | boolean | — | Convenience flag |
-| `messages.[].is_narrator` | boolean | — | Convenience flag |
-| `lorebook` | string | always | Pre-formatted matched lorebook entries |
-| `lorebook_entries` | array | always | Matched lorebook entry objects |
-| `narration` | string | `after_narration` only | Narrator's response from current turn |
-| `active_characters` | array | `after_narration` only | Active character objects for this turn |
-| `active_characters_summary` | string | `after_narration` only | Pre-formatted active character states |
+| Variable | Type | Description |
+|---|---|---|
+| `description` | string | Adventure premise |
+| `title` | string | Adventure title |
+| `message` | string | Current player message |
+| `history` | string | Pre-formatted history (`> ` prefix for player lines) |
+| `messages` | array | Message objects for `{{#each}}` |
+| `lorebook` | string | Pre-formatted matched lorebook entries |
+| `lorebook_entries` | array | Matched lorebook entry objects |
+| `intention` | string | Current intention being resolved (narrator) |
+| `narration` | string | Narrator response text |
+| `narration_so_far` | string | All narration this turn so far |
+| `round_narrations` | string | All narrations from current round |
+| `characters` | array | Character objects with .name, .descriptions |
+| `characters_summary` | string | Pre-formatted character states |
+| `character_name` | string | Current character name |
+| `character_description` | string | Current character personality |
+| `character_states` | string | Visible states (≥6) for current character |
+| `character_all_states` | string | All states with raw values (extractor only) |
 
-### Chat Pipeline
+### Chat Pipeline (Intention/Resolution)
 
-1. Load adventure, global config, per-adventure story roles, message history
-2. Store player message
-3. **Phase 1** — run roles with `when: "on_player_message"` in order: narrator → character_writer → extractor
-4. **Phase 2** — run roles with `when: "after_narration"` in same order
-5. Each role: resolve connection from global config → render Handlebars prompt → call LLM → append response
-6. Persist all new messages, return them
+1. Load adventure, global config, per-adventure story roles, message history, characters, lorebook
+2. **Player resolution** — narrator resolves the player's intention → segments
+3. **Character extractor** — for each character named in narration, update states
+4. **Round loop** (up to `max_rounds`):
+   - Activate characters (name matching + chattiness roll)
+   - Each active character generates an **intention** (1 LLM call)
+   - Narrator **resolves** the intention → segments (1 LLM call)
+   - Character extractor updates that character's states (1 LLM call)
+5. **Lorebook extractor** — extract new world facts from all narrations
+6. **Tick** all character states
+7. Combine all segments into one narrator message, persist all messages
+8. Return `{"messages": [player_msg, ...intention_msgs?, narrator_msg]}`
 
-Global `config.json` `story_roles` maps role → connection name. Per-adventure `story-roles.json` adds trigger + prompt config.
+Global `config.json` `story_roles` maps role → connection name. Per-adventure `story-roles.json` has prompt templates and pipeline settings.
 
 ### Endpoints
 
@@ -299,17 +309,24 @@ DELETE /api/adventures/{slug}/characters/{cslug}   — remove character
 
 ### Character Activation
 
-Each turn, characters are evaluated for activation:
+Each round (within a turn), characters are evaluated for activation:
 1. **Name/nickname match** — if the character's name or any nickname appears (case-insensitive) in the narration or player message, the character is always activated
 2. **Chattiness roll** — otherwise, `random(0, 100) < chattiness` determines spontaneous activation
 
-Active characters are passed to `after_narration` roles via `active_characters` and `active_characters_summary` template variables.
+Active characters each generate an intention and have it resolved by the narrator.
+
+### State Visibility ("Subconscious" Model)
+
+- **Values 0-5 (silent):** Hidden from character + narrator. Only extractor sees them.
+- **Values 6+ (visible):** Shown to character intention LLM + narrator with threshold descriptions.
+- **All values:** Visible to extractor with raw numeric values for precise tracking.
 
 ### Prompt Context
 
 Characters are included in the Handlebars prompt context:
-- `characters` — array of character objects with enriched state descriptions
-- `characters_summary` — pre-formatted text block listing each character and their non-silent states
+- `characters` / `characters_summary` — all characters with visible states (for narrator)
+- `character_name` / `character_states` — single character's visible states (for intentions)
+- `character_all_states` — all states with raw values (for extractor)
 
 ## Lorebook
 
@@ -346,24 +363,37 @@ PATCH  /api/adventures/{slug}/lorebook/{index}
 DELETE /api/adventures/{slug}/lorebook/{index}
 ```
 
-## Extractor
+## Extractors
 
-The extractor role (default: `where: "system"`) outputs structured JSON that is parsed to update game state automatically.
+Two extractors run during the pipeline. Both use best-effort JSON parsing (markdown fences stripped, invalid JSON logged and skipped).
 
-### Output Format
+### Character Extractor
+
+Runs after each narrator resolution. Updates states for a single character.
 
 ```json
 {
   "state_changes": [
-    {"character": "Gareth", "updates": [{"category": "temporal", "label": "Impressed", "value": 8}]}
-  ],
+    {"category": "temporal", "label": "Impressed", "value": 8}
+  ]
+}
+```
+
+State changes update existing states by label match or add new ones. Values are capped per category.
+
+### Lorebook Extractor
+
+Runs once per turn. Adds new world facts.
+
+```json
+{
   "lorebook_entries": [
     {"title": "Hidden Passage", "content": "...", "keywords": ["passage"]}
   ]
 }
 ```
 
-Best-effort parsing: markdown code fences are stripped, invalid JSON is logged and skipped. State changes update existing states by label match or add new ones. New lorebook entries are deduplicated by title.
+New entries are deduplicated by title (case-insensitive).
 
 ## Messages
 
@@ -379,11 +409,22 @@ data/adventures/<slug>/messages.json   # Array of message objects
 
 | Field | Type | Description |
 |---|---|---|
-| `role` | `"player"` \| `"narrator"` | Who sent the message |
-| `text` | string | Message content |
+| `role` | `"player"` \| `"narrator"` \| `"intention"` | Who sent the message |
+| `text` | string | Message content (plain text for prompt history) |
+| `segments` | array? | Structured narration/dialog segments (narrator only) |
+| `character` | string? | Character name (intention messages only) |
 | `ts` | string | ISO 8601 timestamp |
 
-Players describe **intent** — what their character wants to do. The narrator (LLM) decides what actually happens in context of the world.
+### Segment Model
+
+| Field | Type | Description |
+|---|---|---|
+| `type` | `"narration"` \| `"dialog"` | Segment type |
+| `text` | string | Content |
+| `character` | string? | Character name (dialog only) |
+| `emotion` | string? | Emotion tag (dialog only) |
+
+Players describe **intent** — what their character wants to do. The narrator (LLM) decides what actually happens in context of the world. Intention messages are only visible in sandbox mode.
 
 ## Chat
 
@@ -421,13 +462,4 @@ The `> ` prefix marks player lines; bare text is narration. The prompt ends with
 
 ### Flow
 
-1. Load adventure, config, story roles, message history, characters, lorebook
-2. **Lorebook match**: scan player message + last 5 messages for keyword matches
-3. **Phase 1 (on_player_message)**: narrator as game master — validates actions, narrates outcomes
-4. **Character activation**: determine active characters from narration + player message
-5. **Phase 2 (after_narration)**:
-   - Character writer: generate dialog for active characters
-   - Extractor: output JSON → apply state changes + new lorebook entries
-6. **Character tick**: apply tick rates to all character states
-7. Persist messages (system-role outputs are parsed but not added to chat)
-8. Return `{"messages": [player_msg, narrator_msg, ...]}`
+See "Chat Pipeline (Intention/Resolution)" under Story Roles above.

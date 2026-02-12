@@ -81,6 +81,40 @@ def tick_character(character: dict) -> dict:
     return character
 
 
+def extractor_prompt_context(character: dict) -> str:
+    """Build extractor context showing ALL states with raw numeric values.
+
+    Unlike character_prompt_context (which hides silent states), this exposes
+    everything so the extractor can track subconscious states precisely.
+    """
+    lines: list[str] = [f"Character: {character['name']}"]
+    for category in ("core", "persistent", "temporal"):
+        states = character["states"].get(category, [])
+        if states:
+            state_strs = [f"{s['label']}={s['value']}" for s in states]
+            lines.append(f"  {category}: {', '.join(state_strs)}")
+        else:
+            lines.append(f"  {category}: (none)")
+    return "\n".join(lines)
+
+
+def single_character_prompt_context(character: dict) -> str:
+    """Build prompt context for a single character showing only visible states (≥6).
+
+    Used for character intention prompts where the character sees their own
+    conscious states.
+    """
+    lines: list[str] = []
+    for category in ("core", "persistent", "temporal"):
+        for state in character["states"].get(category, []):
+            desc = describe_state(state["label"], state["value"])
+            if desc is not None:
+                lines.append(desc)
+    if not lines:
+        return "(no notable states)"
+    return "; ".join(lines)
+
+
 def character_prompt_context(characters: list[dict]) -> dict:
     """Build Handlebars context for characters.
 
@@ -132,6 +166,6 @@ def activate_characters(
         names.extend(n.lower() for n in char.get("nicknames", []))
         if any(name in text for name in names):
             active.append(char)
-        elif random.randint(0, 100) < char.get("chattiness", 50):
+        elif random.randint(0, 99) < char.get("chattiness", 50):
             active.append(char)
     return active

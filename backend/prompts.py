@@ -64,6 +64,14 @@ def build_context(
     lorebook_entries: list[dict[str, Any]] | None = None,
     active_characters: list[dict[str, Any]] | None = None,
     active_characters_summary: str | None = None,
+    # New pipeline context vars
+    intention: str | None = None,
+    character_name: str | None = None,
+    character_description: str | None = None,
+    character_states: str | None = None,
+    character_all_states: str | None = None,
+    narration_so_far: str | None = None,
+    round_narrations: str | None = None,
 ) -> dict[str, Any]:
     """Assemble template variables from adventure state.
 
@@ -108,4 +116,19 @@ def build_context(
         ctx["active_characters"] = active_characters
     if active_characters_summary is not None:
         ctx["active_characters_summary"] = active_characters_summary
+    # Pipeline-specific context
+    if intention is not None:
+        ctx["intention"] = intention
+    if character_name is not None:
+        ctx["character_name"] = character_name
+    if character_description is not None:
+        ctx["character_description"] = character_description
+    if character_states is not None:
+        ctx["character_states"] = character_states
+    if character_all_states is not None:
+        ctx["character_all_states"] = character_all_states
+    if narration_so_far is not None:
+        ctx["narration_so_far"] = narration_so_far
+    if round_narrations is not None:
+        ctx["round_narrations"] = round_narrations
     return ctx

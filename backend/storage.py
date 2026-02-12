@@ -243,94 +243,154 @@ You are the Game Master narrating an RPG adventure.
 {{lorebook}}
 
 {{/if}}
+{{#if characters_summary}}
 ## Characters
 {{characters_summary}}
 
+{{/if}}
 ## Recent History
-{{#last messages 10}}
+{{#last messages 6}}
 {{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}
 
 {{/last}}
-## Player Action
-> {{message}}
+{{#if narration_so_far}}
+## Earlier This Turn
+{{narration_so_far}}
 
-Narrate what happens next. Validate the player's action against the world \
-state — if it's impossible or contradicts established facts, describe why it \
-fails. Do NOT write character dialog; only describe events, environments, and \
-outcomes.\
+{{/if}}
+## Intention to Resolve
+{{intention}}
+
+Narrate the outcome of this intention. Use the character's visible states \
+to judge success or failure. Write dialog using this strict format:
+
+Name(emotion): Dialog text here.
+
+Where Name is an existing character name. Anything not in this format is \
+narration. Only resolve THIS intention — do not control other characters or \
+the player. If the intention tries to control others, ignore that part.\
 """
 
-DEFAULT_CHARACTER_WRITER_PROMPT = """\
-You write in-character dialog for NPCs in an RPG adventure.
+DEFAULT_CHARACTER_INTENTION_PROMPT = """\
+You are {{character_name}} in an RPG adventure.
 
-## Active Characters
-{{active_characters_summary}}
+## Your Personality
+{{character_description}}
+
+## Your Current States
+{{character_states}}
 
 ## Recent History
 {{#last messages 6}}
 {{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}
 
 {{/last}}
-## Current Narration
-{{narration}}
+## What Just Happened
+{{narration_so_far}}
 
-Write dialog for each active character listed above. Each character speaks in \
-their own voice, influenced by their current states. Use this format:
-
-Name: "Dialog here." *action description*
-
-Only write for the characters listed. Keep dialog concise and in character.\
+State what YOU want to do next in 1-2 first-person sentences. Do not decide \
+the outcome. Do not control other characters or the player. Only describe \
+your own intended action or speech.\
 """
 
-DEFAULT_EXTRACTOR_PROMPT = """\
-You are a game state extractor for an RPG adventure.
+DEFAULT_CHARACTER_EXTRACTOR_PROMPT = """\
+You are a character state tracker for {{character_name}}.
 
-## Characters
-{{characters_summary}}
+## All States (with raw values)
+{{character_all_states}}
 
-## Current Narration
+## Narration
 {{narration}}
 
-Analyze the narration and output a JSON object with state changes and new \
-lorebook entries. Use this exact format:
+Output a JSON object with state changes for {{character_name}} ONLY:
 
 ```json
 {
   "state_changes": [
-    {"character": "Name", "updates": [{"category": "temporal", "label": "State Label", "value": 8}]}
-  ],
+    {"category": "temporal", "label": "State Label", "value": 8}
+  ]
+}
+```
+
+Categories: "temporal" for emotions/situations, "persistent" for relationships, \
+"core" for identity. Values 1-5 are subconscious (character unaware), 6+ are \
+conscious. Output valid JSON only.\
+"""
+
+DEFAULT_LOREBOOK_EXTRACTOR_PROMPT = """\
+You extract world facts from RPG narration.
+
+## Round Narrations
+{{round_narrations}}
+
+Output a JSON object with new world facts ONLY (skip things already known):
+
+```json
+{
   "lorebook_entries": [
     {"title": "Entry Title", "content": "Description...", "keywords": ["keyword1"]}
   ]
 }
 ```
 
-Only include changes that are clearly supported by the narration. Use \
-"temporal" for new emotions/situations, "persistent" for relationship changes, \
-"core" only for fundamental identity shifts. Output valid JSON only.\
+Only include genuinely new world facts, locations, or items revealed. \
+Output valid JSON only.\
 """
 
 DEFAULT_STORY_ROLES: dict[str, Any] = {
     "narrator": {
-        "when": "on_player_message",
-        "where": "chat",
         "prompt": DEFAULT_NARRATOR_PROMPT,
     },
-    "character_writer": {
-        "when": "after_narration",
-        "where": "chat",
-        "prompt": DEFAULT_CHARACTER_WRITER_PROMPT,
+    "character_intention": {
+        "prompt": DEFAULT_CHARACTER_INTENTION_PROMPT,
     },
     "extractor": {
-        "when": "after_narration",
-        "where": "system",
-        "prompt": DEFAULT_EXTRACTOR_PROMPT,
+        "prompt": DEFAULT_CHARACTER_EXTRACTOR_PROMPT,
     },
+    "lorebook_extractor": {
+        "prompt": DEFAULT_LOREBOOK_EXTRACTOR_PROMPT,
+    },
+    "max_rounds": 3,
+    "sandbox": False,
 }
 
 
 def _story_roles_path(slug: str) -> Path:
     return adventures_dir() / slug / "story-roles.json"
+
+
+def _migrate_story_roles(stored: dict[str, Any]) -> dict[str, Any]:
+    """Migrate old story-roles format to new pipeline format.
+
+    Old format had: narrator, character_writer, extractor (each with when/where/prompt).
+    New format has: narrator, character_intention, extractor, lorebook_extractor
+    (each with prompt only), plus max_rounds and sandbox.
+    """
+    migrated = False
+
+    # Rename character_writer → character_intention
+    if "character_writer" in stored and "character_intention" not in stored:
+        stored["character_intention"] = {"prompt": stored["character_writer"].get("prompt", "")}
+        del stored["character_writer"]
+        migrated = True
+
+    # Remove old when/where fields from roles
+    for role_name in ("narrator", "character_intention", "extractor", "lorebook_extractor"):
+        if role_name in stored and isinstance(stored[role_name], dict):
+            for old_field in ("when", "where"):
+                if old_field in stored[role_name]:
+                    del stored[role_name][old_field]
+                    migrated = True
+
+    # Add missing top-level fields
+    if "max_rounds" not in stored:
+        stored["max_rounds"] = 3
+        migrated = True
+    if "sandbox" not in stored:
+        stored["sandbox"] = False
+        migrated = True
+
+    return stored
 
 
 def get_story_roles(slug: str) -> dict[str, Any]:
@@ -339,25 +399,33 @@ def get_story_roles(slug: str) -> dict[str, Any]:
     if not path.is_file():
         return json.loads(json.dumps(DEFAULT_STORY_ROLES))  # deep copy
     stored = json.loads(path.read_text())
+    stored = _migrate_story_roles(stored)
     # Merge with defaults so new roles get default values
     result = json.loads(json.dumps(DEFAULT_STORY_ROLES))
-    for role_name, role_data in stored.items():
-        if role_name in result:
-            result[role_name].update(role_data)
+    for key, value in stored.items():
+        if key in result and isinstance(value, dict) and isinstance(result[key], dict):
+            result[key].update(value)
+        else:
+            result[key] = value
     return result
 
 
 def update_story_roles(slug: str, roles: dict[str, Any]) -> dict[str, Any]:
     """Merge partial role updates and persist. Returns full roles."""
     current = get_story_roles(slug)
-    allowed_fields = {"when", "where", "prompt"}
-    for role_name, role_data in roles.items():
-        if role_name not in current:
-            continue  # ignore unknown roles
-        if isinstance(role_data, dict):
-            for field, value in role_data.items():
-                if field in allowed_fields:
-                    current[role_name][field] = value
+    role_names = {"narrator", "character_intention", "extractor", "lorebook_extractor"}
+    top_level_fields = {"max_rounds", "sandbox"}
+
+    for key, value in roles.items():
+        if key in role_names and isinstance(value, dict):
+            if key not in current:
+                current[key] = {}
+            for field, fval in value.items():
+                if field == "prompt":
+                    current[key][field] = fval
+        elif key in top_level_fields:
+            current[key] = value
+
     path = _story_roles_path(slug)
     path.write_text(json.dumps(current, indent=2))
     return current
@@ -502,7 +570,7 @@ _CONFIG_DEFAULTS: dict[str, Any] = {
     "llm_connections": [],
     "story_roles": {
         "narrator": "",
-        "character_writer": "",
+        "character_intention": "",
         "extractor": "",
     },
     "app_width_percent": 100,
@@ -528,7 +596,13 @@ def get_config() -> dict[str, Any]:
         if "llm_connections" in stored:
             config["llm_connections"] = stored["llm_connections"]
         if "story_roles" in stored:
-            config["story_roles"].update(stored["story_roles"])
+            roles = stored["story_roles"]
+            # Migrate: character_writer → character_intention
+            if "character_writer" in roles and "character_intention" not in roles:
+                roles["character_intention"] = roles.pop("character_writer")
+            elif "character_writer" in roles:
+                del roles["character_writer"]
+            config["story_roles"].update(roles)
         if "app_width_percent" in stored:
             config["app_width_percent"] = stored["app_width_percent"]
         if "help_panel_width_percent" in stored:

@@ -2,7 +2,9 @@ from backend.characters import (
     activate_characters,
     character_prompt_context,
     describe_state,
+    extractor_prompt_context,
     new_character,
+    single_character_prompt_context,
     tick_character,
 )
 
@@ -287,3 +289,63 @@ def test_activate_mixed():
     assert "Gareth" in names
     assert "Elena" in names
     assert "Thrak" not in names
+
+
+# ── extractor_prompt_context ──────────────────────────────────
+
+
+def test_extractor_prompt_context_shows_all_states():
+    """Extractor context shows ALL states with raw values, including silent ones."""
+    char = {
+        "name": "Gareth",
+        "slug": "gareth",
+        "states": {
+            "core": [{"label": "Loyal", "value": 18}],
+            "persistent": [{"label": "Grumpy", "value": 8}],
+            "temporal": [{"label": "Sleepy", "value": 3}],  # silent
+        },
+    }
+    ctx = extractor_prompt_context(char)
+    assert "Gareth" in ctx
+    assert "Loyal=18" in ctx
+    assert "Grumpy=8" in ctx
+    assert "Sleepy=3" in ctx  # silent states visible to extractor
+
+
+def test_extractor_prompt_context_empty_states():
+    char = {
+        "name": "Elena",
+        "slug": "elena",
+        "states": {"core": [], "persistent": [], "temporal": []},
+    }
+    ctx = extractor_prompt_context(char)
+    assert "Elena" in ctx
+    assert "(none)" in ctx
+
+
+# ── single_character_prompt_context ───────────────────────────
+
+
+def test_single_character_context_hides_silent():
+    char = {
+        "name": "Gareth",
+        "slug": "gareth",
+        "states": {
+            "core": [{"label": "Loyal", "value": 18}],
+            "persistent": [],
+            "temporal": [{"label": "Sleepy", "value": 3}],  # silent
+        },
+    }
+    ctx = single_character_prompt_context(char)
+    assert "Loyal" in ctx
+    assert "Sleepy" not in ctx
+
+
+def test_single_character_context_no_notable():
+    char = {
+        "name": "Elena",
+        "slug": "elena",
+        "states": {"core": [], "persistent": [], "temporal": [{"label": "Calm", "value": 2}]},
+    }
+    ctx = single_character_prompt_context(char)
+    assert ctx == "(no notable states)"

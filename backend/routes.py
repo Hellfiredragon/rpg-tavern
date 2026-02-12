@@ -1,18 +1,12 @@
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from backend import llm, storage
+from backend import storage
 from backend.characters import (
     CATEGORY_MAX_VALUES,
-    activate_characters,
-    character_prompt_context,
     new_character,
-    tick_character,
 )
-from backend.lorebook import format_lorebook, match_lorebook_entries
-from backend.prompts import PromptError, build_context, render_prompt
+from backend.pipeline import run_pipeline
 
 router = APIRouter()
 
@@ -133,101 +127,6 @@ async def get_messages(slug: str):
     return storage.get_messages(slug)
 
 
-def _resolve_connection(config: dict, role_name: str) -> dict | None:
-    """Find the LLM connection assigned to a story role. Returns None if unassigned."""
-    conn_name = config["story_roles"].get(role_name)
-    if not conn_name:
-        return None
-    for conn in config["llm_connections"]:
-        if conn["name"] == conn_name:
-            return conn
-    return None
-
-
-# Role execution order — determines priority within each phase
-_ROLE_ORDER = ["narrator", "character_writer", "extractor"]
-
-
-def _apply_extractor_output(slug: str, text: str) -> None:
-    """Parse extractor JSON output and apply state changes + lorebook entries.
-
-    Best-effort: if JSON is invalid, log warning and continue.
-    """
-    import json
-    import logging
-
-    logger = logging.getLogger(__name__)
-
-    # Strip markdown code fences if present
-    cleaned = text.strip()
-    if cleaned.startswith("```"):
-        lines = cleaned.split("\n")
-        # Remove first line (```json or ```) and last line (```)
-        lines = [l for l in lines[1:] if not l.strip().startswith("```")]
-        cleaned = "\n".join(lines)
-
-    try:
-        data = json.loads(cleaned)
-    except json.JSONDecodeError as e:
-        logger.warning(f"Extractor output is not valid JSON: {e}")
-        return
-
-    if not isinstance(data, dict):
-        return
-
-    # Apply state changes
-    state_changes = data.get("state_changes", [])
-    if state_changes:
-        characters = storage.get_characters(slug)
-        char_by_name = {c["name"].lower(): c for c in characters}
-        for change in state_changes:
-            char_name = change.get("character", "").lower()
-            char = char_by_name.get(char_name)
-            if not char:
-                continue
-            for update in change.get("updates", []):
-                category = update.get("category")
-                if category not in ("core", "persistent", "temporal"):
-                    continue
-                label = update.get("label", "")
-                value = update.get("value", 0)
-                if not label or not isinstance(value, (int, float)):
-                    continue
-                value = int(value)
-                cap = CATEGORY_MAX_VALUES.get(category)
-                if cap is not None and value > cap:
-                    value = cap
-                # Update existing or add new
-                found = False
-                for state in char["states"][category]:
-                    if state["label"].lower() == label.lower():
-                        state["value"] = value
-                        found = True
-                        break
-                if not found:
-                    char["states"][category].append(
-                        {"label": label, "value": value}
-                    )
-        storage.save_characters(slug, characters)
-
-    # Apply lorebook entries
-    new_entries = data.get("lorebook_entries", [])
-    if new_entries:
-        lorebook = storage.get_lorebook(slug)
-        existing_titles = {e["title"].lower() for e in lorebook}
-        for entry in new_entries:
-            title = entry.get("title", "")
-            if not title or title.lower() in existing_titles:
-                continue
-            lorebook.append({
-                "title": title,
-                "content": entry.get("content", ""),
-                "keywords": entry.get("keywords", []),
-            })
-            existing_titles.add(title.lower())
-        storage.save_lorebook(slug, lorebook)
-
-
 @router.post("/adventures/{slug}/chat")
 async def adventure_chat(slug: str, body: ChatBody):
     adventure = storage.get_adventure(slug)
@@ -238,117 +137,21 @@ async def adventure_chat(slug: str, body: ChatBody):
     story_roles = storage.get_story_roles(slug)
     history = storage.get_messages(slug)
     characters = storage.get_characters(slug)
-    char_ctx = character_prompt_context(characters) if characters else None
 
-    # Lorebook matching: scan player message + last 5 messages
-    lorebook_all = storage.get_lorebook(slug)
-    match_texts = [body.message]
-    match_texts.extend(m["text"] for m in history[-5:])
-    matched_entries = match_lorebook_entries(lorebook_all, match_texts)
-    lorebook_str = format_lorebook(matched_entries)
-
-    now = datetime.now(timezone.utc).isoformat()
-    player_msg = {"role": "player", "text": body.message, "ts": now}
-    new_messages = [player_msg]
-    narration: str | None = None
-    active_chars: list[dict] | None = None
-    active_chars_summary: str | None = None
-
-    def _build_ctx() -> dict:
-        return build_context(
-            adventure, history, body.message,
-            narration=narration, characters=char_ctx,
-            lorebook=lorebook_str if lorebook_str else None,
-            lorebook_entries=matched_entries if matched_entries else None,
-            active_characters=active_chars,
-            active_characters_summary=active_chars_summary,
+    try:
+        result = await run_pipeline(
+            slug=slug,
+            player_message=body.message,
+            adventure=adventure,
+            config=config,
+            story_roles=story_roles,
+            history=history,
+            characters=characters,
         )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
-    # Phase 1: on_player_message
-    for role_name in _ROLE_ORDER:
-        role_cfg = story_roles.get(role_name, {})
-        if role_cfg.get("when") != "on_player_message":
-            continue
-
-        connection = _resolve_connection(config, role_name)
-        if role_name == "narrator" and not connection:
-            raise HTTPException(
-                400, "Narrator role is not assigned — configure it in Settings"
-            )
-        if not connection:
-            continue
-
-        template_str = role_cfg.get("prompt", "")
-        if not template_str:
-            continue
-        try:
-            prompt = render_prompt(template_str, _build_ctx())
-        except PromptError as e:
-            raise HTTPException(400, f"Prompt template error ({role_name}): {e}")
-
-        text = await llm.generate(
-            connection["provider_url"], connection.get("api_key", ""), prompt
-        )
-
-        if role_name == "narrator":
-            narration = text
-
-        where = role_cfg.get("where", "chat")
-        if where == "system":
-            if role_name == "extractor":
-                _apply_extractor_output(slug, text)
-        else:
-            msg = {"role": role_name, "text": text, "ts": now}
-            new_messages.append(msg)
-
-    # Character activation (after narration is available)
-    if characters and narration:
-        active_chars_raw = activate_characters(
-            characters, narration, body.message
-        )
-        if active_chars_raw:
-            ac_ctx = character_prompt_context(active_chars_raw)
-            active_chars = ac_ctx.get("characters", [])
-            active_chars_summary = ac_ctx.get("characters_summary", "")
-
-    # Phase 2: after_narration
-    for role_name in _ROLE_ORDER:
-        role_cfg = story_roles.get(role_name, {})
-        if role_cfg.get("when") != "after_narration":
-            continue
-
-        connection = _resolve_connection(config, role_name)
-        if not connection:
-            continue
-
-        template_str = role_cfg.get("prompt", "")
-        if not template_str:
-            continue
-        try:
-            prompt = render_prompt(template_str, _build_ctx())
-        except PromptError as e:
-            raise HTTPException(400, f"Prompt template error ({role_name}): {e}")
-
-        text = await llm.generate(
-            connection["provider_url"], connection.get("api_key", ""), prompt
-        )
-
-        where = role_cfg.get("where", "chat")
-        if where == "system":
-            if role_name == "extractor":
-                _apply_extractor_output(slug, text)
-        else:
-            msg = {"role": role_name, "text": text, "ts": now}
-            new_messages.append(msg)
-
-    # Tick character states after pipeline phases
-    if characters:
-        for char in characters:
-            tick_character(char)
-        storage.save_characters(slug, characters)
-
-    storage.append_messages(slug, new_messages)
-    return {"messages": new_messages}
+    return result
 
 
 # ── Characters ────────────────────────────────────────────

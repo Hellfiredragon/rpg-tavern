@@ -107,24 +107,84 @@
   max-width: 100%;
 }
 
-.chat-msg--character_writer {
+.chat-msg--intention {
   align-self: flex-start;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
+  background: var(--bg-deep);
+  border: 1px dashed var(--border);
   border-left: 3px solid #9b59b6;
   max-width: 100%;
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--text-muted);
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
 }
 
-.chat-msg--extractor {
-  align-self: flex-start;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-left: 3px solid #2ecc71;
-  max-width: 100%;
+.intention-label {
+  font-weight: 600;
+  color: #9b59b6;
+  white-space: nowrap;
+  font-style: normal;
+}
+
+.intention-text {
+  flex: 1;
 }
 
 .chat-msg--loading {
   color: var(--text-muted);
+}
+
+/* ── Dialog Cards (inside narrator messages) ─────────────── */
+
+.narration-text {
+  margin: 0.3rem 0;
+  line-height: 1.6;
+}
+
+.narration-text:first-child {
+  margin-top: 0;
+}
+
+.narration-text:last-child {
+  margin-bottom: 0;
+}
+
+.dialog-card {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin: 0.5rem 0;
+  padding: 0.4rem 0.6rem;
+  border-left: 3px solid #9b59b6;
+  background: rgba(155, 89, 182, 0.08);
+  border-radius: 0 4px 4px 0;
+}
+
+.dialog-character {
+  font-weight: 600;
+  color: #bb8fce;
+  white-space: nowrap;
+}
+
+.dialog-emotion {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-style: italic;
+  white-space: nowrap;
+}
+
+.dialog-emotion::before {
+  content: '(';
+}
+
+.dialog-emotion::after {
+  content: ')';
+}
+
+.dialog-text {
+  flex: 1;
 }
 
 .chat-error {
@@ -322,6 +382,51 @@
   margin-top: 0.3rem;
 }
 
+/* ── Pipeline Controls ──────────────────────────────────── */
+
+.pipeline-controls {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-surface, var(--bg-deep));
+}
+
+.pipeline-control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+}
+
+.pipeline-control span:first-child {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.pipeline-control input[type="number"] {
+  width: 4em;
+  padding: 0.3em 0.5em;
+  font-size: 0.85rem;
+}
+
+.pipeline-control--toggle {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pipeline-control--toggle input[type="checkbox"] {
+  width: auto;
+}
+
+.pipeline-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
 /* ── Story Roles Settings ───────────────────────────────── */
 
 .story-roles-settings h3 {
@@ -330,6 +435,11 @@
   margin-bottom: 1rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.story-role-icon {
+  margin-right: 0.4em;
+  opacity: 0.7;
 }
 
 .story-role-card {

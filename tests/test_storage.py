@@ -235,7 +235,7 @@ def test_get_config_empty():
     assert config["llm_connections"] == []
     assert config["story_roles"] == {
         "narrator": "",
-        "character_writer": "",
+        "character_intention": "",
         "extractor": "",
     }
     assert config["app_width_percent"] == 100
@@ -266,7 +266,7 @@ def test_update_config_roles():
     config = storage.get_config()
     assert config["story_roles"]["narrator"] == "My OpenAI"
     assert config["story_roles"]["extractor"] == "Local LLM"
-    assert config["story_roles"]["character_writer"] == ""  # untouched
+    assert config["story_roles"]["character_intention"] == ""  # untouched
 
 
 def test_update_config_partial():
@@ -329,13 +329,12 @@ def test_get_story_roles_defaults():
     storage.create_template("Quest", "Desc")
     adv = storage.embark_template("quest", "Run")
     roles = storage.get_story_roles(adv["slug"])
-    assert roles["narrator"]["when"] == "on_player_message"
-    assert roles["character_writer"]["when"] == "after_narration"
-    assert roles["extractor"]["when"] == "after_narration"
-    assert roles["extractor"]["where"] == "system"
     assert roles["narrator"]["prompt"] != ""
-    assert roles["character_writer"]["prompt"] != ""
+    assert roles["character_intention"]["prompt"] != ""
     assert roles["extractor"]["prompt"] != ""
+    assert roles["lorebook_extractor"]["prompt"] != ""
+    assert roles["max_rounds"] == 3
+    assert roles["sandbox"] is False
 
 
 def test_embark_writes_story_roles():
@@ -351,24 +350,23 @@ def test_update_story_roles_partial():
     storage.create_template("Quest", "Desc")
     adv = storage.embark_template("quest", "Run")
     storage.update_story_roles(adv["slug"], {
-        "character_writer": {"when": "after_narration", "prompt": "Write dialogue."},
+        "character_intention": {"prompt": "Write intention."},
     })
     roles = storage.get_story_roles(adv["slug"])
-    assert roles["character_writer"]["when"] == "after_narration"
-    assert roles["character_writer"]["prompt"] == "Write dialogue."
+    assert roles["character_intention"]["prompt"] == "Write intention."
     # narrator untouched
-    assert roles["narrator"]["when"] == "on_player_message"
+    assert roles["narrator"]["prompt"] != ""
 
 
-def test_update_story_roles_enable_disabled():
-    """Can enable a disabled role."""
+def test_update_story_roles_update_prompt():
+    """Can update a role prompt."""
     storage.create_template("Quest", "Desc")
     adv = storage.embark_template("quest", "Run")
     storage.update_story_roles(adv["slug"], {
-        "extractor": {"when": "after_narration", "prompt": "Extract data."},
+        "extractor": {"prompt": "Extract data."},
     })
     roles = storage.get_story_roles(adv["slug"])
-    assert roles["extractor"]["when"] == "after_narration"
+    assert roles["extractor"]["prompt"] == "Extract data."
 
 
 def test_update_story_roles_ignores_unknown():
@@ -517,19 +515,46 @@ def test_embark_without_intro_no_messages():
 # ── Story Roles Defaults ────────────────────────────────────
 
 
-def test_default_story_roles_character_writer_enabled():
-    """Default story roles now have character_writer enabled."""
+def test_default_story_roles_character_intention_exists():
+    """Default story roles have character_intention with prompt."""
     storage.create_template("Quest", "Desc")
     adv = storage.embark_template("quest", "Run")
     roles = storage.get_story_roles(adv["slug"])
-    assert roles["character_writer"]["when"] == "after_narration"
-    assert roles["character_writer"]["prompt"] != ""
+    assert roles["character_intention"]["prompt"] != ""
 
 
-def test_default_story_roles_extractor_system():
-    """Default story roles have extractor in system mode."""
+def test_default_story_roles_has_max_rounds():
+    """Default story roles include max_rounds and sandbox."""
     storage.create_template("Quest", "Desc")
     adv = storage.embark_template("quest", "Run")
     roles = storage.get_story_roles(adv["slug"])
-    assert roles["extractor"]["when"] == "after_narration"
-    assert roles["extractor"]["where"] == "system"
+    assert roles["max_rounds"] == 3
+    assert roles["sandbox"] is False
+
+
+def test_story_roles_migration_from_old_format():
+    """Old character_writer + when/where format migrates correctly."""
+    import json
+
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    # Write old-format story roles
+    old_roles = {
+        "narrator": {"when": "on_player_message", "where": "chat", "prompt": "Narrate."},
+        "character_writer": {"when": "after_narration", "where": "chat", "prompt": "Write dialog."},
+        "extractor": {"when": "after_narration", "where": "system", "prompt": "Extract."},
+    }
+    path = storage.adventures_dir() / adv["slug"] / "story-roles.json"
+    path.write_text(json.dumps(old_roles, indent=2))
+
+    roles = storage.get_story_roles(adv["slug"])
+    # character_writer renamed to character_intention
+    assert "character_writer" not in roles
+    assert roles["character_intention"]["prompt"] == "Write dialog."
+    # when/where fields removed
+    assert "when" not in roles["narrator"]
+    assert "where" not in roles["narrator"]
+    # defaults filled in
+    assert roles["max_rounds"] == 3
+    assert roles["sandbox"] is False
+    assert roles["lorebook_extractor"]["prompt"] != ""

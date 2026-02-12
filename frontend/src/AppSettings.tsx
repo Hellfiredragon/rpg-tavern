@@ -9,7 +9,7 @@ interface LLMConnection {
 
 interface StoryRoles {
   narrator: string
-  character_writer: string
+  character_intention: string
   extractor: string
 }
 
@@ -206,7 +206,7 @@ export default function AppSettings({ onWidthChange }: AppSettingsProps) {
       <div className="settings-section">
         <h3>Story Roles</h3>
         {roleSelect('Narrator', 'narrator')}
-        {roleSelect('Character Writer', 'character_writer')}
+        {roleSelect('Character Intention', 'character_intention')}
         {roleSelect('Extractor', 'extractor')}
       </div>
 

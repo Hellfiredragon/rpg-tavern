@@ -17,10 +17,19 @@ interface ItemData {
   intro?: string
 }
 
+interface ChatSegment {
+  type: 'narration' | 'dialog'
+  text: string
+  character?: string
+  emotion?: string
+}
+
 interface ChatMessage {
-  role: 'player' | 'narrator' | 'character_writer' | 'extractor'
+  role: 'player' | 'narrator' | 'intention'
   text: string
   ts: string
+  segments?: ChatSegment[]
+  character?: string  // for intention messages
 }
 
 type StateCategory = 'core' | 'persistent' | 'temporal'
@@ -65,56 +74,47 @@ function stateLevel(value: number): string {
 
 type Tab = 'chat' | 'characters' | 'world' | 'settings' | 'global-settings'
 
-type WhenTrigger = 'on_player_message' | 'after_narration' | 'disabled'
-
 interface StoryRoleConfig {
-  when: WhenTrigger
-  where: string
   prompt: string
 }
 
 interface StoryRoles {
   narrator: StoryRoleConfig
-  character_writer: StoryRoleConfig
+  character_intention: StoryRoleConfig
   extractor: StoryRoleConfig
+  lorebook_extractor: StoryRoleConfig
+  max_rounds: number
+  sandbox: boolean
 }
 
-type RoleName = keyof StoryRoles
+type RoleName = 'narrator' | 'character_intention' | 'extractor' | 'lorebook_extractor'
 
 const ROLE_LABELS: Record<RoleName, string> = {
   narrator: 'Narrator',
-  character_writer: 'Character Writer',
-  extractor: 'Extractor',
+  character_intention: 'Character Intention',
+  extractor: 'Character Extractor',
+  lorebook_extractor: 'Lorebook Extractor',
 }
 
 const ROLE_ICONS: Record<RoleName, string> = {
   narrator: 'fa-solid fa-book-open',
-  character_writer: 'fa-solid fa-feather',
+  character_intention: 'fa-solid fa-feather',
   extractor: 'fa-solid fa-flask',
+  lorebook_extractor: 'fa-solid fa-book',
 }
+
+const ROLE_NAMES: RoleName[] = ['narrator', 'character_intention', 'extractor', 'lorebook_extractor']
 
 interface GlobalSettings {
   llm_connections: { name: string; provider_url: string; api_key: string }[]
   story_roles: Record<RoleName, string>
 }
 
-const WHEN_OPTIONS: { value: WhenTrigger; label: string }[] = [
-  { value: 'on_player_message', label: 'On player message' },
-  { value: 'after_narration', label: 'After narration' },
-  { value: 'disabled', label: 'Disabled' },
-]
-
 interface TemplateVar {
   name: string
   type: string
   desc: string
-  afterOnly?: boolean
 }
-
-const WHERE_OPTIONS: { value: string; label: string }[] = [
-  { value: 'chat', label: 'Chat' },
-  { value: 'system', label: 'System (hidden)' },
-]
 
 const TEMPLATE_VARS: TemplateVar[] = [
   { name: 'description', type: 'string', desc: 'Adventure premise' },
@@ -124,11 +124,16 @@ const TEMPLATE_VARS: TemplateVar[] = [
   { name: 'messages', type: 'array', desc: 'Message objects for {{#each}}' },
   { name: 'lorebook', type: 'string', desc: 'Pre-formatted matched lorebook entries' },
   { name: 'lorebook_entries', type: 'array', desc: 'Matched lorebook entry objects' },
-  { name: 'narration', type: 'string', desc: 'Narrator response (current turn)', afterOnly: true },
+  { name: 'intention', type: 'string', desc: 'Current intention being resolved' },
+  { name: 'narration', type: 'string', desc: 'Narrator response text' },
+  { name: 'narration_so_far', type: 'string', desc: 'All narration this turn so far' },
+  { name: 'round_narrations', type: 'string', desc: 'All narrations from this round' },
   { name: 'characters', type: 'array', desc: 'Character objects with .name, .descriptions' },
   { name: 'characters_summary', type: 'string', desc: 'Pre-formatted character states' },
-  { name: 'active_characters', type: 'array', desc: 'Active character objects this turn', afterOnly: true },
-  { name: 'active_characters_summary', type: 'string', desc: 'Pre-formatted active character states', afterOnly: true },
+  { name: 'character_name', type: 'string', desc: 'Current character name' },
+  { name: 'character_description', type: 'string', desc: 'Current character personality' },
+  { name: 'character_states', type: 'string', desc: 'Visible states (≥6) for current character' },
+  { name: 'character_all_states', type: 'string', desc: 'All states with raw values (extractor)' },
 ]
 
 const MESSAGE_FIELDS: { name: string; desc: string }[] = [
@@ -139,7 +144,7 @@ const MESSAGE_FIELDS: { name: string; desc: string }[] = [
   { name: '.is_narrator', desc: 'Boolean flag' },
 ]
 
-function PromptHintsPanel({ showAfterNarration }: { showAfterNarration: boolean }) {
+function PromptHintsPanel() {
   const [open, setOpen] = useState(false)
   const [widthPct, setWidthPct] = useState(25)
 
@@ -189,15 +194,12 @@ function PromptHintsPanel({ showAfterNarration }: { showAfterNarration: boolean 
         <p className="hint-intro">Use Handlebars syntax in prompt templates.</p>
         <dl className="hint-vars">
           {TEMPLATE_VARS.map(v => (
-            <div key={v.name} className={`hint-var ${v.afterOnly && !showAfterNarration ? 'hint-var--dim' : ''}`}>
+            <div key={v.name} className="hint-var">
               <dt>
                 <code>{'{{' + v.name + '}}'}</code>
                 <span className="hint-type">{v.type}</span>
               </dt>
-              <dd>
-                {v.desc}
-                {v.afterOnly && <span className="hint-badge">after_narration only</span>}
-              </dd>
+              <dd>{v.desc}</dd>
             </div>
           ))}
         </dl>
@@ -237,14 +239,10 @@ function PromptHintsPanel({ showAfterNarration }: { showAfterNarration: boolean 
 function StoryRoleCard({
   role,
   config,
-  onTriggerChange,
-  onWhereChange,
   onPromptChange,
 }: {
   role: RoleName
   config: StoryRoleConfig
-  onTriggerChange: (when: WhenTrigger) => void
-  onWhereChange: (where: string) => void
   onPromptChange: (prompt: string) => void
 }) {
   const [promptValue, setPromptValue] = useState(config.prompt)
@@ -263,37 +261,18 @@ function StoryRoleCard({
   return (
     <div className="story-role-card">
       <div className="story-role-header">
-        <h4>{ROLE_LABELS[role]}</h4>
-        <div className="story-role-selectors">
-          <select
-            value={config.when}
-            onChange={e => onTriggerChange(e.target.value as WhenTrigger)}
-          >
-            {WHEN_OPTIONS.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-          {config.when !== 'disabled' && (
-            <select
-              value={config.where}
-              onChange={e => onWhereChange(e.target.value)}
-            >
-              {WHERE_OPTIONS.map(opt => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          )}
-        </div>
+        <h4>
+          <i className={`${ROLE_ICONS[role]} story-role-icon`} />
+          {ROLE_LABELS[role]}
+        </h4>
       </div>
-      {config.when !== 'disabled' && (
-        <textarea
-          className="prompt-editor"
-          value={promptValue}
-          onChange={e => handlePromptChange(e.target.value)}
-          placeholder="Handlebars prompt template..."
-          rows={8}
-        />
-      )}
+      <textarea
+        className="prompt-editor"
+        value={promptValue}
+        onChange={e => handlePromptChange(e.target.value)}
+        placeholder="Handlebars prompt template..."
+        rows={8}
+      />
     </div>
   )
 }
@@ -301,10 +280,8 @@ function StoryRoleCard({
 type ConnectionStatus = 'unknown' | 'checking' | 'ok' | 'error'
 
 function StatusTabs({
-  storyRoles,
   loading,
 }: {
-  storyRoles: StoryRoles | null
   loading: boolean
 }) {
   const [globalSettings, setGlobalSettings] = useState<GlobalSettings | null>(null)
@@ -336,8 +313,7 @@ function StatusTabs({
 
     function checkAll() {
       if (!globalSettings) return
-      const roles = Object.keys(ROLE_LABELS) as RoleName[]
-      for (const role of roles) {
+      for (const role of ROLE_NAMES) {
         const connName = globalSettings.story_roles[role]
         if (!connName) continue
         const conn = globalSettings.llm_connections.find(c => c.name === connName)
@@ -364,71 +340,31 @@ function StatusTabs({
     return () => clearInterval(interval)
   }, [globalSettings])
 
-  if (!storyRoles || !globalSettings) return null
-
-  const roles = Object.keys(ROLE_LABELS) as RoleName[]
-
-  // Pipeline order: phase 1 (on_player_message) then phase 2 (after_narration),
-  // each in narrator → character_writer → extractor order.
-  const pipelineOrder: RoleName[] = []
-  const roleOrder: RoleName[] = ['narrator', 'character_writer', 'extractor']
-  for (const phase of ['on_player_message', 'after_narration'] as const) {
-    for (const r of roleOrder) {
-      if (storyRoles[r].when === phase) pipelineOrder.push(r)
-    }
-  }
-
-  // During loading, only one role per connection executes at a time.
-  // Walk the pipeline and mark the first pending role per connection as executing.
-  const executingSet = new Set<RoleName>()
-  const queuedSet = new Set<RoleName>()
-  if (loading) {
-    const busyConnections = new Set<string>()
-    for (const r of pipelineOrder) {
-      const connName = globalSettings.story_roles[r]
-      if (!connName) continue
-      if (busyConnections.has(connName)) {
-        queuedSet.add(r)
-      } else {
-        executingSet.add(r)
-        busyConnections.add(connName)
-      }
-    }
-  }
+  if (!globalSettings) return null
 
   function getStatusForRole(role: RoleName): {
-    enabled: boolean
     assigned: boolean
     connName: string
     status: ConnectionStatus
-    executing: boolean
-    queued: boolean
   } {
-    const cfg = storyRoles![role]
-    const enabled = cfg.when !== 'disabled'
     const connName = globalSettings!.story_roles[role] || ''
     const assigned = !!connName
     const status = connStatus[role] || 'unknown'
-    const executing = executingSet.has(role)
-    const queued = queuedSet.has(role)
-    return { enabled, assigned, connName, status, executing, queued }
+    return { assigned, connName, status }
   }
 
   return (
     <div className="status-tabs" ref={containerRef}>
-      {roles.map(role => {
+      {ROLE_NAMES.map(role => {
         const info = getStatusForRole(role)
         const isOpen = openRole === role
 
-        let dotClass = 'status-dot--off'
-        if (info.executing) dotClass = 'status-dot--running'
-        else if (info.queued) dotClass = 'status-dot--queued'
-        else if (!info.enabled) dotClass = 'status-dot--off'
+        let dotClass = 'status-dot--unknown'
+        if (loading) dotClass = 'status-dot--running'
         else if (!info.assigned) dotClass = 'status-dot--unassigned'
         else if (info.status === 'ok') dotClass = 'status-dot--ok'
         else if (info.status === 'error') dotClass = 'status-dot--error'
         else if (info.status === 'checking') dotClass = 'status-dot--checking'
-        else dotClass = 'status-dot--unknown'
 
         return (
           <div key={role} className="status-tab-group">
@@ -448,24 +384,18 @@ function StatusTabs({
                 </div>
                 <dl className="status-box-fields">
                   <div className="status-field">
-                    <dt>Trigger</dt>
-                    <dd>{storyRoles![role].when === 'disabled' ? 'Disabled' : storyRoles![role].when.replace('_', ' ')}</dd>
-                  </div>
-                  <div className="status-field">
                     <dt>Connection</dt>
                     <dd>{info.connName || <span className="status-muted">not assigned</span>}</dd>
                   </div>
                   <div className="status-field">
                     <dt>Status</dt>
                     <dd>
-                      {info.executing && <span className="status-badge status-badge--running"><i className="fa-solid fa-spinner fa-spin" /> Running</span>}
-                      {info.queued && <span className="status-badge status-badge--queued">Queued</span>}
-                      {!info.executing && !info.queued && !info.enabled && <span className="status-badge status-badge--off">Disabled</span>}
-                      {!info.executing && !info.queued && info.enabled && !info.assigned && <span className="status-badge status-badge--unassigned">No connection</span>}
-                      {!info.executing && !info.queued && info.enabled && info.assigned && info.status === 'ok' && <span className="status-badge status-badge--ok">Connected</span>}
-                      {!info.executing && !info.queued && info.enabled && info.assigned && info.status === 'error' && <span className="status-badge status-badge--error">Unreachable</span>}
-                      {!info.executing && !info.queued && info.enabled && info.assigned && info.status === 'checking' && <span className="status-badge status-badge--checking">Checking...</span>}
-                      {!info.executing && !info.queued && info.enabled && info.assigned && info.status === 'unknown' && <span className="status-badge status-badge--checking">Pending</span>}
+                      {loading && <span className="status-badge status-badge--running"><i className="fa-solid fa-spinner fa-spin" /> Running</span>}
+                      {!loading && !info.assigned && <span className="status-badge status-badge--unassigned">No connection</span>}
+                      {!loading && info.assigned && info.status === 'ok' && <span className="status-badge status-badge--ok">Connected</span>}
+                      {!loading && info.assigned && info.status === 'error' && <span className="status-badge status-badge--error">Unreachable</span>}
+                      {!loading && info.assigned && info.status === 'checking' && <span className="status-badge status-badge--checking">Checking...</span>}
+                      {!loading && info.assigned && info.status === 'unknown' && <span className="status-badge status-badge--checking">Pending</span>}
                     </dd>
                   </div>
                 </dl>
@@ -974,11 +904,50 @@ export default function AdventureView({ slug, kind, initialTab, onTabChange, onW
               {messages.length === 0 && !loading && (
                 <p className="chat-empty">Describe what your character does to begin.</p>
               )}
-              {messages.map((msg, i) => (
-                <div key={i} className={`chat-msg chat-msg--${msg.role}`}>
-                  {msg.text}
-                </div>
-              ))}
+              {messages.map((msg, i) => {
+                if (msg.role === 'player') {
+                  return (
+                    <div key={i} className="chat-msg chat-msg--player">
+                      {msg.text}
+                    </div>
+                  )
+                }
+                if (msg.role === 'intention') {
+                  const isSandbox = storyRoles?.sandbox
+                  if (!isSandbox) return null
+                  return (
+                    <div key={i} className="chat-msg chat-msg--intention">
+                      <span className="intention-label">{msg.character}</span>
+                      <span className="intention-text">{msg.text}</span>
+                    </div>
+                  )
+                }
+                // Narrator message — render segments if available
+                if (msg.segments && msg.segments.length > 0) {
+                  return (
+                    <div key={i} className="chat-msg chat-msg--narrator">
+                      {msg.segments.map((seg, si) => {
+                        if (seg.type === 'dialog') {
+                          return (
+                            <div key={si} className="dialog-card">
+                              <span className="dialog-character">{seg.character}</span>
+                              {seg.emotion && <span className="dialog-emotion">{seg.emotion}</span>}
+                              <span className="dialog-text">{seg.text}</span>
+                            </div>
+                          )
+                        }
+                        return <p key={si} className="narration-text">{seg.text}</p>
+                      })}
+                    </div>
+                  )
+                }
+                // Fallback: plain text (old messages)
+                return (
+                  <div key={i} className="chat-msg chat-msg--narrator">
+                    {msg.text}
+                  </div>
+                )
+              })}
               {loading && (
                 <div className="chat-msg chat-msg--narrator chat-msg--loading">
                   <i className="fa-solid fa-ellipsis fa-fade" />
@@ -1014,14 +983,50 @@ export default function AdventureView({ slug, kind, initialTab, onTabChange, onW
         )}
         {activeTab === 'settings' && kind === 'adventure' && storyRoles && (
           <div className="story-roles-settings">
+            <h3>Pipeline Settings</h3>
+            <div className="pipeline-controls">
+              <label className="pipeline-control">
+                <span>Max Rounds</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={storyRoles.max_rounds}
+                  onChange={e => {
+                    const v = parseInt(e.target.value) || 3
+                    setStoryRoles(prev => prev ? { ...prev, max_rounds: v } : prev)
+                    fetch(`/api/adventures/${slug}/story-roles`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ max_rounds: v }),
+                    })
+                  }}
+                />
+              </label>
+              <label className="pipeline-control pipeline-control--toggle">
+                <span>Sandbox Mode</span>
+                <input
+                  type="checkbox"
+                  checked={storyRoles.sandbox}
+                  onChange={e => {
+                    const v = e.target.checked
+                    setStoryRoles(prev => prev ? { ...prev, sandbox: v } : prev)
+                    fetch(`/api/adventures/${slug}/story-roles`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ sandbox: v }),
+                    })
+                  }}
+                />
+                <span className="pipeline-hint">Show character intentions in chat</span>
+              </label>
+            </div>
             <h3>Story Roles</h3>
-            {(Object.keys(ROLE_LABELS) as RoleName[]).map(role => (
+            {ROLE_NAMES.map(role => (
               <StoryRoleCard
                 key={role}
                 role={role}
                 config={storyRoles[role]}
-                onTriggerChange={when => patchStoryRole(role, { when })}
-                onWhereChange={where => patchStoryRole(role, { where })}
                 onPromptChange={prompt => patchStoryRole(role, { prompt })}
               />
             ))}
@@ -1036,12 +1041,10 @@ export default function AdventureView({ slug, kind, initialTab, onTabChange, onW
       </div>
 
       {kind === 'adventure' && storyRoles && (
-        <PromptHintsPanel
-          showAfterNarration={Object.values(storyRoles).some(r => r.when === 'after_narration')}
-        />
+        <PromptHintsPanel />
       )}
       {kind === 'adventure' && (
-        <StatusTabs storyRoles={storyRoles} loading={loading} />
+        <StatusTabs loading={loading} />
       )}
     </div>
   )

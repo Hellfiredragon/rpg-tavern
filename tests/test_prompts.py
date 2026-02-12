@@ -186,7 +186,7 @@ def test_build_context_without_active_characters():
 
 
 def test_default_narrator_prompt_renders():
-    """The new default narrator prompt renders without errors."""
+    """The default narrator prompt renders without errors."""
     from backend.storage import DEFAULT_NARRATOR_PROMPT
 
     adventure = {"title": "Quest", "description": "A dark forest"}
@@ -196,6 +196,7 @@ def test_default_narrator_prompt_renders():
     ]
     ctx = build_context(
         adventure, messages, "I go north",
+        intention="I go north",
         characters={
             "characters": [{"name": "Gareth", "descriptions": ["Loyal"]}],
             "characters_summary": "Gareth: Loyal",
@@ -207,34 +208,49 @@ def test_default_narrator_prompt_renders():
     assert "Gareth: Loyal" in result
 
 
-def test_default_character_writer_prompt_renders():
-    from backend.storage import DEFAULT_CHARACTER_WRITER_PROMPT
+def test_default_character_intention_prompt_renders():
+    from backend.storage import DEFAULT_CHARACTER_INTENTION_PROMPT
 
     ctx = build_context(
         {"title": "T", "description": "D"},
         [{"role": "narrator", "text": "The battle rages.", "ts": "t1"}],
         "I attack",
-        narration="The enemy falls back.",
-        active_characters_summary="Gareth: Loyal drives their actions",
+        narration_so_far="The enemy falls back.",
+        character_name="Gareth",
+        character_description="A loyal knight",
+        character_states="Loyal drives their actions",
     )
-    result = render_prompt(DEFAULT_CHARACTER_WRITER_PROMPT, ctx)
-    assert "Gareth: Loyal" in result
+    result = render_prompt(DEFAULT_CHARACTER_INTENTION_PROMPT, ctx)
+    assert "Gareth" in result
     assert "The enemy falls back." in result
 
 
-def test_default_extractor_prompt_renders():
-    from backend.storage import DEFAULT_EXTRACTOR_PROMPT
+def test_default_character_extractor_prompt_renders():
+    from backend.storage import DEFAULT_CHARACTER_EXTRACTOR_PROMPT
 
     ctx = build_context(
         {"title": "T", "description": "D"},
         [],
         "I look around",
         narration="You see a tavern.",
-        characters={
-            "characters": [{"name": "Gareth", "descriptions": []}],
-            "characters_summary": "Gareth: (no notable states)",
-        },
+        character_name="Gareth",
+        character_all_states="Character: Gareth\n  core: (none)\n  persistent: (none)\n  temporal: (none)",
     )
-    result = render_prompt(DEFAULT_EXTRACTOR_PROMPT, ctx)
+    result = render_prompt(DEFAULT_CHARACTER_EXTRACTOR_PROMPT, ctx)
     assert "You see a tavern." in result
     assert "state_changes" in result
+    assert "Gareth" in result
+
+
+def test_default_lorebook_extractor_prompt_renders():
+    from backend.storage import DEFAULT_LOREBOOK_EXTRACTOR_PROMPT
+
+    ctx = build_context(
+        {"title": "T", "description": "D"},
+        [],
+        "I explore",
+        round_narrations="The tavern has a secret cellar.",
+    )
+    result = render_prompt(DEFAULT_LOREBOOK_EXTRACTOR_PROMPT, ctx)
+    assert "secret cellar" in result
+    assert "lorebook_entries" in result
