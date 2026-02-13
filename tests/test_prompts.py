@@ -272,6 +272,29 @@ def test_default_character_extractor_prompt_renders():
     assert "Joe" in result
 
 
+def test_build_context_with_player_persona():
+    ctx = build_context(
+        {"title": "T", "description": "D"},
+        [],
+        "hello",
+        player_name="Aldric",
+        player_description="A wandering sellsword",
+        player_states=[
+            {"label": "Brave", "value": 12, "category": "core", "level": "manifest",
+             "description": "Brave is manifest in their body language"},
+        ],
+    )
+    assert ctx["player_name"] == "Aldric"
+    assert ctx["player"]["description"] == "A wandering sellsword"
+    assert len(ctx["player"]["states"]) == 1
+    assert ctx["player"]["states"][0]["label"] == "Brave"
+
+
+def test_build_context_without_player_persona():
+    ctx = build_context({"title": "T", "description": "D"}, [], "hello")
+    assert "player" not in ctx
+
+
 def test_default_lorebook_extractor_prompt_renders():
     from backend.storage import DEFAULT_LOREBOOK_EXTRACTOR_PROMPT
 

@@ -5,7 +5,7 @@ import shutil
 from datetime import datetime, timezone
 
 from backend import storage
-from backend.characters import new_character
+from backend.characters import new_character, new_persona
 
 DEMO_TEMPLATES = [
     {
@@ -74,6 +74,16 @@ def create_demo_data() -> None:
 
     storage.save_characters(adventure["slug"], [gareth, elena, thrak])
 
+    # Create demo persona and set it active
+    aldric_persona = new_persona("Aldric")
+    aldric_persona["description"] = "A wandering sellsword from the northern marches, seeking redemption for past misdeeds."
+    aldric_persona["nicknames"] = ["Al"]
+    aldric_persona["states"]["core"] = [{"label": "Seeking redemption", "value": 16}]
+    aldric_persona["states"]["persistent"] = [{"label": "Wary of authority", "value": 10}]
+    aldric_persona["states"]["temporal"] = [{"label": "Curious about the dragon", "value": 7}]
+    storage.save_global_personas([aldric_persona])
+    storage.update_adventure(adventure["slug"], {"active_persona": "aldric"})
+
     # Add demo lorebook entries
     lorebook_entries = [
         {
@@ -123,4 +133,4 @@ def create_demo_data() -> None:
     ]
     storage.append_messages(adventure["slug"], demo_messages)
 
-    print(f"Created {len(DEMO_TEMPLATES)} demo templates + 1 demo adventure + 3 characters + 3 lorebook entries + demo messages.")
+    print(f"Created {len(DEMO_TEMPLATES)} demo templates + 1 demo adventure + 3 characters + 1 persona + 3 lorebook entries + demo messages.")

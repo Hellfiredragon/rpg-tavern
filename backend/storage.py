@@ -212,11 +212,11 @@ def delete_adventure(slug: str) -> bool:
 
 
 def update_adventure(slug: str, fields: dict[str, Any]) -> dict[str, Any] | None:
-    """Update mutable adventure fields (player_name). Returns updated adventure."""
+    """Update mutable adventure fields (player_name, active_persona). Returns updated adventure."""
     adventure = get_adventure(slug)
     if adventure is None:
         return None
-    allowed = {"player_name"}
+    allowed = {"player_name", "active_persona"}
     for key, value in fields.items():
         if key in allowed:
             adventure[key] = value
@@ -495,6 +495,8 @@ def embark_template(
     _characters_path(target_slug).write_text(json.dumps([], indent=2))
     # Write empty lorebook
     _lorebook_path(target_slug).write_text(json.dumps([], indent=2))
+    # Write empty personas
+    _personas_adventure_path(target_slug).write_text(json.dumps([], indent=2))
     # Write intro as first narrator message if set
     intro = template.get("intro", "")
     if intro:
@@ -557,6 +559,61 @@ def get_character(slug: str, char_slug: str) -> dict[str, Any] | None:
         if char["slug"] == char_slug:
             return char
     return None
+
+
+# ── Personas ──────────────────────────────────────────────
+
+
+def _personas_global_path() -> Path:
+    return data_dir() / "personas.json"
+
+
+def _personas_adventure_path(slug: str) -> Path:
+    return adventures_dir() / slug / "personas.json"
+
+
+def get_global_personas() -> list[dict[str, Any]]:
+    """Read global personas. Returns [] if missing."""
+    path = _personas_global_path()
+    if not path.is_file():
+        return []
+    return json.loads(path.read_text())
+
+
+def save_global_personas(personas: list[dict[str, Any]]) -> None:
+    """Write global personas."""
+    _personas_global_path().write_text(json.dumps(personas, indent=2))
+
+
+def get_adventure_personas(slug: str) -> list[dict[str, Any]]:
+    """Read adventure-local personas. Returns [] if missing."""
+    path = _personas_adventure_path(slug)
+    if not path.is_file():
+        return []
+    return json.loads(path.read_text())
+
+
+def save_adventure_personas(slug: str, personas: list[dict[str, Any]]) -> None:
+    """Write adventure-local personas."""
+    path = _personas_adventure_path(slug)
+    path.write_text(json.dumps(personas, indent=2))
+
+
+def get_merged_personas(slug: str) -> list[dict[str, Any]]:
+    """Merge global + adventure-local personas. Adventure-local wins by slug.
+
+    Returns list with in-memory `source` field ("global" or "adventure").
+    """
+    by_slug: dict[str, dict[str, Any]] = {}
+    for p in get_global_personas():
+        entry = dict(p)
+        entry["source"] = "global"
+        by_slug[p["slug"]] = entry
+    for p in get_adventure_personas(slug):
+        entry = dict(p)
+        entry["source"] = "adventure"
+        by_slug[p["slug"]] = entry
+    return list(by_slug.values())
 
 
 # ── Name generation ───────────────────────────────────────

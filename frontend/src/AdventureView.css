@@ -1137,6 +1137,87 @@
   color: var(--text-muted);
 }
 
+/* ── Persona Panel ──────────────────────────────────────── */
+
+.persona-panel h3 {
+  font-size: 1.1rem;
+  color: var(--accent);
+  margin-bottom: 1rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.persona-source-badge {
+  font-size: 0.7rem;
+  padding: 0.1em 0.5em;
+  border-radius: 3px;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  text-transform: lowercase;
+}
+
+.persona-description {
+  display: block;
+  width: 100%;
+  margin-top: 0.2rem;
+  font-size: 0.85rem;
+  padding: 0.4em 0.6em;
+  font-family: var(--font-body);
+  color: var(--text);
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  outline: none;
+  resize: vertical;
+  line-height: 1.4;
+}
+
+.persona-description:focus {
+  border-color: var(--accent);
+}
+
+.persona-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  align-items: center;
+}
+
+.persona-action-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 0.4em 0.8em;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+
+.persona-action-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── Persona Selector (chat input) ─────────────────────── */
+
+.persona-selector {
+  padding: 0.4em 0.6em;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--text);
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  outline: none;
+  max-width: 180px;
+}
+
+.persona-selector:focus {
+  border-color: var(--accent);
+}
+
 /* ── Template Settings ──────────────────────────────────── */
 
 .template-settings-panel h3 {

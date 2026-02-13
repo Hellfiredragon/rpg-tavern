@@ -71,6 +71,8 @@ def build_context(
     narration_so_far: str | None = None,
     round_narrations: str | None = None,
     player_name: str | None = None,
+    player_description: str | None = None,
+    player_states: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Assemble template variables from adventure state.
 
@@ -136,5 +138,12 @@ def build_context(
         if round_narrations is not None:
             turn["round_narrations"] = round_narrations
         ctx["turn"] = turn
+    if player_description is not None or player_states is not None:
+        player: dict[str, Any] = {}
+        if player_description is not None:
+            player["description"] = player_description
+        if player_states is not None:
+            player["states"] = player_states
+        ctx["player"] = player
 
     return ctx

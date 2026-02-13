@@ -670,3 +670,106 @@ async def test_run_pipeline_fallback_player_name(tmp_path):
         )
 
     assert "the adventurer" in captured_prompt
+
+
+@pytest.mark.asyncio
+async def test_run_pipeline_active_persona_overrides_player_name(tmp_path):
+    """When active_persona is set, persona name replaces player_name in prompt."""
+    from backend import storage
+    from backend.characters import new_persona
+    from backend.pipeline import run_pipeline
+
+    storage.init_storage(tmp_path)
+    storage.create_template("Test", "A tavern")
+    adv = storage.embark_template("test", "Run", player_name="OldName")
+    slug = adv["slug"]
+
+    # Create a global persona and set it active
+    persona = new_persona("Aldric")
+    persona["description"] = "A wandering sellsword"
+    storage.save_global_personas([persona])
+    storage.update_adventure(slug, {"active_persona": "aldric"})
+    adv = storage.get_adventure(slug)
+
+    config = {
+        "llm_connections": [
+            {"name": "test-llm", "provider_url": "http://localhost:5001", "api_key": ""},
+        ],
+        "story_roles": {
+            "narrator": "test-llm",
+            "character_intention": "",
+            "extractor": "",
+        },
+    }
+    story_roles = storage.get_story_roles(slug)
+
+    captured_prompt = None
+
+    async def mock_generate(url, key, prompt):
+        nonlocal captured_prompt
+        captured_prompt = prompt
+        return "Aldric enters the tavern."
+
+    with patch("backend.pipeline.llm.generate", side_effect=mock_generate):
+        await run_pipeline(
+            slug=slug,
+            player_message="I enter",
+            adventure=adv,
+            config=config,
+            story_roles=story_roles,
+            history=[],
+            characters=[],
+        )
+
+    # Persona name should be in prompt, not old player_name
+    assert "Aldric" in captured_prompt
+    assert "OldName" not in captured_prompt
+
+
+@pytest.mark.asyncio
+async def test_run_pipeline_persona_nicknames_in_known_names(tmp_path):
+    """Persona nicknames are used for dialog parsing."""
+    from backend import storage
+    from backend.characters import new_persona
+    from backend.pipeline import run_pipeline
+
+    storage.init_storage(tmp_path)
+    storage.create_template("Test", "A tavern")
+    adv = storage.embark_template("test", "Run")
+    slug = adv["slug"]
+
+    persona = new_persona("Aldric")
+    persona["nicknames"] = ["Al"]
+    storage.save_global_personas([persona])
+    storage.update_adventure(slug, {"active_persona": "aldric"})
+    adv = storage.get_adventure(slug)
+
+    config = {
+        "llm_connections": [
+            {"name": "test-llm", "provider_url": "http://localhost:5001", "api_key": ""},
+        ],
+        "story_roles": {
+            "narrator": "test-llm",
+            "character_intention": "",
+            "extractor": "",
+        },
+    }
+    story_roles = storage.get_story_roles(slug)
+
+    with patch("backend.pipeline.llm.generate", new_callable=AsyncMock) as mock_gen:
+        mock_gen.return_value = "Al(curious): What is this place?"
+
+        result = await run_pipeline(
+            slug=slug,
+            player_message="I enter",
+            adventure=adv,
+            config=config,
+            story_roles=story_roles,
+            history=[],
+            characters=[],
+        )
+
+    narrator_msg = result["messages"][1]
+    dialog_segs = [s for s in narrator_msg["segments"] if s["type"] == "dialog"]
+    assert len(dialog_segs) == 1
+    assert dialog_segs[0]["character"] == "Al"

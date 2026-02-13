@@ -16,6 +16,7 @@ interface ItemData {
   description: string
   intro?: string
   player_name?: string
+  active_persona?: string
 }
 
 interface ChatSegment {
@@ -55,6 +56,16 @@ interface Character {
   overflow_pending: boolean
 }
 
+interface Persona {
+  name: string
+  slug: string
+  nicknames: string[]
+  description: string
+  states: CharacterStates
+  overflow_pending: boolean
+  source: 'global' | 'adventure'
+}
+
 interface LorebookEntryData {
   title: string
   content: string
@@ -73,7 +84,7 @@ function stateLevel(value: number): string {
   return 'definitive'
 }
 
-type Tab = 'chat' | 'characters' | 'world' | 'settings' | 'global-settings'
+type Tab = 'chat' | 'personas' | 'characters' | 'world' | 'settings' | 'global-settings'
 
 interface StoryRoleConfig {
   prompt: string
@@ -136,6 +147,19 @@ const TOP_LEVEL_VARS: VarLeaf[] = [
 ]
 
 const VAR_GROUPS: VarGroup[] = [
+  {
+    key: 'player', label: 'player', desc: 'Active persona',
+    children: [
+      { name: 'player.description', type: 'string', desc: 'Persona description' },
+      { name: 'player.states', type: 'array', desc: 'Persona visible states (value ≥ 6)', subfields: [
+        { name: '.label', type: 'string', desc: 'State name' },
+        { name: '.value', type: 'number', desc: 'Numeric value' },
+        { name: '.category', type: 'string', desc: '"core", "persistent", or "temporal"' },
+        { name: '.level', type: 'string', desc: '"subconscious", "manifest", "dominant", "definitive"' },
+        { name: '.description', type: 'string', desc: 'Threshold description text' },
+      ]},
+    ],
+  },
   {
     key: 'char', label: 'char', desc: 'Current character',
     children: [
@@ -517,6 +541,209 @@ function AddStateInput({ onAdd }: { onAdd: (label: string) => void }) {
   )
 }
 
+function PersonaPanel({ slug }: { slug: string }) {
+  const [personas, setPersonas] = useState<Persona[]>([])
+  const [newName, setNewName] = useState('')
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const debounceRefs = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
+  useEffect(() => {
+    fetch(`/api/adventures/${slug}/personas`)
+      .then(res => res.ok ? res.json() : [])
+      .then(setPersonas)
+  }, [slug])
+
+  async function addPersona() {
+    const name = newName.trim()
+    if (!name) return
+    const res = await fetch(`/api/adventures/${slug}/personas`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    })
+    if (res.ok) {
+      const p = await res.json()
+      setPersonas(prev => [...prev, { ...p, source: 'adventure' }])
+      setNewName('')
+    }
+  }
+
+  async function deletePersona(pslug: string) {
+    const res = await fetch(`/api/adventures/${slug}/personas/${pslug}`, { method: 'DELETE' })
+    if (res.ok) {
+      // Refresh from server to get correct merge state
+      const refreshed = await fetch(`/api/adventures/${slug}/personas`).then(r => r.json())
+      setPersonas(refreshed)
+      if (expanded === pslug) setExpanded(null)
+    }
+  }
+
+  function patchPersona(pslug: string, body: Record<string, unknown>) {
+    fetch(`/api/adventures/${slug}/personas/${pslug}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  }
+
+  function removeState(persona: Persona, category: StateCategory, index: number) {
+    const newList = persona.states[category].filter((_, i) => i !== index)
+    setPersonas(prev => prev.map(p => p.slug === persona.slug ? { ...p, states: { ...p.states, [category]: newList } } : p))
+    patchPersona(persona.slug, { states: { [category]: newList } })
+  }
+
+  function addState(persona: Persona, category: StateCategory, label: string) {
+    const newList = [...persona.states[category], { label, value: CATEGORY_DEFAULTS[category] }]
+    setPersonas(prev => prev.map(p => p.slug === persona.slug ? { ...p, states: { ...p.states, [category]: newList } } : p))
+    patchPersona(persona.slug, { states: { [category]: newList } })
+  }
+
+  function changeStateValue(persona: Persona, category: StateCategory, index: number, rawValue: number) {
+    const cap = CATEGORY_MAX_VALUES[category]
+    const value = cap !== null && rawValue > cap ? cap : rawValue
+    const newList = persona.states[category].map((s, i) => i === index ? { ...s, value } : s)
+    setPersonas(prev => prev.map(p => p.slug === persona.slug ? { ...p, states: { ...p.states, [category]: newList } } : p))
+    const key = `${persona.slug}-${category}-${index}`
+    const existing = debounceRefs.current.get(key)
+    if (existing) clearTimeout(existing)
+    debounceRefs.current.set(key, setTimeout(() => {
+      patchPersona(persona.slug, { states: { [category]: newList } })
+      debounceRefs.current.delete(key)
+    }, 400))
+  }
+
+  function updateNicknames(persona: Persona, nicknames: string[]) {
+    setPersonas(prev => prev.map(p => p.slug === persona.slug ? { ...p, nicknames } : p))
+    patchPersona(persona.slug, { nicknames })
+  }
+
+  function updateDescription(persona: Persona, description: string) {
+    setPersonas(prev => prev.map(p => p.slug === persona.slug ? { ...p, description } : p))
+    const key = `${persona.slug}-desc`
+    const existing = debounceRefs.current.get(key)
+    if (existing) clearTimeout(existing)
+    debounceRefs.current.set(key, setTimeout(() => {
+      patchPersona(persona.slug, { description })
+      debounceRefs.current.delete(key)
+    }, 500))
+  }
+
+  async function promotePersona(pslug: string) {
+    await fetch(`/api/adventures/${slug}/personas/${pslug}/promote`, { method: 'POST' })
+    const refreshed = await fetch(`/api/adventures/${slug}/personas`).then(r => r.json())
+    setPersonas(refreshed)
+  }
+
+  async function localizePersona(pslug: string) {
+    await fetch(`/api/adventures/${slug}/personas/${pslug}/localize`, { method: 'POST' })
+    const refreshed = await fetch(`/api/adventures/${slug}/personas`).then(r => r.json())
+    setPersonas(refreshed)
+  }
+
+  return (
+    <div className="persona-panel">
+      <h3>Personas</h3>
+      <form className="add-character-form" onSubmit={e => { e.preventDefault(); addPersona() }}>
+        <input
+          type="text"
+          value={newName}
+          onChange={e => setNewName(e.target.value)}
+          placeholder="Persona name..."
+        />
+        <button type="submit" disabled={!newName.trim()}>
+          <i className="fa-solid fa-plus" /> Add
+        </button>
+      </form>
+
+      {personas.length === 0 && (
+        <p className="character-empty">No personas yet. Add one above or create a global persona in settings.</p>
+      )}
+
+      {personas.map(persona => {
+        const isExpanded = expanded === persona.slug
+        const totalStates = persona.states.core.length + persona.states.persistent.length + persona.states.temporal.length
+        return (
+          <div key={persona.slug} className="character-card">
+            <div className="character-card-header" onClick={() => setExpanded(isExpanded ? null : persona.slug)}>
+              <i className={`fa-solid ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'} character-expand-icon`} />
+              <span className="character-name">{persona.name}</span>
+              <span className="persona-source-badge">{persona.source}</span>
+              {persona.overflow_pending && <span className="overflow-badge" title="Category overflow — resolve slots">overflow</span>}
+              <span className="character-state-count">{totalStates} states</span>
+            </div>
+
+            {isExpanded && (
+              <div className="character-card-body">
+                <div className="character-meta-section">
+                  <label className="character-meta-label">
+                    Description
+                    <textarea
+                      className="persona-description"
+                      value={persona.description || ''}
+                      onChange={e => updateDescription(persona, e.target.value)}
+                      placeholder="A wandering sellsword from the northern marches..."
+                      rows={3}
+                    />
+                  </label>
+                  <label className="character-meta-label">
+                    Nicknames
+                    <input
+                      type="text"
+                      value={(persona.nicknames || []).join(', ')}
+                      onChange={e => updateNicknames(persona, e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+                      placeholder="Al, The Wanderer (comma-separated)"
+                    />
+                  </label>
+                </div>
+
+                {(['core', 'persistent', 'temporal'] as StateCategory[]).map(category => (
+                  <div key={category} className="character-states-section">
+                    <h5>
+                      {category}
+                      <span className="slot-count">{persona.states[category].length}/{CATEGORY_LIMITS[category]}</span>
+                    </h5>
+                    {persona.states[category].map((state, i) => (
+                      <div key={i} className="state-row">
+                        <span className="state-label">{state.label}</span>
+                        <input
+                          type="number"
+                          className={`state-value-input state-level--${stateLevel(state.value)}`}
+                          value={state.value}
+                          onChange={e => changeStateValue(persona, category, i, parseInt(e.target.value) || 0)}
+                        />
+                        <button className="state-remove" onClick={() => removeState(persona, category, i)} title="Remove state">
+                          <i className="fa-solid fa-xmark" />
+                        </button>
+                      </div>
+                    ))}
+                    <AddStateInput onAdd={label => addState(persona, category, label)} />
+                  </div>
+                ))}
+
+                <div className="persona-actions">
+                  {persona.source === 'adventure' && (
+                    <button className="persona-action-btn" onClick={() => promotePersona(persona.slug)} title="Copy to global personas">
+                      <i className="fa-solid fa-arrow-up" /> Promote to Global
+                    </button>
+                  )}
+                  {persona.source === 'global' && (
+                    <button className="persona-action-btn" onClick={() => localizePersona(persona.slug)} title="Copy to adventure-local">
+                      <i className="fa-solid fa-arrow-down" /> Copy to Adventure
+                    </button>
+                  )}
+                  <button className="character-delete" onClick={() => deletePersona(persona.slug)}>
+                    <i className="fa-solid fa-trash" /> Delete
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function CharacterPanel({ slug }: { slug: string }) {
   const [characters, setCharacters] = useState<Character[]>([])
   const [newName, setNewName] = useState('')
@@ -748,51 +975,6 @@ function TemplateSettingsPanel({
   )
 }
 
-function PlayerNameField({
-  slug,
-  data,
-  setData,
-}: {
-  slug: string
-  data: ItemData
-  setData: (d: ItemData) => void
-}) {
-  const [value, setValue] = useState(data.player_name || '')
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
-
-  useEffect(() => {
-    setValue(data.player_name || '')
-  }, [data.player_name])
-
-  function handleChange(v: string) {
-    setValue(v)
-    clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => {
-      fetch(`/api/adventures/${slug}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ player_name: v }),
-      }).then(res => {
-        if (res.ok) res.json().then(setData)
-      })
-    }, 500)
-  }
-
-  return (
-    <div className="player-name-field">
-      <label>
-        <strong>Player Character Name</strong>
-        <input
-          type="text"
-          value={value}
-          onChange={e => handleChange(e.target.value)}
-          placeholder="Your character's name..."
-        />
-      </label>
-    </div>
-  )
-}
-
 function LorebookPanel({ slug }: { slug: string }) {
   const [entries, setEntries] = useState<LorebookEntryData[]>([])
   const [editing, setEditing] = useState<number | null>(null)
@@ -910,7 +1092,7 @@ function LorebookPanel({ slug }: { slug: string }) {
   )
 }
 
-const VALID_TABS: Tab[] = ['chat', 'characters', 'world', 'settings', 'global-settings']
+const VALID_TABS: Tab[] = ['chat', 'personas', 'characters', 'world', 'settings', 'global-settings']
 
 export default function AdventureView({ slug, kind, initialTab, onTabChange, onWidthChange }: AdventureViewProps) {
   const [data, setData] = useState<ItemData | null>(null)
@@ -922,13 +1104,18 @@ export default function AdventureView({ slug, kind, initialTab, onTabChange, onW
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [storyRoles, setStoryRoles] = useState<StoryRoles | null>(null)
+  const [personas, setPersonas] = useState<Persona[]>([])
+  const [activePersona, setActivePersona] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const apiBase = kind === 'template' ? '/api/templates' : '/api/adventures'
     fetch(`${apiBase}/${slug}`)
       .then(res => res.json())
-      .then(setData)
+      .then(d => {
+        setData(d)
+        if (d.active_persona) setActivePersona(d.active_persona)
+      })
   }, [slug, kind])
 
   useEffect(() => {
@@ -943,6 +1130,13 @@ export default function AdventureView({ slug, kind, initialTab, onTabChange, onW
     fetch(`/api/adventures/${slug}/story-roles`)
       .then(res => res.ok ? res.json() : null)
       .then(setStoryRoles)
+  }, [slug, kind])
+
+  useEffect(() => {
+    if (kind !== 'adventure') return
+    fetch(`/api/adventures/${slug}/personas`)
+      .then(res => res.ok ? res.json() : [])
+      .then(setPersonas)
   }, [slug, kind])
 
   useEffect(() => {
@@ -992,6 +1186,15 @@ export default function AdventureView({ slug, kind, initialTab, onTabChange, onW
     }
   }
 
+  function handlePersonaChange(pslug: string) {
+    setActivePersona(pslug)
+    fetch(`/api/adventures/${slug}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active_persona: pslug }),
+    })
+  }
+
   if (!data) {
     return <p className="loading-text">Loading...</p>
   }
@@ -1006,6 +1209,7 @@ export default function AdventureView({ slug, kind, initialTab, onTabChange, onW
 
   const tabs: { key: Tab; label: string; icon?: string }[] = [
     { key: 'chat', label: chatLabel },
+    ...(!isTemplate ? [{ key: 'personas' as Tab, label: 'Personas' }] : []),
     ...(!isTemplate ? [{ key: 'characters' as Tab, label: 'Characters' }] : []),
     { key: 'world', label: 'World' },
     { key: 'settings', label: 'Settings' },
@@ -1087,6 +1291,21 @@ export default function AdventureView({ slug, kind, initialTab, onTabChange, onW
             </div>
             {error && <p className="chat-error">{error}</p>}
             <form className="chat-input-bar" onSubmit={e => { e.preventDefault(); sendMessage() }}>
+              {kind === 'adventure' && personas.length > 0 && (
+                <select
+                  className="persona-selector"
+                  value={activePersona}
+                  onChange={e => handlePersonaChange(e.target.value)}
+                  disabled={loading}
+                >
+                  <option value="">No persona</option>
+                  {personas.map(p => (
+                    <option key={p.slug} value={p.slug}>
+                      {p.name} ({p.source})
+                    </option>
+                  ))}
+                </select>
+              )}
               <input
                 type="text"
                 value={input}
@@ -1100,12 +1319,14 @@ export default function AdventureView({ slug, kind, initialTab, onTabChange, onW
             </form>
           </div>
         )}
+        {activeTab === 'personas' && kind === 'adventure' && (
+          <PersonaPanel slug={slug} />
+        )}
         {activeTab === 'characters' && kind === 'adventure' && (
           <CharacterPanel slug={slug} />
         )}
         {activeTab === 'world' && kind === 'adventure' && (
           <div>
-            <PlayerNameField slug={slug} data={data} setData={setData} />
             <LorebookPanel slug={slug} />
           </div>
         )}

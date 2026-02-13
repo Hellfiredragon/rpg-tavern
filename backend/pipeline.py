@@ -166,6 +166,57 @@ def apply_character_extractor(
     storage.save_characters(slug, characters)
 
 
+def apply_persona_extractor(
+    slug: str, persona: dict, text: str
+) -> None:
+    """Parse extractor output and apply state changes for the active persona.
+
+    Copy-on-write: ensures the persona is saved to adventure-local storage.
+    """
+    data = _parse_json_output(text)
+    if not data:
+        return
+
+    state_changes = data.get("state_changes", [])
+    if not state_changes:
+        return
+
+    for change in state_changes:
+        updates = change.get("updates", [change]) if "updates" in change else [change]
+        for update in updates:
+            category = update.get("category")
+            if category not in ("core", "persistent", "temporal"):
+                continue
+            label = update.get("label", "")
+            value = update.get("value", 0)
+            if not label or not isinstance(value, (int, float)):
+                continue
+            value = int(value)
+            cap = CATEGORY_MAX_VALUES.get(category)
+            if cap is not None and value > cap:
+                value = cap
+            found = False
+            for state in persona["states"][category]:
+                if state["label"].lower() == label.lower():
+                    state["value"] = value
+                    found = True
+                    break
+            if not found:
+                persona["states"][category].append({"label": label, "value": value})
+
+    # Copy-on-write: save persona to adventure-local
+    local_personas = storage.get_adventure_personas(slug)
+    replaced = False
+    for i, lp in enumerate(local_personas):
+        if lp["slug"] == persona["slug"]:
+            local_personas[i] = persona
+            replaced = True
+            break
+    if not replaced:
+        local_personas.append(persona)
+    storage.save_adventure_personas(slug, local_personas)
+
+
 def apply_lorebook_extractor(slug: str, text: str) -> None:
     """Parse lorebook extractor output and add new entries."""
     data = _parse_json_output(text)
@@ -240,6 +291,23 @@ async def run_pipeline(
     # Player name (fallback for old adventures without the field)
     player_name = adventure.get("player_name", "") or "the adventurer"
 
+    # ── Persona resolution ──
+    active_persona: dict | None = None
+    active_persona_slug = adventure.get("active_persona", "")
+    player_description: str | None = None
+    player_states: list[dict] | None = None
+    if active_persona_slug:
+        merged_personas = storage.get_merged_personas(slug)
+        for p in merged_personas:
+            if p["slug"] == active_persona_slug:
+                active_persona = p
+                break
+    if active_persona:
+        player_name = active_persona["name"]
+        if active_persona.get("description"):
+            player_description = active_persona["description"]
+        player_states = enrich_states(active_persona)
+
     # Character prompt context (visible states only, for narrator)
     char_ctx = character_prompt_context(characters) if characters else None
 
@@ -255,10 +323,14 @@ async def run_pipeline(
     for char in characters:
         known_names.append(char["name"])
         known_names.extend(char.get("nicknames", []))
-    # Add player name if it's a real name (not the fallback)
-    raw_player_name = adventure.get("player_name", "")
-    if raw_player_name:
-        known_names.append(raw_player_name)
+    # Add player/persona names
+    if active_persona:
+        known_names.append(active_persona["name"])
+        known_names.extend(active_persona.get("nicknames", []))
+    else:
+        raw_player_name = adventure.get("player_name", "")
+        if raw_player_name:
+            known_names.append(raw_player_name)
 
     # Helper to build base context
     def _base_ctx(**extra: Any) -> dict:
@@ -268,6 +340,8 @@ async def run_pipeline(
             lore_text=lorebook_str if lorebook_str else None,
             lore_entries=matched_entries if matched_entries else None,
             player_name=player_name,
+            player_description=player_description,
+            player_states=player_states,
             **extra,
         )
 
@@ -320,6 +394,30 @@ async def run_pipeline(
                     apply_character_extractor(slug, char, ext_text, characters)
             # Refresh char_ctx after updates
             char_ctx = character_prompt_context(characters) if characters else None
+
+    # ── Persona extractor for player resolution ──
+
+    if extractor_conn and active_persona and narration_so_far:
+        char_extractor_tpl = story_roles.get("extractor", {}).get("prompt", "")
+        if char_extractor_tpl:
+            p_names = [active_persona["name"].lower()] + [n.lower() for n in active_persona.get("nicknames", [])]
+            if any(name in narration_so_far.lower() for name in p_names):
+                ext_ctx = _base_ctx(
+                    narration=narration_so_far,
+                    char_name=active_persona["name"],
+                    char_all_states=enrich_states(active_persona, include_silent=True),
+                )
+                try:
+                    ext_prompt = render_prompt(char_extractor_tpl, ext_ctx)
+                    ext_text = await llm.generate(
+                        extractor_conn["provider_url"],
+                        extractor_conn.get("api_key", ""),
+                        ext_prompt,
+                    )
+                    apply_persona_extractor(slug, active_persona, ext_text)
+                    player_states = enrich_states(active_persona)
+                except PromptError:
+                    pass
 
     # ── Rounds: character intentions + resolutions ────────
 
@@ -418,6 +516,29 @@ async def run_pipeline(
                         )
                         apply_character_extractor(slug, char, ext_text, characters)
 
+                # ── Persona extractor (round) ──
+                if extractor_conn and active_persona:
+                    p_ext_tpl = story_roles.get("extractor", {}).get("prompt", "")
+                    if p_ext_tpl:
+                        p_names = [active_persona["name"].lower()] + [n.lower() for n in active_persona.get("nicknames", [])]
+                        if any(name in resolution_plain.lower() for name in p_names):
+                            p_ext_ctx = _base_ctx(
+                                narration=resolution_plain,
+                                char_name=active_persona["name"],
+                                char_all_states=enrich_states(active_persona, include_silent=True),
+                            )
+                            try:
+                                p_ext_prompt = render_prompt(p_ext_tpl, p_ext_ctx)
+                                p_ext_text = await llm.generate(
+                                    extractor_conn["provider_url"],
+                                    extractor_conn.get("api_key", ""),
+                                    p_ext_prompt,
+                                )
+                                apply_persona_extractor(slug, active_persona, p_ext_text)
+                                player_states = enrich_states(active_persona)
+                            except PromptError:
+                                pass
+
         if round_narration_parts:
             round_all_narrations.append("\n\n".join(round_narration_parts))
 
@@ -451,6 +572,22 @@ async def run_pipeline(
         for char in characters:
             tick_character(char)
         storage.save_characters(slug, characters)
+
+    # ── Tick persona states ──────────────────────────────
+
+    if active_persona:
+        tick_character(active_persona)
+        # Save to adventure-local
+        local_personas = storage.get_adventure_personas(slug)
+        replaced = False
+        for i, lp in enumerate(local_personas):
+            if lp["slug"] == active_persona["slug"]:
+                local_personas[i] = active_persona
+                replaced = True
+                break
+        if not replaced:
+            local_personas.append(active_persona)
+        storage.save_adventure_personas(slug, local_personas)
 
     # ── Build narrator message with segments ──────────────
 

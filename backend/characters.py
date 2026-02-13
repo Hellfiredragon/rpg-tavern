@@ -45,6 +45,18 @@ def new_character(name: str) -> dict:
     }
 
 
+def new_persona(name: str) -> dict:
+    """Create a persona dict — like a character but with description instead of chattiness."""
+    return {
+        "name": name,
+        "slug": slugify(name),
+        "nicknames": [],
+        "description": "",
+        "states": {"core": [], "persistent": [], "temporal": []},
+        "overflow_pending": False,
+    }
+
+
 def tick_character(character: dict) -> dict:
     """Apply tick rates, remove zeroed states, promote temporal->persistent, check overflow."""
     states = character["states"]

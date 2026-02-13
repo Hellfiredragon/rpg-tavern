@@ -92,6 +92,7 @@ A running adventure is an object under `data/adventures/`.
 | `description` | string | Copied from template |
 | `template_slug` | string | Slug of source template |
 | `player_name` | string | Player character name (optional, empty string if unset) |
+| `active_persona` | string | Slug of active persona (empty = none) |
 | `created_at` | string | ISO 8601 timestamp |
 
 ### Embarking
@@ -214,6 +215,8 @@ Variables use nested object paths (e.g. `{{char.name}}`).
 | `intention` | string | Current intention being resolved (narrator) |
 | `narration` | string | Narrator response text |
 | `msgs` | array | Message objects for `{{#each}}` (.role, .text, .ts, .is_player, .is_narrator) |
+| `player.description` | string | Active persona description |
+| `player.states` | array | Active persona visible states (≥6) |
 | `char.name` | string | Current character name |
 | `char.description` | string | Current character personality |
 | `char.states` | string | Visible states (≥6) for current character |
@@ -337,6 +340,68 @@ Characters are included in the Handlebars prompt context:
 - `chars.list` / `chars.summary` — all characters with visible states (for narrator)
 - `char.name` / `char.states` — single character's visible states (for intentions)
 - `char.all_states` — all states with raw values (for extractor)
+
+## Personas
+
+Player character profiles with the same state mechanics as NPC characters. Personas are stored globally and per-adventure (adventure-local takes precedence by slug).
+
+### Storage
+
+```
+data/personas.json                              # Global personas (array)
+data/adventures/<slug>/personas.json            # Adventure-local personas (array)
+```
+
+Written automatically on embark as an empty array `[]`.
+
+### Persona Model
+
+```json
+{
+  "name": "Aldric",
+  "slug": "aldric",
+  "nicknames": ["Al"],
+  "description": "A wandering sellsword from the northern marches.",
+  "states": {
+    "core": [{ "label": "Seeking redemption", "value": 16 }],
+    "persistent": [],
+    "temporal": []
+  },
+  "overflow_pending": false
+}
+```
+
+Like a character but with `description` instead of `chattiness`.
+
+### Merge (dual storage)
+
+`get_merged_personas(slug)` returns the union of global + adventure-local personas. Adventure-local wins by slug (same pattern as template presets). Each persona gets an in-memory `source` field (`"global"` or `"adventure"`).
+
+### Active Persona
+
+Adventures have an `active_persona` field (slug string, empty = none). When set:
+- Persona name overrides `player_name` in prompts
+- Persona nicknames are added to `known_names` for dialog parsing
+- `player.description` and `player.states` are available in templates
+- Character extractor runs on the persona when its name appears in narration
+- Persona states are ticked at end of turn
+- State changes copy-on-write the persona to adventure-local storage
+
+### Endpoints
+
+```
+GET    /api/personas                                    — list global
+POST   /api/personas                                    — create global
+PATCH  /api/personas/{pslug}                            — update global
+DELETE /api/personas/{pslug}                             — delete global
+
+GET    /api/adventures/{slug}/personas                  — merged list with source tags
+POST   /api/adventures/{slug}/personas                  — create adventure-local
+PATCH  /api/adventures/{slug}/personas/{pslug}           — update (copy-on-write from global)
+DELETE /api/adventures/{slug}/personas/{pslug}            — delete adventure-local
+POST   /api/adventures/{slug}/personas/{pslug}/promote   — copy adventure → global
+POST   /api/adventures/{slug}/personas/{pslug}/localize  — copy global → adventure
+```
 
 ## Lorebook
 

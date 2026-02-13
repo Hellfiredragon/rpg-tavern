@@ -50,9 +50,9 @@ cd frontend && bun run lint      # ESLint
 ```
 backend/              Python backend (FastAPI)
   app.py              App factory (create_app with configurable data_dir)
-  routes.py           API endpoints under /api (/templates, /adventures, /settings, /name-suggestion, /lorebook)
-  pipeline.py         Intention/resolution chat pipeline (run_pipeline, parser, extractors)
-  storage.py          File-based JSON storage (split templates + adventures, preset merging, config, lorebook)
+  routes.py           API endpoints under /api (/templates, /adventures, /personas, /settings, /name-suggestion, /lorebook)
+  pipeline.py         Intention/resolution chat pipeline (run_pipeline, parser, extractors, persona integration)
+  storage.py          File-based JSON storage (split templates + adventures, preset merging, config, lorebook, personas)
   prompts.py          Handlebars prompt rendering + context builder for story roles
   characters.py       Character state logic (categories, thresholds, ticking, activation, prompt context)
   lorebook.py         Lorebook keyword matching and formatting
@@ -64,7 +64,7 @@ frontend/             React + TypeScript (Vite)
     App.tsx            URL router (see "Frontend Routes" below)
     Layout.tsx         Shell with header breadcrumb (adventure name + back link)
     QuestBoard.tsx     Quest board with "Running Adventures" and "Templates" sections
-    AdventureView.tsx  Tab-based view (Chat/World/Settings/Global Settings) for template or adventure
+    AdventureView.tsx  Tab-based view (Chat/Personas/Characters/World/Settings/Global Settings) for template or adventure
     EmbarkDialog.tsx   Modal dialog for naming an adventure before embarking
     AppSettings.tsx    Global settings (LLM connections, story role assignments, display)
   vite.config.ts      Build output → ../backend/static, dev proxy /api → backend
@@ -76,6 +76,7 @@ presets/              Built-in content (committed to git, read-only at runtime)
 data/                 Runtime data storage (gitignored, default location)
   templates/           User-created and overridden templates
   adventures/          Running adventures (created via embark)
+  personas.json        Global personas (array)
 data-tests/           Test data (gitignored, wiped before each test)
 .env.example          Default config (copy to .env to override)
 ARCH-DESIGN.md        Data model and object tree storage design
@@ -111,7 +112,7 @@ Use **Font Awesome Free** (`@fortawesome/fontawesome-free`) for all icons. Prefe
 | `/advn/{slug}` | Adventure (default tab: chat) |
 | `/advn/{slug}/{tab}` | Adventure with specific tab |
 
-Valid tabs: `chat`, `characters` (adventures only), `world`, `settings`, `global-settings`. The active tab is reflected in the URL via `history.replaceState` and restored on page load.
+Valid tabs: `chat`, `personas` (adventures only), `characters` (adventures only), `world`, `settings`, `global-settings`. The active tab is reflected in the URL via `history.replaceState` and restored on page load.
 
 ### UI Settings
 
@@ -129,7 +130,7 @@ The chat pipeline in `backend/pipeline.py` uses an intention/resolution loop:
    - Narrator **resolves** the intention → segments (1 LLM call)
    - Character extractor updates that character's states (1 LLM call)
 4. **Lorebook extractor** runs once per turn for new world facts
-5. Tick all character states, combine all segments into one narrator message
+5. Tick all character + persona states, combine all segments into one narrator message
 
 **Story Roles** (4 LLM connection assignments in Global Settings):
 
@@ -140,7 +141,9 @@ The chat pipeline in `backend/pipeline.py` uses an intention/resolution loop:
 | `extractor` | Updates character states after each resolution |
 | `lorebook_extractor` | Extracts new world facts (uses extractor connection) |
 
-**Player name** — adventures store `player_name` (optional). The pipeline passes it as `{{player_name}}` to all prompts (fallback: "the adventurer"). The player name is also added to `known_names` for dialog parsing, so `Joe(surprised): text` is parsed as dialog. Editable in Embark dialog and World tab. `PATCH /api/adventures/{slug}` updates it.
+**Player name** — adventures store `player_name` (optional). The pipeline passes it as `{{player_name}}` to all prompts (fallback: "the adventurer"). The player name is also added to `known_names` for dialog parsing, so `Joe(surprised): text` is parsed as dialog. Editable in Embark dialog. `PATCH /api/adventures/{slug}` updates it.
+
+**Personas** — player character profiles with description, nicknames, and states (same mechanics as NPC characters). Stored globally (`data/personas.json`) and per-adventure (`adventures/{slug}/personas.json`), with adventure-local winning by slug. When `active_persona` is set on an adventure, the persona name overrides `player_name`, persona nicknames join `known_names`, and `{{player.description}}`/`{{player.states}}` are available in templates. The character extractor also runs on the active persona when its name appears in narration (copy-on-write to adventure-local). Persona states are ticked each turn. Selectable via dropdown in the chat input bar. Manageable in the Personas tab.
 
 **Narrator output format** — parsed by `parse_narrator_output()`:
 ```
