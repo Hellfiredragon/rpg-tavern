@@ -41,7 +41,7 @@ def create_demo_data() -> None:
             storage.update_template(t["slug"], {"intro": tmpl["intro"]})
 
     # Embark a demo adventure so story roles are visible out of the box
-    adventure = storage.embark_template("dragons-hollow", "Dragon's Hollow Demo Run")
+    adventure = storage.embark_template("dragons-hollow", "Dragon's Hollow Demo Run", player_name="Aldric")
 
     # Add demo characters with sample states, nicknames, and chattiness
     gareth = new_character("Gareth")

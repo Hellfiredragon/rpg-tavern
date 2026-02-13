@@ -237,6 +237,9 @@ async def run_pipeline(
     max_rounds = story_roles.get("max_rounds", 3)
     sandbox = story_roles.get("sandbox", False)
 
+    # Player name (fallback for old adventures without the field)
+    player_name = adventure.get("player_name", "") or "the adventurer"
+
     # Character prompt context (visible states only, for narrator)
     char_ctx = character_prompt_context(characters) if characters else None
 
@@ -252,6 +255,10 @@ async def run_pipeline(
     for char in characters:
         known_names.append(char["name"])
         known_names.extend(char.get("nicknames", []))
+    # Add player name if it's a real name (not the fallback)
+    raw_player_name = adventure.get("player_name", "")
+    if raw_player_name:
+        known_names.append(raw_player_name)
 
     # Helper to build base context
     def _base_ctx(**extra: Any) -> dict:
@@ -260,6 +267,7 @@ async def run_pipeline(
             chars=char_ctx,
             lore_text=lorebook_str if lorebook_str else None,
             lore_entries=matched_entries if matched_entries else None,
+            player_name=player_name,
             **extra,
         )
 

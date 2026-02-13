@@ -97,6 +97,17 @@ def test_parse_nickname_match():
     assert segments[0]["character"] == "Cap"
 
 
+def test_parse_player_name_as_dialog():
+    """Player name in known_names enables player dialog parsing."""
+    text = "Joe pops his eyes open.\nJoe(surprised): Who are you?"
+    segments = parse_narrator_output(text, ["Gabrielle", "Joe"])
+    assert len(segments) == 2
+    assert segments[0]["type"] == "narration"
+    assert segments[1]["type"] == "dialog"
+    assert segments[1]["character"] == "Joe"
+    assert segments[1]["emotion"] == "surprised"
+
+
 def test_parse_dialog_with_parentheses_in_text():
     text = "Gareth(amused): The king (may he rest) was wise."
     segments = parse_narrator_output(text, ["Gareth"])
@@ -565,3 +576,97 @@ async def test_run_pipeline_sandbox_shows_intentions(tmp_path):
     assert "intention" in roles
     intention_msg = [m for m in result["messages"] if m["role"] == "intention"][0]
     assert intention_msg["character"] == "Gareth"
+
+
+@pytest.mark.asyncio
+async def test_run_pipeline_player_name_in_prompt(tmp_path):
+    """Pipeline includes player_name in narrator prompt context."""
+    from backend import storage
+    from backend.pipeline import run_pipeline
+
+    storage.init_storage(tmp_path)
+    storage.create_template("Test", "A dark tavern")
+    adv = storage.embark_template("test", "Run", player_name="Joe")
+    slug = adv["slug"]
+
+    config = {
+        "llm_connections": [
+            {"name": "test-llm", "provider_url": "http://localhost:5001", "api_key": ""},
+        ],
+        "story_roles": {
+            "narrator": "test-llm",
+            "character_intention": "",
+            "extractor": "",
+        },
+    }
+    story_roles = storage.get_story_roles(slug)
+
+    captured_prompt = None
+
+    async def mock_generate(url, key, prompt):
+        nonlocal captured_prompt
+        captured_prompt = prompt
+        return "Joe walks into the tavern.\nJoe(curious): What is this place?"
+
+    with patch("backend.pipeline.llm.generate", side_effect=mock_generate):
+        result = await run_pipeline(
+            slug=slug,
+            player_message="I enter the tavern",
+            adventure=adv,
+            config=config,
+            story_roles=story_roles,
+            history=[],
+            characters=[],
+        )
+
+    # Player name should appear in the rendered prompt
+    assert "Joe" in captured_prompt
+    # Player name dialog should be parsed as dialog segment
+    narrator_msg = result["messages"][1]
+    dialog_segs = [s for s in narrator_msg["segments"] if s["type"] == "dialog"]
+    assert len(dialog_segs) == 1
+    assert dialog_segs[0]["character"] == "Joe"
+
+
+@pytest.mark.asyncio
+async def test_run_pipeline_fallback_player_name(tmp_path):
+    """Pipeline falls back to 'the adventurer' when player_name is empty."""
+    from backend import storage
+    from backend.pipeline import run_pipeline
+
+    storage.init_storage(tmp_path)
+    storage.create_template("Test", "A tavern")
+    adv = storage.embark_template("test", "Run")  # no player_name
+    slug = adv["slug"]
+
+    config = {
+        "llm_connections": [
+            {"name": "test-llm", "provider_url": "http://localhost:5001", "api_key": ""},
+        ],
+        "story_roles": {
+            "narrator": "test-llm",
+            "character_intention": "",
+            "extractor": "",
+        },
+    }
+    story_roles = storage.get_story_roles(slug)
+
+    captured_prompt = None
+
+    async def mock_generate(url, key, prompt):
+        nonlocal captured_prompt
+        captured_prompt = prompt
+        return "The tavern door opens."
+
+    with patch("backend.pipeline.llm.generate", side_effect=mock_generate):
+        await run_pipeline(
+            slug=slug,
+            player_message="I enter",
+            adventure=adv,
+            config=config,
+            story_roles=story_roles,
+            history=[],
+            characters=[],
+        )
+
+    assert "the adventurer" in captured_prompt

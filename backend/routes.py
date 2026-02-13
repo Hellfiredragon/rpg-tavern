@@ -24,6 +24,11 @@ class UpdateTemplate(BaseModel):
 
 class EmbarkBody(BaseModel):
     title: str
+    player_name: str = ""
+
+
+class UpdateAdventure(BaseModel):
+    player_name: str | None = None
 
 
 class ChatBody(BaseModel):
@@ -90,7 +95,7 @@ async def delete_template(slug: str):
 
 @router.post("/templates/{slug}/embark", status_code=201)
 async def embark_template(slug: str, body: EmbarkBody):
-    adventure = storage.embark_template(slug, body.title)
+    adventure = storage.embark_template(slug, body.title, body.player_name)
     if not adventure:
         raise HTTPException(404, "Template not found")
     return adventure
@@ -117,6 +122,15 @@ async def delete_adventure(slug: str):
     if not storage.delete_adventure(slug):
         raise HTTPException(404, "Adventure not found")
     return {"ok": True}
+
+
+@router.patch("/adventures/{slug}")
+async def update_adventure(slug: str, body: UpdateAdventure):
+    fields = body.model_dump(exclude_none=True)
+    updated = storage.update_adventure(slug, fields)
+    if not updated:
+        raise HTTPException(404, "Adventure not found")
+    return updated
 
 
 @router.get("/adventures/{slug}/messages")

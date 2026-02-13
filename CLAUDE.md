@@ -140,6 +140,8 @@ The chat pipeline in `backend/pipeline.py` uses an intention/resolution loop:
 | `extractor` | Updates character states after each resolution |
 | `lorebook_extractor` | Extracts new world facts (uses extractor connection) |
 
+**Player name** — adventures store `player_name` (optional). The pipeline passes it as `{{player_name}}` to all prompts (fallback: "the adventurer"). The player name is also added to `known_names` for dialog parsing, so `Joe(surprised): text` is parsed as dialog. Editable in Embark dialog and World tab. `PATCH /api/adventures/{slug}` updates it.
+
 **Narrator output format** — parsed by `parse_narrator_output()`:
 ```
 Narration text here.

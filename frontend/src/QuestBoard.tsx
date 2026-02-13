@@ -68,11 +68,11 @@ export default function QuestBoard({ onSelectTemplate, onSelectAdventure, onSett
     fetchData()
   }
 
-  const handleEmbark = async (slug: string, adventureTitle: string) => {
+  const handleEmbark = async (slug: string, adventureTitle: string, playerName: string) => {
     const res = await fetch(`/api/templates/${slug}/embark`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: adventureTitle }),
+      body: JSON.stringify({ title: adventureTitle, player_name: playerName }),
     })
     const adventure: Adventure = await res.json()
     setEmbarkSlug(null)
@@ -200,7 +200,7 @@ export default function QuestBoard({ onSelectTemplate, onSelectAdventure, onSett
         <EmbarkDialog
           templateSlug={embarkTemplate.slug}
           templateTitle={embarkTemplate.title}
-          onEmbark={(adventureTitle) => handleEmbark(embarkTemplate.slug, adventureTitle)}
+          onEmbark={(adventureTitle, playerName) => handleEmbark(embarkTemplate.slug, adventureTitle, playerName)}
           onCancel={() => setEmbarkSlug(null)}
         />
       )}

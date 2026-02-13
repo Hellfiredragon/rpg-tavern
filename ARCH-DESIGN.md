@@ -91,11 +91,16 @@ A running adventure is an object under `data/adventures/`.
 | `slug` | string | Filesystem slug |
 | `description` | string | Copied from template |
 | `template_slug` | string | Slug of source template |
+| `player_name` | string | Player character name (optional, empty string if unset) |
 | `created_at` | string | ISO 8601 timestamp |
 
 ### Embarking
 
-Embarking creates a running adventure from a template. The user picks a name (with a random suggestion like "Day of the Crimson Moon: The Cursed Tavern"). If the adventure slug collides, a numeric suffix is appended (`my-adventure-2`, `-3`, etc.).
+Embarking creates a running adventure from a template. The user picks a name (with a random suggestion like "Day of the Crimson Moon: The Cursed Tavern") and optionally a player character name. If the adventure slug collides, a numeric suffix is appended (`my-adventure-2`, `-3`, etc.).
+
+### Updating
+
+`PATCH /api/adventures/{slug}` updates mutable adventure fields (`player_name`). The player name can also be edited from the World tab after embarking.
 
 ### Name Generation
 
@@ -203,6 +208,7 @@ Variables use nested object paths (e.g. `{{char.name}}`).
 |---|---|---|
 | `title` | string | Adventure title |
 | `description` | string | Adventure premise |
+| `player_name` | string | Player character name (or "the adventurer" fallback) |
 | `message` | string | Current player message |
 | `history` | string | Pre-formatted history (`> ` prefix for player lines) |
 | `intention` | string | Current intention being resolved (narrator) |

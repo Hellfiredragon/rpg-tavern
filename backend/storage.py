@@ -211,6 +211,20 @@ def delete_adventure(slug: str) -> bool:
     return True
 
 
+def update_adventure(slug: str, fields: dict[str, Any]) -> dict[str, Any] | None:
+    """Update mutable adventure fields (player_name). Returns updated adventure."""
+    adventure = get_adventure(slug)
+    if adventure is None:
+        return None
+    allowed = {"player_name"}
+    for key, value in fields.items():
+        if key in allowed:
+            adventure[key] = value
+    path = adventures_dir() / f"{slug}.json"
+    path.write_text(json.dumps(adventure, indent=2))
+    return adventure
+
+
 # ── Messages ─────────────────────────────────────────────
 
 
@@ -261,18 +275,23 @@ You are the Game Master narrating an RPG adventure.
 ## Intention to Resolve
 {{intention}}
 
-Narrate the outcome of this intention. Use the character's visible states \
-to judge success or failure. Write dialog using this strict format:
+Narrate the outcome of this intention in the third person. The player \
+character is {{player_name}}. Use character states to inform success or \
+failure — strong states make related actions easier, weak or absent states \
+make them harder.
 
+Write dialog in this exact format:
 Name(emotion): Dialog text here.
 
-Where Name is an existing character name. Anything not in this format is \
-narration. Only resolve THIS intention — do not control other characters or \
-the player. If the intention tries to control others, ignore that part.\
+Where Name is an existing character name (including {{player_name}}). \
+Everything else is narration. You may write dialog for the acting character. \
+Do not invent new independent actions for other characters — only describe \
+their reactions and the environment. Keep narration concise.\
 """
 
 DEFAULT_CHARACTER_INTENTION_PROMPT = """\
-You are {{char.name}} in an RPG adventure.
+You are {{char.name}} in an RPG adventure. The player character is \
+{{player_name}}.
 
 ## Your Personality
 {{char.description}}
@@ -291,12 +310,14 @@ You are {{char.name}} in an RPG adventure.
 {{turn.narration}}
 
 State what YOU want to do next in 1-2 first-person sentences. Do not decide \
-the outcome. Do not control other characters or the player. Only describe \
-your own intended action or speech.\
+the outcome — the Game Master will narrate what happens. Do not control \
+other characters or {{player_name}}. Only describe your own intended action \
+or speech.\
 """
 
 DEFAULT_CHARACTER_EXTRACTOR_PROMPT = """\
-You are a character state tracker for {{char.name}}.
+You are a character state tracker for {{char.name}} in an adventure where \
+the player character is {{player_name}}.
 
 ## All States (with raw values)
 {{#each char.all_states}}
@@ -306,7 +327,8 @@ You are a character state tracker for {{char.name}}.
 ## Narration
 {{narration}}
 
-Output a JSON object with state changes for {{char.name}} ONLY:
+Output a JSON object with state changes for {{char.name}} ONLY based on \
+the narration above:
 
 ```json
 {
@@ -318,7 +340,7 @@ Output a JSON object with state changes for {{char.name}} ONLY:
 
 Categories: "temporal" for emotions/situations, "persistent" for relationships, \
 "core" for identity. Values 1-5 are subconscious (character unaware), 6+ are \
-conscious. Output valid JSON only.\
+conscious. Only include states that actually changed. Output valid JSON only.\
 """
 
 DEFAULT_LOREBOOK_EXTRACTOR_PROMPT = """\
@@ -439,7 +461,7 @@ def update_story_roles(slug: str, roles: dict[str, Any]) -> dict[str, Any]:
 
 
 def embark_template(
-    template_slug: str, adventure_title: str
+    template_slug: str, adventure_title: str, player_name: str = ""
 ) -> dict[str, Any] | None:
     """Create a running adventure from a template with a user-chosen title."""
     template = get_template(template_slug)
@@ -458,6 +480,7 @@ def embark_template(
         "slug": target_slug,
         "description": template["description"],
         "template_slug": template_slug,
+        "player_name": player_name,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     (adventures_dir() / f"{target_slug}.json").write_text(

@@ -183,6 +183,21 @@ def test_build_context_with_chars_extra_fields():
     assert ctx["chars"]["active_summary"] == "Gareth: (no notable states)"
 
 
+def test_build_context_with_player_name():
+    ctx = build_context(
+        {"title": "T", "description": "D"},
+        [],
+        "hello",
+        player_name="Joe",
+    )
+    assert ctx["player_name"] == "Joe"
+
+
+def test_build_context_without_player_name():
+    ctx = build_context({"title": "T", "description": "D"}, [], "hello")
+    assert "player_name" not in ctx
+
+
 def test_default_narrator_prompt_renders():
     """The default narrator prompt renders without errors."""
     from backend.storage import DEFAULT_NARRATOR_PROMPT
@@ -199,11 +214,13 @@ def test_default_narrator_prompt_renders():
             "list": [{"name": "Gareth", "descriptions": ["Loyal"]}],
             "summary": "Gareth: Loyal",
         },
+        player_name="Joe",
     )
     result = render_prompt(DEFAULT_NARRATOR_PROMPT, ctx)
     assert "A dark forest" in result
     assert "I go north" in result
     assert "Gareth: Loyal" in result
+    assert "Joe" in result
 
 
 def test_default_character_intention_prompt_renders():
@@ -222,11 +239,13 @@ def test_default_character_intention_prompt_renders():
              "is_silent": False, "is_subconscious": False, "is_manifest": False,
              "is_dominant": True, "is_definitive": False},
         ],
+        player_name="Joe",
     )
     result = render_prompt(DEFAULT_CHARACTER_INTENTION_PROMPT, ctx)
     assert "Gareth" in result
     assert "The enemy falls back." in result
     assert "Loyal dominates their current priorities" in result
+    assert "Joe" in result
 
 
 def test_default_character_extractor_prompt_renders():
@@ -243,12 +262,14 @@ def test_default_character_extractor_prompt_renders():
              "description": "", "is_silent": True, "is_subconscious": False,
              "is_manifest": False, "is_dominant": False, "is_definitive": False},
         ],
+        player_name="Joe",
     )
     result = render_prompt(DEFAULT_CHARACTER_EXTRACTOR_PROMPT, ctx)
     assert "You see a tavern." in result
     assert "state_changes" in result
     assert "Gareth" in result
     assert "temporal/Angry = 3 (silent)" in result
+    assert "Joe" in result
 
 
 def test_default_lorebook_extractor_prompt_renders():

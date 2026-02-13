@@ -178,6 +178,22 @@ def test_embark_slug_collision():
     assert r2["slug"] == "run-2"
 
 
+def test_embark_with_player_name():
+    storage.create_template("Quest", "A great quest")
+    adventure = storage.embark_template("quest", "My Adventure", player_name="Joe")
+    assert adventure is not None
+    assert adventure["player_name"] == "Joe"
+    # Verify it persists on disk
+    loaded = storage.get_adventure(adventure["slug"])
+    assert loaded["player_name"] == "Joe"
+
+
+def test_embark_without_player_name():
+    storage.create_template("Quest", "Desc")
+    adventure = storage.embark_template("quest", "Run")
+    assert adventure["player_name"] == ""
+
+
 def test_embark_missing():
     assert storage.embark_template("nope", "Title") is None
 
@@ -208,6 +224,29 @@ def test_adventure_lifecycle():
 
     assert storage.delete_adventure(adv["slug"]) is True
     assert storage.list_adventures() == []
+
+
+def test_update_adventure_player_name():
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    updated = storage.update_adventure(adv["slug"], {"player_name": "Joe"})
+    assert updated is not None
+    assert updated["player_name"] == "Joe"
+    # Verify persistence
+    loaded = storage.get_adventure(adv["slug"])
+    assert loaded["player_name"] == "Joe"
+
+
+def test_update_adventure_ignores_unknown_fields():
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    updated = storage.update_adventure(adv["slug"], {"player_name": "Joe", "slug": "hacked"})
+    assert updated["player_name"] == "Joe"
+    assert updated["slug"] == adv["slug"]
+
+
+def test_update_adventure_missing():
+    assert storage.update_adventure("nope", {"player_name": "X"}) is None
 
 
 def test_get_adventure_missing():

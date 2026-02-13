@@ -42,8 +42,14 @@
   flex: 1;
 }
 
+.embark-optional {
+  font-style: italic;
+  opacity: 0.6;
+}
+
 .embark-actions {
   display: flex;
   gap: 0.5rem;
   justify-content: flex-end;
+  margin-top: 1.25rem;
 }

@@ -15,6 +15,7 @@ interface ItemData {
   slug: string
   description: string
   intro?: string
+  player_name?: string
 }
 
 interface ChatSegment {
@@ -127,6 +128,7 @@ interface VarGroup {
 const TOP_LEVEL_VARS: VarLeaf[] = [
   { name: 'title', type: 'string', desc: 'Adventure title' },
   { name: 'description', type: 'string', desc: 'Adventure premise' },
+  { name: 'player_name', type: 'string', desc: 'Player character name' },
   { name: 'message', type: 'string', desc: 'Current player message' },
   { name: 'history', type: 'string', desc: 'Pre-formatted history' },
   { name: 'intention', type: 'string', desc: 'Current intention being resolved' },
@@ -746,6 +748,51 @@ function TemplateSettingsPanel({
   )
 }
 
+function PlayerNameField({
+  slug,
+  data,
+  setData,
+}: {
+  slug: string
+  data: ItemData
+  setData: (d: ItemData) => void
+}) {
+  const [value, setValue] = useState(data.player_name || '')
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  useEffect(() => {
+    setValue(data.player_name || '')
+  }, [data.player_name])
+
+  function handleChange(v: string) {
+    setValue(v)
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      fetch(`/api/adventures/${slug}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player_name: v }),
+      }).then(res => {
+        if (res.ok) res.json().then(setData)
+      })
+    }, 500)
+  }
+
+  return (
+    <div className="player-name-field">
+      <label>
+        <strong>Player Character Name</strong>
+        <input
+          type="text"
+          value={value}
+          onChange={e => handleChange(e.target.value)}
+          placeholder="Your character's name..."
+        />
+      </label>
+    </div>
+  )
+}
+
 function LorebookPanel({ slug }: { slug: string }) {
   const [entries, setEntries] = useState<LorebookEntryData[]>([])
   const [editing, setEditing] = useState<number | null>(null)
@@ -1057,7 +1104,10 @@ export default function AdventureView({ slug, kind, initialTab, onTabChange, onW
           <CharacterPanel slug={slug} />
         )}
         {activeTab === 'world' && kind === 'adventure' && (
-          <LorebookPanel slug={slug} />
+          <div>
+            <PlayerNameField slug={slug} data={data} setData={setData} />
+            <LorebookPanel slug={slug} />
+          </div>
         )}
         {activeTab === 'world' && isTemplate && (
           <div className="tab-placeholder">

@@ -4,12 +4,13 @@ import './EmbarkDialog.css'
 interface EmbarkDialogProps {
   templateSlug: string
   templateTitle: string
-  onEmbark: (title: string) => void
+  onEmbark: (title: string, playerName: string) => void
   onCancel: () => void
 }
 
 export default function EmbarkDialog({ templateSlug, templateTitle, onEmbark, onCancel }: EmbarkDialogProps) {
   const [name, setName] = useState('')
+  const [playerName, setPlayerName] = useState('')
   const [loading, setLoading] = useState(true)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -31,7 +32,7 @@ export default function EmbarkDialog({ templateSlug, templateTitle, onEmbark, on
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (name.trim()) onEmbark(name.trim())
+    if (name.trim()) onEmbark(name.trim(), playerName.trim())
   }
 
   return (
@@ -59,6 +60,14 @@ export default function EmbarkDialog({ templateSlug, templateTitle, onEmbark, on
               Re-roll
             </button>
           </div>
+          <label className="embark-label">Character name <span className="embark-optional">(optional)</span></label>
+          <input
+            type="text"
+            className="embark-input"
+            value={playerName}
+            onChange={e => setPlayerName(e.target.value)}
+            placeholder="Your character's name..."
+          />
           <div className="embark-actions">
             <button type="submit" className="btn btn-primary" disabled={!name.trim() || loading}>
               Embark
