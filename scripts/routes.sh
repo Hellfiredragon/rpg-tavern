@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Print all backend API and frontend page routes with descriptions.
 #
-# Backend: extracted from @router decorators + handler docstrings in routes.py.
+# Backend: extracted from @router decorators + handler docstrings in backend/routes/.
 # Frontend: extracted from JSDoc route comments in App.tsx.
 #
 # Usage: scripts/routes.sh
@@ -18,27 +18,30 @@ echo "Backend API (under /api)"
 echo ""
 
 python3 -c "
-import ast, sys
+import ast, pathlib, sys
 
-with open('backend/routes.py') as f:
-    tree = ast.parse(f.read())
-
-for node in ast.iter_child_nodes(tree):
-    if not isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef)):
+routes_dir = pathlib.Path('backend/routes')
+files = sorted(routes_dir.glob('*.py'))
+for filepath in files:
+    if filepath.name == '__init__.py' or filepath.name == 'models.py':
         continue
-    for dec in node.decorator_list:
-        if not isinstance(dec, ast.Call):
+    tree = ast.parse(filepath.read_text())
+    for node in ast.iter_child_nodes(tree):
+        if not isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef)):
             continue
-        if not isinstance(dec.func, ast.Attribute):
-            continue
-        method = dec.func.attr.upper()
-        if method not in ('GET', 'POST', 'PUT', 'PATCH', 'DELETE'):
-            continue
-        path = dec.args[0].value if dec.args else ''
-        ds = ast.get_docstring(node) or '(no description)'
-        desc = ds.split(chr(10))[0]
-        print(f'  {method:<8s} /api{path:<50s} {desc}')
-        break
+        for dec in node.decorator_list:
+            if not isinstance(dec, ast.Call):
+                continue
+            if not isinstance(dec.func, ast.Attribute):
+                continue
+            method = dec.func.attr.upper()
+            if method not in ('GET', 'POST', 'PUT', 'PATCH', 'DELETE'):
+                continue
+            path = dec.args[0].value if dec.args else ''
+            ds = ast.get_docstring(node) or '(no description)'
+            desc = ds.split(chr(10))[0]
+            print(f'  {method:<8s} /api{path:<50s} {desc}')
+            break
 "
 
 # ── Frontend routes (from App.tsx JSDoc) ─────────────────────────────────────

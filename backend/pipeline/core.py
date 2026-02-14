@@ -1,45 +1,11 @@
-"""Intention/resolution chat pipeline.
+"""Main pipeline loop: intention/resolution with character rounds."""
 
-Executes the full turn loop for one player message:
-  1. Resolve player intention — narrator LLM produces narration + dialog segments.
-  2. Character extractor — update states for each character named in the narration.
-  3. Persona extractor — same for the active player persona if named.
-  4. Round loop (up to max_rounds, default 3):
-     a. Activate characters (name/nickname match always; otherwise chattiness roll).
-     b. Each active character generates an intention (character_intention role).
-     c. Narrator resolves the intention into new segments.
-     d. Character extractor updates that character's states.
-     e. Persona extractor runs if persona named in round narration.
-  5. Lorebook extractor — extract new world facts from all narrations.
-  6. Tick all character + persona states, combine segments into one narrator message.
-
-Story roles (4, each with a Handlebars prompt template + LLM connection):
-  narrator            — resolves intentions into narration + dialog
-  character_intention — generates what a character wants to do
-  extractor           — updates character/persona states after each resolution
-  lorebook_extractor  — extracts new world facts once per turn
-
-Connection resolution: per-adventure story-roles.json connection field first,
-then global config.json story_roles mapping, then None (role skipped).
-
-Narrator output format (parsed by parse_narrator_output):
-  Narration text.
-  CharacterName(emotion): Dialog text.
-
-Message format: {"role": "narrator", "text": "...", "segments": [...]}
-  Segments: {"type": "narration"|"dialog", "text": "...", "character"?, "emotion"?}
-  Intention messages (sandbox only): {"role": "intention", "character": "...", "text": "..."}
-"""
-
-import json
 import logging
-import re
 from datetime import datetime, timezone
 from typing import Any
 
 from backend import llm, storage
 from backend.characters import (
-    CATEGORY_MAX_VALUES,
     activate_characters,
     character_prompt_context,
     enrich_states,
@@ -48,224 +14,14 @@ from backend.characters import (
 from backend.lorebook import format_lorebook, match_lorebook_entries
 from backend.prompts import PromptError, build_context, render_prompt
 
+from .extractors import (
+    apply_character_extractor,
+    apply_lorebook_extractor,
+    apply_persona_extractor,
+)
+from .segments import Segment, parse_narrator_output, segments_to_text
+
 logger = logging.getLogger(__name__)
-
-
-# ── Segment types ──────────────────────────────────────────
-
-
-Segment = dict[str, str]  # {"type": "narration"|"dialog", "text": ..., ...}
-
-
-def parse_narrator_output(text: str, known_names: list[str]) -> list[Segment]:
-    """Parse narrator output into narration and dialog segments.
-
-    Dialog format: Name(emotion): Dialog text
-    Where Name must be in known_names (case-insensitive match).
-    Adjacent narration lines are merged into a single segment.
-    Unknown names are treated as narration (graceful fallback).
-    """
-    if not text or not text.strip():
-        return [{"type": "narration", "text": ""}]
-
-    # Build regex pattern for known names
-    name_lookup: dict[str, str] = {}
-    for name in known_names:
-        name_lookup[name.lower()] = name
-
-    # Pattern: KnownName(emotion): text
-    # We build a dynamic pattern matching any known name
-    segments: list[Segment] = []
-    current_narration: list[str] = []
-
-    for line in text.split("\n"):
-        stripped = line.strip()
-        if not stripped:
-            if current_narration:
-                current_narration.append("")
-            continue
-
-        # Try matching dialog pattern: Name(emotion): text
-        match = re.match(r'^([A-Za-z][\w\s]*?)\(([^)]+)\):\s*(.+)$', stripped)
-        if match:
-            raw_name = match.group(1).strip()
-            if raw_name.lower() in name_lookup:
-                # Flush narration
-                if current_narration:
-                    segments.append({
-                        "type": "narration",
-                        "text": "\n".join(current_narration).strip(),
-                    })
-                    current_narration = []
-                segments.append({
-                    "type": "dialog",
-                    "character": name_lookup[raw_name.lower()],
-                    "emotion": match.group(2).strip(),
-                    "text": match.group(3).strip(),
-                })
-                continue
-
-        # Not dialog — accumulate as narration
-        current_narration.append(stripped)
-
-    # Flush remaining narration
-    if current_narration:
-        segments.append({
-            "type": "narration",
-            "text": "\n".join(current_narration).strip(),
-        })
-
-    # Filter empty narration segments
-    segments = [s for s in segments if s.get("text", "").strip() or s["type"] == "dialog"]
-
-    return segments if segments else [{"type": "narration", "text": ""}]
-
-
-def segments_to_text(segments: list[Segment]) -> str:
-    """Convert segments back to plain text for prompt history."""
-    parts: list[str] = []
-    for seg in segments:
-        if seg["type"] == "dialog":
-            parts.append(f"{seg['character']}({seg['emotion']}): {seg['text']}")
-        else:
-            parts.append(seg["text"])
-    return "\n".join(parts)
-
-
-# ── Extractor helpers ──────────────────────────────────────
-
-
-def _parse_json_output(text: str) -> dict | None:
-    """Parse JSON from LLM output, stripping markdown fences."""
-    cleaned = text.strip()
-    if cleaned.startswith("```"):
-        lines = cleaned.split("\n")
-        lines = [l for l in lines[1:] if not l.strip().startswith("```")]
-        cleaned = "\n".join(lines)
-    try:
-        data = json.loads(cleaned)
-        return data if isinstance(data, dict) else None
-    except json.JSONDecodeError as e:
-        logger.warning(f"Extractor output is not valid JSON: {e}")
-        return None
-
-
-def apply_character_extractor(
-    slug: str, character: dict, text: str, characters: list[dict]
-) -> None:
-    """Parse character extractor output and apply state changes for one character."""
-    data = _parse_json_output(text)
-    if not data:
-        return
-
-    state_changes = data.get("state_changes", [])
-    if not state_changes:
-        return
-
-    for change in state_changes:
-        # Accept both flat format and nested format
-        updates = change.get("updates", [change]) if "updates" in change else [change]
-        for update in updates:
-            category = update.get("category")
-            if category not in ("core", "persistent", "temporal"):
-                continue
-            label = update.get("label", "")
-            value = update.get("value", 0)
-            if not label or not isinstance(value, (int, float)):
-                continue
-            value = int(value)
-            cap = CATEGORY_MAX_VALUES.get(category)
-            if cap is not None and value > cap:
-                value = cap
-            found = False
-            for state in character["states"][category]:
-                if state["label"].lower() == label.lower():
-                    state["value"] = value
-                    found = True
-                    break
-            if not found:
-                character["states"][category].append({"label": label, "value": value})
-
-    storage.save_characters(slug, characters)
-
-
-def apply_persona_extractor(
-    slug: str, persona: dict, text: str
-) -> None:
-    """Parse extractor output and apply state changes for the active persona.
-
-    Copy-on-write: ensures the persona is saved to adventure-local storage.
-    """
-    data = _parse_json_output(text)
-    if not data:
-        return
-
-    state_changes = data.get("state_changes", [])
-    if not state_changes:
-        return
-
-    for change in state_changes:
-        updates = change.get("updates", [change]) if "updates" in change else [change]
-        for update in updates:
-            category = update.get("category")
-            if category not in ("core", "persistent", "temporal"):
-                continue
-            label = update.get("label", "")
-            value = update.get("value", 0)
-            if not label or not isinstance(value, (int, float)):
-                continue
-            value = int(value)
-            cap = CATEGORY_MAX_VALUES.get(category)
-            if cap is not None and value > cap:
-                value = cap
-            found = False
-            for state in persona["states"][category]:
-                if state["label"].lower() == label.lower():
-                    state["value"] = value
-                    found = True
-                    break
-            if not found:
-                persona["states"][category].append({"label": label, "value": value})
-
-    # Copy-on-write: save persona to adventure-local
-    local_personas = storage.get_adventure_personas(slug)
-    replaced = False
-    for i, lp in enumerate(local_personas):
-        if lp["slug"] == persona["slug"]:
-            local_personas[i] = persona
-            replaced = True
-            break
-    if not replaced:
-        local_personas.append(persona)
-    storage.save_adventure_personas(slug, local_personas)
-
-
-def apply_lorebook_extractor(slug: str, text: str) -> None:
-    """Parse lorebook extractor output and add new entries."""
-    data = _parse_json_output(text)
-    if not data:
-        return
-
-    new_entries = data.get("lorebook_entries", [])
-    if not new_entries:
-        return
-
-    lorebook = storage.get_lorebook(slug)
-    existing_titles = {e["title"].lower() for e in lorebook}
-    for entry in new_entries:
-        title = entry.get("title", "")
-        if not title or title.lower() in existing_titles:
-            continue
-        lorebook.append({
-            "title": title,
-            "content": entry.get("content", ""),
-            "keywords": entry.get("keywords", []),
-        })
-        existing_titles.add(title.lower())
-    storage.save_lorebook(slug, lorebook)
-
-
-# ── Connection resolution ──────────────────────────────────
 
 
 def _resolve_connection(config: dict, story_roles: dict, role_name: str) -> dict | None:
@@ -286,9 +42,6 @@ def _resolve_connection(config: dict, story_roles: dict, role_name: str) -> dict
         if conn["name"] == conn_name:
             return conn
     return None
-
-
-# ── Pipeline ───────────────────────────────────────────────
 
 
 async def run_pipeline(
