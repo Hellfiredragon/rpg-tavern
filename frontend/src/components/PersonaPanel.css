@@ -16,7 +16,7 @@
   margin-top: 0.2rem;
   font-size: 0.85rem;
   padding: 0.4em 0.6em;
-  font-family: var(--font-body);
+  font-family: var(--font-ui-family);
   color: var(--text);
   background: var(--bg-deep);
   border: 1px solid var(--border);

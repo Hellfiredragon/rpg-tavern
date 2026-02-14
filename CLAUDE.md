@@ -66,7 +66,8 @@ frontend/             React + TypeScript (Vite)
     QuestBoard.tsx     Quest board with "Running Adventures" and "Templates" sections
     AdventureView.tsx  Tab-based view (Chat/Personas/Characters/World/Settings/Global Settings) for template or adventure
     EmbarkDialog.tsx   Modal dialog for naming an adventure before embarking
-    AppSettings.tsx    Global settings (LLM connections, story role assignments, display)
+    AppSettings.tsx    Global settings (LLM connections, story role assignments, display, fonts)
+    fontSettings.ts    Font list, types, and applyFontSettings() utility
     types.ts           Shared types (Character, Persona, StoryRoles, state constants/helpers)
     components/
       AddStateInput.tsx        Inline form for adding a state entry
@@ -130,6 +131,8 @@ Valid tabs: `chat`, `personas` (adventures only), `characters` (adventures only)
 ### UI Settings
 
 All UI-related settings (layout dimensions, panel sizes, display preferences) belong in Global Settings under the "UI Settings" section. These are stored in `data/config.json` via the `GET/PATCH /api/settings` endpoints and managed in `AppSettings.tsx`.
+
+**Font Settings** — configurable per-group typography stored in `config.json` under `font_settings`. Five groups: `narration`, `dialog`, `intention`, `heading`, `ui`. Each has `family` (from curated Google Fonts list), `size` (px), and `style` (normal/italic). Applied live via CSS custom properties (`--font-{group}-family`, `--font-{group}-size`, `--font-{group}-style`). Legacy `--font-heading` and `--font-body` kept as aliases. Font list and apply logic in `frontend/src/fontSettings.ts`. Settings applied on page load in `Layout.tsx` and live in `AppSettings.tsx`.
 
 ### Chat Pipeline (Intention/Resolution)
 

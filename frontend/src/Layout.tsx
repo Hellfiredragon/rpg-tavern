@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
+import { applyFontSettings, type FontSettings } from './fontSettings'
 import './Layout.css'
 
 interface LayoutProps {
@@ -9,6 +10,15 @@ interface LayoutProps {
 }
 
 export default function Layout({ children, adventureName, onBack, appWidthPercent }: LayoutProps) {
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then((data: { font_settings?: FontSettings }) => {
+        if (data.font_settings) applyFontSettings(data.font_settings)
+      })
+      .catch(() => {})
+  }, [])
+
   const pct = appWidthPercent ?? 100
   const widthStyle = pct < 100
     ? { maxWidth: `${pct}%` } as const

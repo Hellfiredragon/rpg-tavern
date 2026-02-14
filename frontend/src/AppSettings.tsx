@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { FONT_LIST, FONT_GROUPS, FONT_GROUP_LABELS, applyFontSettings, type FontSettings, type FontGroupSettings } from './fontSettings'
 import './AppSettings.css'
 
 interface LLMConnection {
@@ -18,6 +19,7 @@ interface Settings {
   story_roles: StoryRoles
   app_width_percent: number
   help_panel_width_percent: number
+  font_settings: FontSettings
 }
 
 interface AppSettingsProps {
@@ -42,6 +44,7 @@ export default function AppSettings({ onWidthChange }: AppSettingsProps) {
           help_panel_width_percent: data.help_panel_width_percent,
         }
         onWidthChange(data.app_width_percent)
+        if (data.font_settings) applyFontSettings(data.font_settings)
       })
   }, [onWidthChange])
 
@@ -69,6 +72,20 @@ export default function AppSettings({ onWidthChange }: AppSettingsProps) {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ [field]: value }),
+    })
+  }
+
+  function patchFontGroup(group: string, updates: Partial<FontGroupSettings>) {
+    setSettings(prev => {
+      if (!prev) return prev
+      const newFs = { ...prev.font_settings, [group]: { ...prev.font_settings[group as keyof FontSettings], ...updates } }
+      applyFontSettings(newFs)
+      fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ font_settings: { [group]: updates } }),
+      })
+      return { ...prev, font_settings: newFs }
     })
   }
 
@@ -247,6 +264,48 @@ export default function AppSettings({ onWidthChange }: AppSettingsProps) {
             </button>
           </div>
         )}
+      </div>
+
+      <hr className="divider" />
+
+      <div className="settings-section">
+        <h3 className="panel-heading">Font Settings</h3>
+        <div className="font-settings-grid">
+          {FONT_GROUPS.map(group => {
+            const g = settings.font_settings[group]
+            return (
+              <div key={group} className="font-group-row">
+                <span className="font-group-label">{FONT_GROUP_LABELS[group]}</span>
+                <select
+                  className="font-group-family"
+                  value={g.family}
+                  onChange={e => patchFontGroup(group, { family: e.target.value })}
+                >
+                  {FONT_LIST.map(f => (
+                    <option key={f.name} value={f.name}>{f.name}</option>
+                  ))}
+                </select>
+                <div className="font-group-size">
+                  <input
+                    type="number"
+                    min={10}
+                    max={32}
+                    value={g.size}
+                    onChange={e => patchFontGroup(group, { size: Number(e.target.value) })}
+                  />
+                  <span className="font-size-unit">px</span>
+                </div>
+                <button
+                  className={`font-style-toggle ${g.style === 'italic' ? 'font-style-toggle--active' : ''}`}
+                  onClick={() => patchFontGroup(group, { style: g.style === 'italic' ? 'normal' : 'italic' })}
+                  title={g.style === 'italic' ? 'Switch to normal' : 'Switch to italic'}
+                >
+                  <i className="fa-solid fa-italic" />
+                </button>
+              </div>
+            )
+          })}
+        </div>
       </div>
     </div>
   )

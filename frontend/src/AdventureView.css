@@ -99,6 +99,7 @@
   align-self: flex-start;
   border-left: 3px solid var(--accent);
   padding-left: 1rem;
+  font-family: var(--font-narration-family);
   font-style: italic;
   color: var(--text-muted);
   background: none;
@@ -110,6 +111,8 @@
   background: var(--bg-surface);
   border: 1px solid var(--border);
   max-width: 100%;
+  font-family: var(--font-narration-family);
+  font-style: var(--font-narration-style);
 }
 
 .chat-msg--intention {
@@ -118,8 +121,9 @@
   border: 1px dashed var(--border);
   border-left: 3px solid var(--dialog);
   max-width: 100%;
-  font-size: 0.85rem;
-  font-style: italic;
+  font-family: var(--font-intention-family);
+  font-size: var(--font-intention-size);
+  font-style: var(--font-intention-style);
   color: var(--text-muted);
   display: flex;
   gap: 0.5rem;
@@ -146,6 +150,9 @@
 .narration-text {
   margin: 0.3rem 0;
   line-height: 1.6;
+  font-family: var(--font-narration-family);
+  font-size: var(--font-narration-size);
+  font-style: var(--font-narration-style);
 }
 
 .narration-text:first-child {
@@ -165,6 +172,9 @@
   border-left: 3px solid var(--dialog);
   background: var(--dialog-bg);
   border-radius: 0 4px 4px 0;
+  font-family: var(--font-dialog-family);
+  font-size: var(--font-dialog-size);
+  font-style: var(--font-dialog-style);
 }
 
 .dialog-character {
@@ -279,7 +289,7 @@
 
 .persona-selector {
   padding: 0.4em 0.6em;
-  font-family: var(--font-body);
+  font-family: var(--font-ui-family);
   font-size: 0.85rem;
   color: var(--text);
   background: var(--bg-deep);

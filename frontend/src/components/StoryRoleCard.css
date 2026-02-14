@@ -35,7 +35,7 @@
 .story-role-selectors select,
 .story-role-header select {
   padding: 0.4em 0.8em;
-  font-family: var(--font-body);
+  font-family: var(--font-ui-family);
   font-size: 0.9rem;
   color: var(--text);
   background: var(--bg-deep);
