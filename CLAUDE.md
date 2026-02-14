@@ -2,11 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## MAIN Directives
-- ALWAYS treat the source code, type definitions, and test files as the authoritative source of truth. If a documentation of any kind like Markdown (*.md), follow the code and flag the documentation as potentially stale
-- NEVER proactively create or update documentation files (e.g., README.md, QuickStart.md) unless explicitly requested. Focus exclusively on functional code changes and verification
+## Directives
+- ALWAYS treat source code, type definitions, and test files as the authoritative source of truth. If documentation conflicts, follow the code and flag the docs as stale
+- NEVER proactively create or update documentation files (e.g., README.md) unless explicitly requested
 - ALWAYS check if the added feature needs more tests and add them accordingly
-- ALWAYS run the project's test suite and linting tools after any code change. Do not rely on documentation to confirm functionality; rely on execution results
+- ALWAYS run the project's test suite and linting tools after any code change — rely on execution results, not documentation
+- ALWAYS write the commit message into `.gitmessage` after completing work (including doc-only changes)
+- ALWAYS use semantic commit prefixes: `feat(topic):`, `fix(topic):`, `chore(topic):`, `refactor(topic):`, `test(topic):`, `docs(topic):`
+- ALWAYS run `scripts/arch.sh` and `scripts/routes.sh` to verify descriptions are current before finishing
+- ALWAYS update `backend/demo.py` when data model or storage changes so `--demo` generates valid demo data
+- ALWAYS run `git done` when work is done — stages all changes, commits with `.gitmessage`, and pushes. Do NOT ask for confirmation
 
 ## Project Overview
 
@@ -76,10 +81,3 @@ All ports/host are configured via `.env` at the project root (see `.env.example`
 
 In development, the Vite dev server proxies `/api/*` requests to the backend. In production, the backend serves everything — API routes and static frontend files — from a single port.
 
-## Workflow
-
-- After completing a piece of work, write the commit message into `.gitmessage` — this includes doc-only changes (CLAUDE.md, etc.)
-- **Commit messages** use semantic prefixes: `feat(topic):`, `fix(topic):`, `chore(topic):`, `refactor(topic):`, `test(topic):`, `docs(topic):`
-- Run `scripts/arch.sh` and `scripts/routes.sh` to verify descriptions are current
-- Update `backend/demo.py` when data model or storage changes so `--demo` generates valid, representative demo data
-- Run `git done` when work is done — this stages all changes, commits with `.gitmessage`, and pushes
