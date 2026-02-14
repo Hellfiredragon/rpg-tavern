@@ -2,9 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## MAIN Directives
+- ALWAYS treat the source code, type definitions, and test files as the authoritative source of truth. If a documentation of any kind like Markdown (*.md), follow the code and flag the documentation as potentially stale
+- NEVER proactively create or update documentation files (e.g., README.md, QuickStart.md) unless explicitly requested. Focus exclusively on functional code changes and verification
+- ALWAYS check if the added feature needs more tests and add them accordingly
+- ALWAYS run the project's test suite and linting tools after any code change. Do not rely on documentation to confirm functionality; rely on execution results
+
 ## Project Overview
 
-RPG Tavern is an LLM-powered RPG engine. Players connect, describe what their characters want to do, and the server uses LLMs to alter world state and narrate the story. Data is stored as files on disk.
+RPG Tavern is an LLM-powered RPG engine. Players describe what their characters want to do, and the server uses LLMs to alter world state and narrate the story. Data is stored as files on disk.
 
 ## Tech Stack
 
@@ -48,37 +54,23 @@ cd frontend && bun run lint      # ESLint
 ## Architecture
 
 Run `scripts/arch.sh` to print the file tree with descriptions extracted from source headers.
+Run `scripts/routes.sh` to print all backend API and frontend page routes.
 
 Every source file has a header comment describing its purpose:
 - **Python:** module docstring (`"""..."""`)
 - **TypeScript/TSX:** JSDoc block before imports (`/** ... */`)
 
-When changing a module's responsibilities, update its header comment.
+- ALWAYS when changing a module's responsibilities, update its header comment
+- ALWAYS when adding or changing a route, update the handler's docstring (backend) or the JSDoc route list (frontend).
 
 ### Configuration (.env)
 
-All ports/host are configured via `.env` at the project root (see `.env.example`). Key vars: `HOST`, `BACKEND_PORT`, `FRONTEND_PORT`, `DATA_DIR`.
+All ports/host are configured via `.env` at the project root (see `.env.example`)
 
 ### Icons
 
-Use **Font Awesome Free** (`@fortawesome/fontawesome-free`) for all icons. Prefer `fa-solid` style. Usage: `<i className="fa-solid fa-gear" />`. Do not use inline SVGs or Unicode symbols for icons. The CSS is imported in `main.tsx`.
-
-### Frontend Routes
-
-| Route | Page |
-|-------|------|
-| `/` | Quest Board |
-| `/global-settings` | Standalone Global Settings |
-| `/tmpl/{slug}` | Template (default tab: chat) |
-| `/tmpl/{slug}/{tab}` | Template with specific tab |
-| `/advn/{slug}` | Adventure (default tab: chat) |
-| `/advn/{slug}/{tab}` | Adventure with specific tab |
-
-Valid tabs: `chat`, `personas` (adventures only), `characters` (adventures only), `world`, `settings`, `global-settings`, `global-personas`. The tab bar is split into left (adventure-specific) and right (global) groups. The active tab is reflected in the URL via `history.replaceState` and restored on page load.
-
-### UI Settings
-
-All UI-related settings belong in Global Settings under the "UI Settings" section, stored in `data/config.json` via `GET/PATCH /api/settings`.
+- ALWAYS use `@fortawesome/fontawesome-free` for all icons. Prefer `fa-solid` style. Usage: `<i className="fa-solid fa-gear" />`. 
+- NEVER use inline SVGs or Unicode symbols for icons
 
 ### Dev proxy setup
 
@@ -88,8 +80,6 @@ In development, the Vite dev server proxies `/api/*` requests to the backend. In
 
 - After completing a piece of work, write the commit message into `.gitmessage` — this includes doc-only changes (CLAUDE.md, etc.)
 - **Commit messages** use semantic prefixes: `feat(topic):`, `fix(topic):`, `chore(topic):`, `refactor(topic):`, `test(topic):`, `docs(topic):`
-- Keep TODOS.md updated when completing items listed there
-- When changing a module's responsibilities, update its file header comment
-- Run `scripts/arch.sh` to verify architecture descriptions are current
+- Run `scripts/arch.sh` and `scripts/routes.sh` to verify descriptions are current
 - Update `backend/demo.py` when data model or storage changes so `--demo` generates valid, representative demo data
 - Run `git done` when work is done — this stages all changes, commits with `.gitmessage`, and pushes

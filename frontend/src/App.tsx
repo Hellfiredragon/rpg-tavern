@@ -1,6 +1,11 @@
-/** URL-based router. Routes: / (QuestBoard), /global-settings (AppSettings),
- * /tmpl/{slug} (template view), /advn/{slug} (adventure view). Tab selection
- * is reflected in the URL path and restored on page load via history.replaceState. */
+/** URL-based router. Tab selection reflected in URL via history.replaceState.
+ *
+ * Frontend routes:
+ *   /                          Quest board — template + adventure lists
+ *   /global-settings           Standalone global settings page
+ *   /tmpl/{slug}[/{tab}]       Template view (tabs: chat, world, settings, global-settings, global-personas)
+ *   /advn/{slug}[/{tab}]       Adventure view (tabs: chat, personas, characters, world, settings, global-settings, global-personas)
+ */
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import Layout from './Layout'
 import QuestBoard from './QuestBoard'
