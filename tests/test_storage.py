@@ -360,6 +360,60 @@ def test_append_messages_accumulates():
     assert result[1]["text"] == "Hi there."
 
 
+def test_delete_message_middle():
+    """Delete a message from the middle of the list."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    storage.append_messages(adv["slug"], [
+        {"role": "player", "text": "A", "ts": "2026-01-01T00:00:00Z"},
+        {"role": "narrator", "text": "B", "ts": "2026-01-01T00:00:01Z"},
+        {"role": "player", "text": "C", "ts": "2026-01-01T00:00:02Z"},
+    ])
+    result = storage.delete_message(adv["slug"], 1)
+    assert len(result) == 2
+    assert result[0]["text"] == "A"
+    assert result[1]["text"] == "C"
+
+
+def test_delete_message_first():
+    """Delete the first message."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    storage.append_messages(adv["slug"], [
+        {"role": "player", "text": "A", "ts": "2026-01-01T00:00:00Z"},
+        {"role": "narrator", "text": "B", "ts": "2026-01-01T00:00:01Z"},
+    ])
+    result = storage.delete_message(adv["slug"], 0)
+    assert len(result) == 1
+    assert result[0]["text"] == "B"
+
+
+def test_delete_message_last():
+    """Delete the last message."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    storage.append_messages(adv["slug"], [
+        {"role": "player", "text": "A", "ts": "2026-01-01T00:00:00Z"},
+        {"role": "narrator", "text": "B", "ts": "2026-01-01T00:00:01Z"},
+    ])
+    result = storage.delete_message(adv["slug"], 1)
+    assert len(result) == 1
+    assert result[0]["text"] == "A"
+
+
+def test_delete_message_out_of_range():
+    """Out-of-range index raises IndexError."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    storage.append_messages(adv["slug"], [
+        {"role": "player", "text": "A", "ts": "2026-01-01T00:00:00Z"},
+    ])
+    with pytest.raises(IndexError):
+        storage.delete_message(adv["slug"], 5)
+    with pytest.raises(IndexError):
+        storage.delete_message(adv["slug"], -1)
+
+
 # ── Story Roles ─────────────────────────────────────────────
 
 

@@ -121,6 +121,22 @@ export default function AdventureView({ slug, kind, initialTab, onTabChange, onW
     }
   }
 
+  async function deleteMessage(index: number) {
+    const res = await fetch(`/api/adventures/${slug}/messages/${index}`, { method: 'DELETE' })
+    if (res.ok) {
+      const updated = await res.json()
+      setMessages(updated)
+    }
+  }
+
+  function handleMessageAction(index: number, action: string, e: React.MouseEvent) {
+    if (action === 'delete') {
+      if (e.ctrlKey || e.metaKey || confirm('Delete this message?')) {
+        deleteMessage(index)
+      }
+    }
+  }
+
   function handlePersonaChange(pslug: string) {
     setActivePersona(pslug)
     fetch(`/api/adventures/${slug}`, {
@@ -192,10 +208,25 @@ export default function AdventureView({ slug, kind, initialTab, onTabChange, onW
                 <p className="chat-empty">Describe what your character does to begin.</p>
               )}
               {messages.map((msg, i) => {
+                const actions = kind === 'adventure' && !loading ? (
+                  <div className="chat-msg-actions">
+                    <button
+                      className="chat-msg-action chat-msg-action--delete"
+                      title="Delete message (Ctrl+Click to skip confirmation)"
+                      onClick={e => handleMessageAction(i, 'delete', e)}
+                    >
+                      <i className="fa-solid fa-trash-can" />
+                    </button>
+                  </div>
+                ) : null
+
                 if (msg.role === 'player') {
                   return (
-                    <div key={i} className="chat-msg chat-msg--player">
-                      {msg.text}
+                    <div key={i} className="chat-msg-wrapper">
+                      <div className="chat-msg chat-msg--player">
+                        {msg.text}
+                      </div>
+                      {actions}
                     </div>
                   )
                 }
@@ -203,33 +234,42 @@ export default function AdventureView({ slug, kind, initialTab, onTabChange, onW
                   const isSandbox = storyRoles?.sandbox
                   if (!isSandbox) return null
                   return (
-                    <div key={i} className="chat-msg chat-msg--intention">
-                      <span className="intention-label">{msg.character}</span>
-                      <span className="intention-text">{msg.text}</span>
+                    <div key={i} className="chat-msg-wrapper">
+                      <div className="chat-msg chat-msg--intention">
+                        <span className="intention-label">{msg.character}</span>
+                        <span className="intention-text">{msg.text}</span>
+                      </div>
+                      {actions}
                     </div>
                   )
                 }
                 if (msg.segments && msg.segments.length > 0) {
                   return (
-                    <div key={i} className="chat-msg chat-msg--narrator">
-                      {msg.segments.map((seg, si) => {
-                        if (seg.type === 'dialog') {
-                          return (
-                            <div key={si} className="dialog-card">
-                              <span className="dialog-character">{seg.character}</span>
-                              {seg.emotion && <span className="dialog-emotion">{seg.emotion}</span>}
-                              <span className="dialog-text">{seg.text}</span>
-                            </div>
-                          )
-                        }
-                        return <p key={si} className="narration-text">{seg.text}</p>
-                      })}
+                    <div key={i} className="chat-msg-wrapper">
+                      <div className="chat-msg chat-msg--narrator">
+                        {msg.segments.map((seg, si) => {
+                          if (seg.type === 'dialog') {
+                            return (
+                              <div key={si} className="dialog-card">
+                                <span className="dialog-character">{seg.character}</span>
+                                {seg.emotion && <span className="dialog-emotion">{seg.emotion}</span>}
+                                <span className="dialog-text">{seg.text}</span>
+                              </div>
+                            )
+                          }
+                          return <p key={si} className="narration-text">{seg.text}</p>
+                        })}
+                      </div>
+                      {actions}
                     </div>
                   )
                 }
                 return (
-                  <div key={i} className="chat-msg chat-msg--narrator">
-                    {msg.text}
+                  <div key={i} className="chat-msg-wrapper">
+                    <div className="chat-msg chat-msg--narrator">
+                      {msg.text}
+                    </div>
+                    {actions}
                   </div>
                 )
               })}

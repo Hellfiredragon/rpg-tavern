@@ -244,6 +244,17 @@ def append_messages(slug: str, messages: list[dict[str, Any]]) -> None:
     path.write_text(json.dumps(existing, indent=2))
 
 
+def delete_message(slug: str, index: int) -> list[dict[str, Any]]:
+    """Delete a message by index. Returns updated message list."""
+    messages = get_messages(slug)
+    if index < 0 or index >= len(messages):
+        raise IndexError(f"Message index {index} out of range")
+    messages.pop(index)
+    path = adventures_dir() / slug / "messages.json"
+    path.write_text(json.dumps(messages, indent=2))
+    return messages
+
+
 # ── Story Roles (per-adventure) ──────────────────────────
 
 DEFAULT_NARRATOR_PROMPT = """\

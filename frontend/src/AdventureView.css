@@ -150,6 +150,47 @@
   color: var(--text-muted);
 }
 
+/* ── Message Actions (hover-revealed) ─────────────────── */
+
+.chat-msg-wrapper {
+  position: relative;
+}
+
+.chat-msg-actions {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+
+.chat-msg-wrapper:hover .chat-msg-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.chat-msg-action {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.75rem;
+  line-height: 1;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.chat-msg-action:hover {
+  color: var(--text);
+}
+
+.chat-msg-action--delete:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
 /* ── Dialog Cards (inside narrator messages) ─────────────── */
 
 .narration-text {

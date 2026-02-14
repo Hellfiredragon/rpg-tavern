@@ -153,6 +153,18 @@ async def get_messages(slug: str):
     return storage.get_messages(slug)
 
 
+@router.delete("/adventures/{slug}/messages/{index}")
+async def delete_message(slug: str, index: int):
+    adventure = storage.get_adventure(slug)
+    if not adventure:
+        raise HTTPException(404, "Adventure not found")
+    try:
+        messages = storage.delete_message(slug, index)
+    except IndexError:
+        raise HTTPException(404, "Message not found")
+    return messages
+
+
 @router.post("/adventures/{slug}/chat")
 async def adventure_chat(slug: str, body: ChatBody):
     adventure = storage.get_adventure(slug)
