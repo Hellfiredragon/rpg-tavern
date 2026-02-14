@@ -21,6 +21,7 @@
 }
 
 .embark-dialog-title {
+  font-family: var(--font-heading-family);
   font-size: 1.3rem;
   margin-bottom: 1.25rem;
 }

@@ -203,6 +203,7 @@ textarea {
 
 /* ── Shared Panel Heading ───────────────────────────────── */
 .panel-heading {
+  font-family: var(--font-heading-family);
   font-size: 1.1rem;
   color: var(--accent);
   margin-bottom: 1rem;

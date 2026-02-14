@@ -24,6 +24,7 @@
 
 .tab-btn {
   padding: 0.7rem 1.4rem;
+  font-family: var(--font-ui-family);
   font-size: 0.95rem;
   background: none;
   border: none;
@@ -83,6 +84,8 @@
 .chat-empty {
   text-align: center;
   color: var(--text-muted);
+  font-family: var(--font-narration-family);
+  font-size: var(--font-narration-size);
   font-style: italic;
   padding: 2rem 1rem;
 }
@@ -100,6 +103,7 @@
   border-left: 3px solid var(--accent);
   padding-left: 1rem;
   font-family: var(--font-narration-family);
+  font-size: var(--font-narration-size);
   font-style: italic;
   color: var(--text-muted);
   background: none;
@@ -112,6 +116,7 @@
   border: 1px solid var(--border);
   max-width: 100%;
   font-family: var(--font-narration-family);
+  font-size: var(--font-narration-size);
   font-style: var(--font-narration-style);
 }
 
@@ -218,6 +223,8 @@
 
 .chat-input-bar input {
   flex: 1;
+  font-family: var(--font-narration-family);
+  font-size: var(--font-narration-size);
 }
 
 .chat-input-bar button {

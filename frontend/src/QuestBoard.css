@@ -33,6 +33,7 @@
 }
 
 .section-title {
+  font-family: var(--font-heading-family);
   font-size: 1.1rem;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -81,6 +82,7 @@
 }
 
 .adventure-name {
+  font-family: var(--font-heading-family);
   font-size: 1.15rem;
 }
 
