@@ -53,6 +53,7 @@ export interface ChatMessage {
 
 export interface StoryRoleConfig {
   prompt: string
+  connection: string
 }
 
 export interface StoryRoles {

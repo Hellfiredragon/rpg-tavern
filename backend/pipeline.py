@@ -245,9 +245,18 @@ def apply_lorebook_extractor(slug: str, text: str) -> None:
 # ── Connection resolution ──────────────────────────────────
 
 
-def _resolve_connection(config: dict, role_name: str) -> dict | None:
-    """Find the LLM connection assigned to a story role."""
-    conn_name = config["story_roles"].get(role_name)
+def _resolve_connection(config: dict, story_roles: dict, role_name: str) -> dict | None:
+    """Find the LLM connection assigned to a story role.
+
+    Checks per-adventure story_roles first (connection field on each role),
+    then falls back to the global config story_roles mapping.
+    """
+    conn_name = ""
+    role = story_roles.get(role_name)
+    if isinstance(role, dict):
+        conn_name = role.get("connection", "")
+    if not conn_name:
+        conn_name = config.get("story_roles", {}).get(role_name, "")
     if not conn_name:
         return None
     for conn in config["llm_connections"]:
@@ -278,12 +287,12 @@ async def run_pipeline(
     all_segments: list[Segment] = []
 
     # Resolve connections
-    narrator_conn = _resolve_connection(config, "narrator")
+    narrator_conn = _resolve_connection(config, story_roles, "narrator")
     if not narrator_conn:
         raise ValueError("Narrator role is not assigned — configure it in Settings")
 
-    intention_conn = _resolve_connection(config, "character_intention")
-    extractor_conn = _resolve_connection(config, "extractor")
+    intention_conn = _resolve_connection(config, story_roles, "character_intention")
+    extractor_conn = _resolve_connection(config, story_roles, "extractor")
 
     max_rounds = story_roles.get("max_rounds", 3)
     sandbox = story_roles.get("sandbox", False)
@@ -550,7 +559,7 @@ async def run_pipeline(
 
     # ── Lorebook extractor per round ──────────────────────
 
-    lorebook_ext_conn = _resolve_connection(config, "extractor")
+    lorebook_ext_conn = _resolve_connection(config, story_roles, "lorebook_extractor")
     lorebook_ext_tpl = story_roles.get("lorebook_extractor", {}).get("prompt", "")
     if lorebook_ext_conn and lorebook_ext_tpl and round_all_narrations:
         round_narrations_str = "\n\n---\n\n".join(round_all_narrations)

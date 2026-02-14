@@ -5,11 +5,15 @@ import './StoryRoleCard.css'
 export default function StoryRoleCard({
   role,
   config,
+  connectionNames,
   onPromptChange,
+  onConnectionChange,
 }: {
   role: RoleName
   config: StoryRoleConfig
+  connectionNames: string[]
   onPromptChange: (prompt: string) => void
+  onConnectionChange: (connection: string) => void
 }) {
   const [promptValue, setPromptValue] = useState(config.prompt)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
@@ -31,6 +35,15 @@ export default function StoryRoleCard({
           <i className={`${ROLE_ICONS[role]} story-role-icon`} />
           {ROLE_LABELS[role]}
         </h4>
+        <select
+          value={config.connection}
+          onChange={e => onConnectionChange(e.target.value)}
+        >
+          <option value="">Default</option>
+          {connectionNames.map(name => (
+            <option key={name} value={name}>{name}</option>
+          ))}
+        </select>
       </div>
       <textarea
         className="prompt-editor"

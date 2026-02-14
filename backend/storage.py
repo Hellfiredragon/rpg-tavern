@@ -377,15 +377,19 @@ Output valid JSON only.\
 DEFAULT_STORY_ROLES: dict[str, Any] = {
     "narrator": {
         "prompt": DEFAULT_NARRATOR_PROMPT,
+        "connection": "",
     },
     "character_intention": {
         "prompt": DEFAULT_CHARACTER_INTENTION_PROMPT,
+        "connection": "",
     },
     "extractor": {
         "prompt": DEFAULT_CHARACTER_EXTRACTOR_PROMPT,
+        "connection": "",
     },
     "lorebook_extractor": {
         "prompt": DEFAULT_LOREBOOK_EXTRACTOR_PROMPT,
+        "connection": "",
     },
     "max_rounds": 3,
     "sandbox": False,
@@ -458,7 +462,7 @@ def update_story_roles(slug: str, roles: dict[str, Any]) -> dict[str, Any]:
             if key not in current:
                 current[key] = {}
             for field, fval in value.items():
-                if field == "prompt":
+                if field in ("prompt", "connection"):
                     current[key][field] = fval
         elif key in top_level_fields:
             current[key] = value
@@ -498,9 +502,15 @@ def embark_template(
         json.dumps(adventure, indent=2)
     )
     (adventures_dir() / target_slug).mkdir(exist_ok=True)
-    # Write default story roles for the new adventure
+    # Write default story roles for the new adventure, copying global connection assignments
+    initial_roles = json.loads(json.dumps(DEFAULT_STORY_ROLES))
+    config = get_config()
+    global_conns = config.get("story_roles", {})
+    for role_name in ("narrator", "character_intention", "extractor", "lorebook_extractor"):
+        if role_name in initial_roles and global_conns.get(role_name):
+            initial_roles[role_name]["connection"] = global_conns[role_name]
     _story_roles_path(target_slug).write_text(
-        json.dumps(DEFAULT_STORY_ROLES, indent=2)
+        json.dumps(initial_roles, indent=2)
     )
     # Write empty characters list
     _characters_path(target_slug).write_text(json.dumps([], indent=2))
@@ -667,6 +677,7 @@ _CONFIG_DEFAULTS: dict[str, Any] = {
         "narrator": "",
         "character_intention": "",
         "extractor": "",
+        "lorebook_extractor": "",
     },
     "app_width_percent": 100,
     "help_panel_width_percent": 25,

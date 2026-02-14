@@ -148,14 +148,16 @@ The chat pipeline in `backend/pipeline.py` uses an intention/resolution loop:
 4. **Lorebook extractor** runs once per turn for new world facts
 5. Tick all character + persona states, combine all segments into one narrator message
 
-**Story Roles** (4 LLM connection assignments in Global Settings):
+**Story Roles** (4 roles, each with a prompt template and LLM connection assignment):
 
 | Role | Purpose |
 |------|---------|
 | `narrator` | Resolves intentions → narration + dialog |
 | `character_intention` | Generates character intentions |
 | `extractor` | Updates character states after each resolution |
-| `lorebook_extractor` | Extracts new world facts (uses extractor connection) |
+| `lorebook_extractor` | Extracts new world facts |
+
+**Connection assignments** — each role's LLM connection is stored per-adventure in `story-roles.json` (alongside the prompt). On embark, connections are copied from global defaults (`config.json` → `story_roles`). The pipeline resolves connections per-adventure first, falling back to global config. The adventure Settings tab shows a connection dropdown on each StoryRoleCard. Global Settings shows "Default Story Role Connections" for new adventures.
 
 **Player name** — adventures store `player_name` (optional). The pipeline passes it as `{{player_name}}` to all prompts (fallback: "the adventurer"). The player name is also added to `known_names` for dialog parsing, so `Joe(surprised): text` is parsed as dialog. Editable in Embark dialog. `PATCH /api/adventures/{slug}` updates it.
 

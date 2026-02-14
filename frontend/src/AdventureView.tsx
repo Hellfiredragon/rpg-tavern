@@ -43,6 +43,7 @@ export default function AdventureView({ slug, kind, initialTab, onTabChange, onW
   const [storyRoles, setStoryRoles] = useState<StoryRoles | null>(null)
   const [personas, setPersonas] = useState<Persona[]>([])
   const [activePersona, setActivePersona] = useState('')
+  const [connectionNames, setConnectionNames] = useState<string[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -75,6 +76,15 @@ export default function AdventureView({ slug, kind, initialTab, onTabChange, onW
       .then(res => res.ok ? res.json() : [])
       .then(setPersonas)
   }, [slug, kind])
+
+  useEffect(() => {
+    if (kind !== 'adventure') return
+    fetch('/api/settings')
+      .then(res => res.json())
+      .then(data => setConnectionNames(
+        (data.llm_connections || []).map((c: { name: string }) => c.name).filter(Boolean)
+      ))
+  }, [kind])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -372,7 +382,9 @@ export default function AdventureView({ slug, kind, initialTab, onTabChange, onW
                 key={role}
                 role={role}
                 config={storyRoles[role]}
+                connectionNames={connectionNames}
                 onPromptChange={prompt => patchStoryRole(role, { prompt })}
+                onConnectionChange={connection => patchStoryRole(role, { connection })}
               />
             ))}
           </div>

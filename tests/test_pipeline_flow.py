@@ -36,8 +36,10 @@ def _setup_adventure(tmp_path, characters=None, persona=None, active_persona_slu
     return adv, slug
 
 
-def _config(narrator=True, intention=True, extractor=True):
+def _config(narrator=True, intention=True, extractor=True, lorebook_extractor=None):
     """Build a config dict with optional connection assignments."""
+    if lorebook_extractor is None:
+        lorebook_extractor = extractor
     conns = [{"name": "llm", "provider_url": "http://localhost:5001", "api_key": ""}]
     return {
         "llm_connections": conns,
@@ -45,6 +47,7 @@ def _config(narrator=True, intention=True, extractor=True):
             "narrator": "llm" if narrator else "",
             "character_intention": "llm" if intention else "",
             "extractor": "llm" if extractor else "",
+            "lorebook_extractor": "llm" if lorebook_extractor else "",
         },
     }
 

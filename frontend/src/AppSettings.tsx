@@ -12,6 +12,7 @@ interface StoryRoles {
   narrator: string
   character_intention: string
   extractor: string
+  lorebook_extractor: string
 }
 
 interface Settings {
@@ -275,10 +276,12 @@ export default function AppSettings({ onWidthChange }: AppSettingsProps) {
       <hr className="divider" />
 
       <div className="settings-section">
-        <h3 className="panel-heading">Story Roles</h3>
+        <h3 className="panel-heading">Default Story Role Connections</h3>
+        <p className="settings-hint">Defaults for new adventures. Per-adventure connections are in the adventure Settings tab.</p>
         {roleSelect('Narrator', 'narrator')}
         {roleSelect('Character Intention', 'character_intention')}
         {roleSelect('Extractor', 'extractor')}
+        {roleSelect('Lorebook Extractor', 'lorebook_extractor')}
       </div>
 
       <hr className="divider" />

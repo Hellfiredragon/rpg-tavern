@@ -276,6 +276,7 @@ def test_get_config_empty():
         "narrator": "",
         "character_intention": "",
         "extractor": "",
+        "lorebook_extractor": "",
     }
     assert config["app_width_percent"] == 100
 
@@ -651,3 +652,51 @@ def test_story_roles_migration_from_old_format():
     assert roles["max_rounds"] == 3
     assert roles["sandbox"] is False
     assert roles["lorebook_extractor"]["prompt"] != ""
+
+
+# ── Story Role Connections ────────────────────────────────────
+
+
+def test_update_story_roles_connection():
+    """update_story_roles persists connection field."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    storage.update_story_roles(adv["slug"], {
+        "narrator": {"connection": "my-llm"},
+    })
+    roles = storage.get_story_roles(adv["slug"])
+    assert roles["narrator"]["connection"] == "my-llm"
+    # prompt untouched
+    assert roles["narrator"]["prompt"] != ""
+
+
+def test_embark_copies_global_connections():
+    """embark_template copies global connection defaults into new adventure."""
+    storage.create_template("Quest", "Desc")
+    storage.update_config({"story_roles": {
+        "narrator": "llm-a",
+        "extractor": "llm-b",
+    }})
+    adv = storage.embark_template("quest", "Run")
+    roles = storage.get_story_roles(adv["slug"])
+    assert roles["narrator"]["connection"] == "llm-a"
+    assert roles["extractor"]["connection"] == "llm-b"
+    assert roles["character_intention"]["connection"] == ""
+    assert roles["lorebook_extractor"]["connection"] == ""
+
+
+def test_config_includes_lorebook_extractor():
+    """get_config includes lorebook_extractor in story_roles defaults."""
+    config = storage.get_config()
+    assert "lorebook_extractor" in config["story_roles"]
+    assert config["story_roles"]["lorebook_extractor"] == ""
+
+
+def test_default_story_roles_have_connection_field():
+    """Default story roles include connection field."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    roles = storage.get_story_roles(adv["slug"])
+    for role_name in ("narrator", "character_intention", "extractor", "lorebook_extractor"):
+        assert "connection" in roles[role_name]
+        assert roles[role_name]["connection"] == ""
