@@ -17,6 +17,19 @@
   --danger:       #a84232;
   --danger-hover: #c44f3d;
 
+  /* Dialog / Intention */
+  --dialog:          #9b59b6;
+  --dialog-light:    #bb8fce;
+  --dialog-bg:       rgba(155, 89, 182, 0.08);
+
+  /* State level colors */
+  --state-subconscious-bg:   #2c3e50;
+  --state-subconscious-text: #bdc3c7;
+  --state-manifest-bg:       #1a5276;
+  --state-manifest-text:     #85c1e9;
+  --state-dominant-bg:       #7d3c98;
+  --state-dominant-text:     #d7bde2;
+
   /* Typography */
   --font-heading: 'Cinzel', Georgia, serif;
   --font-body:    'Crimson Text', Georgia, serif;
@@ -164,4 +177,21 @@ textarea {
   border: none;
   border-top: 1px solid var(--border);
   margin: 1.5rem 0;
+}
+
+/* ── Shared Panel Heading ───────────────────────────────── */
+.panel-heading {
+  font-size: 1.1rem;
+  color: var(--accent);
+  margin-bottom: 1rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ── Loading Text (shared) ──────────────────────────────── */
+.loading-text {
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 4rem 0;
 }

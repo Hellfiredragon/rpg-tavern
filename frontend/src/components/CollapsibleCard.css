@@ -1,0 +1,51 @@
+/* ── Collapsible Card ────────────────────────────────────── */
+
+.character-card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+  background: var(--bg-surface, var(--bg-deep));
+}
+
+.character-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.character-card-header:hover {
+  background: var(--bg-deep);
+}
+
+.character-expand-icon {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  width: 1em;
+}
+
+.character-name {
+  font-weight: 600;
+}
+
+.character-state-count {
+  margin-left: auto;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.overflow-badge {
+  font-size: 0.7rem;
+  padding: 0.1em 0.5em;
+  border-radius: 3px;
+  background: var(--danger, #e74c3c);
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.character-card-body {
+  padding: 0 1rem 1rem;
+}

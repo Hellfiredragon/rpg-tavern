@@ -1,0 +1,116 @@
+/* ── Persona Panel ──────────────────────────────────────── */
+
+.persona-source-badge {
+  font-size: 0.7rem;
+  padding: 0.1em 0.5em;
+  border-radius: 3px;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  text-transform: lowercase;
+}
+
+.persona-description {
+  display: block;
+  width: 100%;
+  margin-top: 0.2rem;
+  font-size: 0.85rem;
+  padding: 0.4em 0.6em;
+  font-family: var(--font-body);
+  color: var(--text);
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  outline: none;
+  resize: vertical;
+  line-height: 1.4;
+}
+
+.persona-description:focus {
+  border-color: var(--accent);
+}
+
+.persona-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  align-items: center;
+}
+
+.persona-action-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 0.4em 0.8em;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+
+.persona-action-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.add-character-form {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.add-character-form input {
+  flex: 1;
+}
+
+.add-character-form button {
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
+
+.add-character-form button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.character-empty {
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 2rem 1rem;
+}
+
+.character-meta-section {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.character-meta-label {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 0.4rem;
+}
+
+.character-meta-label input[type="text"] {
+  display: block;
+  width: 100%;
+  margin-top: 0.2rem;
+  font-size: 0.85rem;
+}
+
+.character-delete {
+  margin-top: 0.75rem;
+  background: none;
+  border: 1px solid var(--danger, #e74c3c);
+  color: var(--danger, #e74c3c);
+  padding: 0.4em 0.8em;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+
+.character-delete:hover {
+  background: var(--danger, #e74c3c);
+  color: #fff;
+}

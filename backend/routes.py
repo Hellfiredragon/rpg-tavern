@@ -405,6 +405,9 @@ async def promote_persona(slug: str, pslug: str):
     if not replaced:
         global_personas.append(dict(found))
     storage.save_global_personas(global_personas)
+    # Remove the adventure-local copy so the global one takes over
+    local_personas = [p for p in local_personas if p["slug"] != pslug]
+    storage.save_adventure_personas(slug, local_personas)
     return {"ok": True}
 
 

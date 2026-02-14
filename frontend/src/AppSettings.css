@@ -9,13 +9,7 @@
   margin-bottom: 2rem;
 }
 
-.settings-section h3 {
-  font-size: 1.1rem;
-  color: var(--accent);
-  margin-bottom: 1rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
+/* h3 uses .panel-heading from index.css */
 
 .settings-field {
   margin-bottom: 1rem;

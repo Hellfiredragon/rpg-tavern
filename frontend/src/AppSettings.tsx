@@ -161,7 +161,7 @@ export default function AppSettings({ onWidthChange }: AppSettingsProps) {
       <h2>Settings</h2>
 
       <div className="settings-section">
-        <h3>LLM Connections</h3>
+        <h3 className="panel-heading">LLM Connections</h3>
         {settings.llm_connections.map((conn, i) => (
           <div key={i} className="connection-card">
             <div className="connection-header">
@@ -204,7 +204,7 @@ export default function AppSettings({ onWidthChange }: AppSettingsProps) {
       <hr className="divider" />
 
       <div className="settings-section">
-        <h3>Story Roles</h3>
+        <h3 className="panel-heading">Story Roles</h3>
         {roleSelect('Narrator', 'narrator')}
         {roleSelect('Character Intention', 'character_intention')}
         {roleSelect('Extractor', 'extractor')}
@@ -213,7 +213,7 @@ export default function AppSettings({ onWidthChange }: AppSettingsProps) {
       <hr className="divider" />
 
       <div className="settings-section">
-        <h3>UI Settings</h3>
+        <h3 className="panel-heading">UI Settings</h3>
         <p className="settings-hint">Changes are saved immediately but take effect after reload.</p>
         <div className="settings-field">
           <label>App Width — {settings.app_width_percent}%</label>

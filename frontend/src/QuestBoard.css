@@ -1,11 +1,6 @@
 /* ── Quest Board ──────────────────────────────────────────── */
 
-.loading-text {
-  text-align: center;
-  color: var(--text-muted);
-  font-style: italic;
-  padding: 4rem 0;
-}
+/* .loading-text is now in index.css */
 
 .quest-board {
   background: var(--bg-surface);

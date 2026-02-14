@@ -67,6 +67,19 @@ frontend/             React + TypeScript (Vite)
     AdventureView.tsx  Tab-based view (Chat/Personas/Characters/World/Settings/Global Settings) for template or adventure
     EmbarkDialog.tsx   Modal dialog for naming an adventure before embarking
     AppSettings.tsx    Global settings (LLM connections, story role assignments, display)
+    types.ts           Shared types (Character, Persona, StoryRoles, state constants/helpers)
+    components/
+      AddStateInput.tsx        Inline form for adding a state entry
+      useEntityStates.ts       Hook: removeState/addState/changeStateValue (shared by character + persona panels)
+      StateEditor.tsx          Renders core/persistent/temporal state sections with inputs
+      CollapsibleCard.tsx      Expandable card wrapper (name, badges, state count)
+      PersonaPanel.tsx         Unified persona panel (adventureSlug? prop → adventure or global mode)
+      CharacterPanel.tsx       Character list with states, nicknames, chattiness
+      LorebookPanel.tsx        Lorebook entry CRUD
+      StoryRoleCard.tsx        Prompt editor card for a single story role
+      PromptHintsPanel.tsx     Sliding help panel with template variable reference
+      StatusTabs.tsx           Floating connection status indicators
+      TemplateSettingsPanel.tsx Template intro text editor
   vite.config.ts      Build output → ../backend/static, dev proxy /api → backend
 
 presets/              Built-in content (committed to git, read-only at runtime)
@@ -112,7 +125,7 @@ Use **Font Awesome Free** (`@fortawesome/fontawesome-free`) for all icons. Prefe
 | `/advn/{slug}` | Adventure (default tab: chat) |
 | `/advn/{slug}/{tab}` | Adventure with specific tab |
 
-Valid tabs: `chat`, `personas` (adventures only), `characters` (adventures only), `world`, `settings`, `global-settings`. The active tab is reflected in the URL via `history.replaceState` and restored on page load.
+Valid tabs: `chat`, `personas` (adventures only), `characters` (adventures only), `world`, `settings`, `global-settings`, `global-personas`. The tab bar is split into left (adventure-specific) and right (global) groups. The active tab is reflected in the URL via `history.replaceState` and restored on page load.
 
 ### UI Settings
 
