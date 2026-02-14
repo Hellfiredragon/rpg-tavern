@@ -1,3 +1,5 @@
+/** App entry point. Mounts React root, imports Font Awesome CSS, and sets up
+ * global focus-select behavior for text inputs. */
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import '@fortawesome/fontawesome-free/css/fontawesome.min.css'

@@ -1,3 +1,5 @@
+/** Floating connection status indicators showing which LLM connections are
+ * assigned to each story role, with health check status. */
 import { useEffect, useRef, useState } from 'react'
 import { type RoleName, ROLE_NAMES, ROLE_LABELS, ROLE_ICONS } from '../types'
 import './StatusTabs.css'

@@ -1,3 +1,6 @@
+"""Tests for Handlebars prompt rendering: template compilation, context building,
+custom helpers (take, last), and error handling."""
+
 import pytest
 
 from backend.prompts import PromptError, build_context, render_prompt

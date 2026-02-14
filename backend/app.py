@@ -1,3 +1,10 @@
+"""FastAPI application factory.
+
+create_app(data_dir) initializes file storage and returns a FastAPI app.
+Mounts the API router under /api and serves the built frontend as static
+files with SPA fallback (all non-API routes return index.html).
+"""
+
 import os
 from pathlib import Path
 

@@ -1,3 +1,4 @@
+/** Inline form for adding a new state entry to a character or persona. */
 import { useState } from 'react'
 
 export default function AddStateInput({ onAdd }: { onAdd: (label: string) => void }) {

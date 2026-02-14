@@ -1,3 +1,6 @@
+/** Quest board with "Running Adventures" and "Templates" sections. Lists all
+ * adventures and templates; clicking a template opens it, with an Embark button
+ * to create a running adventure from it. */
 import { useEffect, useState } from 'react'
 import EmbarkDialog from './EmbarkDialog'
 import './QuestBoard.css'

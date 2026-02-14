@@ -1,3 +1,5 @@
+/** Persona CRUD panel. When adventureSlug is provided, shows adventure-scoped
+ * personas with promote/localize actions; otherwise shows global personas only. */
 import { useEffect, useRef, useState } from 'react'
 import { type Persona } from '../types'
 import CollapsibleCard from './CollapsibleCard'

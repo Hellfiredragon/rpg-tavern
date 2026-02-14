@@ -1,8 +1,32 @@
 """File-based JSON storage using a tree of slugified objects.
 
-Templates live in data/templates/ (user-created) with preset fallback from
-presets/templates/ (read-only, committed to git).  Adventures live in
-data/adventures/ only.
+Data layout:
+  data/
+    templates/           User-created and preset-overridden templates
+    adventures/          Running adventures (each with child JSON files)
+      <slug>.json        Adventure metadata (title, description, player_name, active_persona)
+      <slug>/            Child resources:
+        messages.json    Chat message history
+        characters.json  NPC character list with states
+        personas.json    Adventure-local persona overrides
+        lorebook.json    World knowledge entries
+        story-roles.json Per-adventure prompt templates + pipeline settings
+    personas.json        Global personas
+    config.json          App settings (LLM connections, story role defaults, display)
+  presets/
+    templates/           Built-in read-only templates (merged at read time)
+    adventure-names.txt  Name generation word lists (periods + epithets)
+
+Slug rules: title → Unicode normalize → strip non-ASCII → lowercase →
+replace non-alnum runs with hyphen → strip leading/trailing hyphens.
+
+Preset merging: list_templates() and get_template() merge preset + user data;
+user data wins on slug collision. Copy-on-write: updating a preset copies it
+to data/templates/ first. Deleting a user override reveals the preset.
+
+Config: get_config() returns defaults merged with stored values.
+update_config() applies partial updates — llm_connections replaced wholesale,
+story_roles merged key-by-key, scalars overwritten.
 """
 
 import json

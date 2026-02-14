@@ -1,3 +1,5 @@
+/** Lorebook entry CRUD panel. Manages per-adventure world knowledge entries
+ * with title, content, and keyword fields. */
 import { useEffect, useState } from 'react'
 import { type LorebookEntryData } from '../types'
 import './LorebookPanel.css'

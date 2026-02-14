@@ -1,3 +1,5 @@
+"""Tests for the LLM client: successful generation, HTTP errors, and timeouts."""
+
 from unittest.mock import AsyncMock, patch
 
 import httpx

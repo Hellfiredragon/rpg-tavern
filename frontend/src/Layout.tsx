@@ -1,3 +1,5 @@
+/** App shell with header breadcrumb (adventure name + back link). Applies font
+ * settings from /api/settings on mount and sets --app-width CSS variable. */
 import { useEffect, type ReactNode } from 'react'
 import { applyFontSettings, type FontSettings } from './fontSettings'
 import './Layout.css'

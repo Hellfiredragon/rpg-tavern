@@ -1,3 +1,5 @@
+/** Modal dialog for naming an adventure before embarking. Fetches a random name
+ * suggestion from /api/name-suggestion and accepts an optional player character name. */
 import { useEffect, useRef, useState } from 'react'
 import './EmbarkDialog.css'
 

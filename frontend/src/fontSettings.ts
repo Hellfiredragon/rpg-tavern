@@ -1,3 +1,8 @@
+/** Font configuration types and apply logic. Five groups: narration, dialog,
+ * intention, heading, ui — each with family/size/style. Curated list of 13 Google
+ * Fonts. applyFontSettings() sets CSS custom properties (--font-{group}-family,
+ * --font-{group}-size, --font-{group}-style) with legacy aliases --font-heading
+ * and --font-body. */
 export const FONT_LIST = [
   { name: 'Crimson Text', category: 'serif' },
   { name: 'Cinzel', category: 'serif' },

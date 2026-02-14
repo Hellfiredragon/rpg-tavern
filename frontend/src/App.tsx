@@ -1,3 +1,6 @@
+/** URL-based router. Routes: / (QuestBoard), /global-settings (AppSettings),
+ * /tmpl/{slug} (template view), /advn/{slug} (adventure view). Tab selection
+ * is reflected in the URL path and restored on page load via history.replaceState. */
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import Layout from './Layout'
 import QuestBoard from './QuestBoard'

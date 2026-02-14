@@ -1,3 +1,6 @@
+"""Tests for character state logic: thresholds, ticking, promotion, activation,
+overflow detection, and prompt context building."""
+
 from backend.characters import (
     activate_characters,
     character_prompt_context,

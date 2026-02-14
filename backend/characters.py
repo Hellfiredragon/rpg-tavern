@@ -1,4 +1,26 @@
-"""Character state logic — categories, thresholds, ticking, and prompt context."""
+"""Character state logic — categories, thresholds, ticking, activation, and prompt context.
+
+State categories (max slots / max value / tick rate per round):
+  core       3 / 30 / +2  — rarely change, life crisis if challenged
+  persistent 10 / 20 / +1 — current beliefs, relationships
+  temporal   10 / -- / -1 — short-lived emotions (promotes to persistent at 20+)
+
+Value thresholds control visibility in prompts:
+  0-5   silent      — only extractor sees raw values
+  6-10  subconscious — "feels a subconscious nudge related to {label}"
+  11-15 manifest    — "{label} is manifest in their body language"
+  16-20 dominant    — "{label} dominates their current priorities"
+  21-30 definitive  — "{label} is a core truth they would die for"
+
+Tick rules: values capped per category after tick; states at 0 removed;
+temporal at 20+ promotes to persistent if slots available; overflow_pending
+set if a category exceeds max slots.
+
+Activation: name/nickname in narration → always active; else chattiness roll.
+
+Prompt context: character_prompt_context() returns {"list": [...], "summary": "..."}.
+enrich_states() builds per-state dicts with level flags for template use.
+"""
 
 import random
 

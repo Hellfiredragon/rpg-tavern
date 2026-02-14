@@ -1,3 +1,11 @@
+"""FastAPI API endpoints under /api.
+
+Endpoint groups: templates, adventures, personas (global + per-adventure),
+characters, lorebook, story-roles, chat (pipeline), settings, name-suggestion.
+Each adventure's child resources (characters, personas, lorebook, story-roles,
+messages) are nested under /api/adventures/{slug}/.
+"""
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 

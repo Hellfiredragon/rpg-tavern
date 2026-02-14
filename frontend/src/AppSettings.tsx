@@ -1,3 +1,6 @@
+/** Global settings panel: LLM connections, default story role connection
+ * assignments, display (app width), and per-group font settings. Reads/writes
+ * config via GET/PATCH /api/settings. */
 import { useEffect, useRef, useState } from 'react'
 import { FONT_LIST, FONT_GROUPS, FONT_GROUP_LABELS, applyFontSettings, type FontSettings, type FontGroupSettings, type FontGroup } from './fontSettings'
 import './AppSettings.css'

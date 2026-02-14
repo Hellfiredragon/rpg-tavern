@@ -1,3 +1,7 @@
+/** Tab-based view for a template or adventure. Tabs: Chat, Personas (adventure),
+ * Characters (adventure), World (lorebook + story roles), Settings (per-adventure
+ * connections), Global Settings, Global Personas. Manages chat input with persona
+ * selector, message rendering with narration/dialog segments, and story role editing. */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import AppSettings from './AppSettings'
 import { type ChatMessage, type Persona, type StoryRoles, type StoryRoleConfig, type RoleName, ROLE_NAMES } from './types'

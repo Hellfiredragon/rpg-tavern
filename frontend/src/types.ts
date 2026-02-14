@@ -1,3 +1,7 @@
+/** Shared TypeScript types and constants. Data model types: Character, Persona,
+ * ChatMessage, StoryRoles, StoryRoleConfig, LorebookEntryData. State constants:
+ * CATEGORY_LIMITS, CATEGORY_MAX_VALUES, CATEGORY_DEFAULTS. Helpers: stateLevel(),
+ * ROLE_NAMES, ROLE_LABELS, ROLE_ICONS. */
 export type StateCategory = 'core' | 'persistent' | 'temporal'
 
 export interface CharacterState {

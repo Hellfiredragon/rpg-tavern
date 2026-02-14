@@ -1,3 +1,4 @@
+/** Sliding help panel with template variable reference for Handlebars prompts. */
 import { useEffect, useState } from 'react'
 import './PromptHintsPanel.css'
 

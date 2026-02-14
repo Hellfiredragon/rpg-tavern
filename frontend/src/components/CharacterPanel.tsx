@@ -1,3 +1,5 @@
+/** Character list with states, nicknames, and chattiness slider. Supports
+ * adding, removing, and editing characters per adventure. */
 import { useEffect, useRef, useState } from 'react'
 import { type Character } from '../types'
 import CollapsibleCard from './CollapsibleCard'

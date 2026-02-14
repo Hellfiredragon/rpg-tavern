@@ -1,3 +1,4 @@
+/** Expandable card wrapper showing name, optional badges, and state count. */
 import { type ReactNode } from 'react'
 import './CollapsibleCard.css'
 

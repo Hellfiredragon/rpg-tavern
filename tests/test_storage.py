@@ -1,3 +1,6 @@
+"""Tests for file-based storage: slugify, templates, adventures, characters,
+personas, lorebook, messages, config, name generation, and preset merging."""
+
 import pytest
 
 from backend import storage

@@ -1,3 +1,5 @@
+"""Tests for lorebook keyword matching, deduplication, and formatting."""
+
 from backend.lorebook import format_lorebook, match_lorebook_entries
 
 

@@ -1,3 +1,5 @@
+/** Shared hook for character/persona state mutations: removeState, addState,
+ * changeStateValue. Handles API PATCH calls and optimistic local updates. */
 import { type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import { type StateCategory, type CharacterStates, CATEGORY_MAX_VALUES, CATEGORY_DEFAULTS } from '../types'
 

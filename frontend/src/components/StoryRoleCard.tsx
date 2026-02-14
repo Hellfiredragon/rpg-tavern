@@ -1,3 +1,5 @@
+/** Prompt editor card for a single story role. Shows a text area for the
+ * Handlebars template and an optional LLM connection dropdown. */
 import { useEffect, useRef, useState } from 'react'
 import { type RoleName, type StoryRoleConfig, ROLE_ICONS, ROLE_LABELS } from '../types'
 import './StoryRoleCard.css'

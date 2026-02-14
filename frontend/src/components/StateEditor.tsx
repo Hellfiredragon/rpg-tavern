@@ -1,3 +1,4 @@
+/** Renders core/persistent/temporal state sections with value sliders and add/remove controls. */
 import { type StateCategory, type CharacterStates, CATEGORY_LIMITS, stateLevel } from '../types'
 import AddStateInput from './AddStateInput'
 import './StateEditor.css'

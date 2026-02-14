@@ -1,3 +1,5 @@
+/** Template intro text editor. Manages the optional intro narration written
+ * as the first narrator message when embarking on an adventure. */
 import { useEffect, useRef, useState } from 'react'
 import './TemplateSettingsPanel.css'
 

@@ -1,4 +1,30 @@
-"""Handlebars prompt rendering for story roles."""
+"""Handlebars prompt rendering for story roles.
+
+render_prompt() compiles and caches Handlebars templates, then renders with
+a context dict built by build_context(). Templates are cached by source string.
+
+Template variables (nested paths via dot notation):
+  title, description     — adventure metadata
+  message                — current player message
+  history                — pre-formatted history (> prefix for player lines)
+  msgs                   — message objects for {{#each}} (.role, .text, .ts, .is_player, .is_narrator)
+  player_name            — player character name (or "the adventurer")
+  player.description     — active persona description
+  player.states          — active persona visible states (>=6)
+  intention              — current intention being resolved
+  narration              — narrator response text (extractor context)
+  char.name/description  — current character info
+  char.states            — visible states for current character
+  char.all_states        — all states with raw values (extractor only)
+  chars.list/summary     — all characters with visible states
+  chars.active/active_summary — active characters this round
+  turn.narration         — all narration this turn so far
+  turn.round_narrations  — narrations from current round
+  lore.text              — pre-formatted matched lorebook entries
+  lore.entries           — matched lorebook entry objects
+
+Custom helpers: {{#take array N}}, {{#last array N}}.
+"""
 
 from collections.abc import Callable
 from typing import Any
