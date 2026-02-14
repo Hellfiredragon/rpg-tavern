@@ -200,10 +200,17 @@
 
 /* ── Font Settings ──────────────────────────────────────── */
 
+.font-settings-layout {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
 .font-settings-grid {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
+  flex-shrink: 0;
 }
 
 .font-group-row {
@@ -289,4 +296,89 @@
   border-color: var(--accent);
   color: var(--accent);
   background: var(--accent-glow);
+}
+
+/* ── Font Preview ───────────────────────────────────────── */
+
+.font-preview {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+
+.font-preview-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+}
+
+.font-preview-scene {
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.font-preview-line {
+  line-height: 1.5;
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.font-preview-narration {
+  color: var(--text);
+}
+
+.font-preview-dialog {
+  border-left: 3px solid var(--dialog);
+  background: var(--dialog-bg);
+  padding: 0.3rem 0.5rem;
+  border-radius: 0 4px 4px 0;
+  color: var(--text);
+}
+
+.font-preview-dialog-name {
+  font-weight: 600;
+  color: var(--dialog-light);
+  margin-right: 0.25em;
+}
+
+.font-preview-dialog-emotion {
+  font-size: 0.78em;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-right: 0.25em;
+}
+
+.font-preview-intention {
+  border-left: 3px solid var(--dialog);
+  border: 1px dashed var(--border);
+  border-left: 3px solid var(--dialog);
+  padding: 0.3rem 0.5rem;
+  color: var(--text-muted);
+}
+
+.font-preview-intention-label {
+  font-weight: 600;
+  color: var(--dialog);
+  font-style: normal;
+  margin-right: 0.3em;
+}
+
+.font-preview-heading {
+  color: var(--text-heading);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.font-preview-ui {
+  color: var(--text-muted);
 }

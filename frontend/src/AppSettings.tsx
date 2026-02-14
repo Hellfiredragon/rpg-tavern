@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { FONT_LIST, FONT_GROUPS, FONT_GROUP_LABELS, applyFontSettings, type FontSettings, type FontGroupSettings } from './fontSettings'
+import { FONT_LIST, FONT_GROUPS, FONT_GROUP_LABELS, applyFontSettings, type FontSettings, type FontGroupSettings, type FontGroup } from './fontSettings'
 import './AppSettings.css'
 
 interface LLMConnection {
@@ -28,6 +28,60 @@ interface AppSettingsProps {
 
 function newConnection(): LLMConnection {
   return { name: '', provider_url: '', api_key: '' }
+}
+
+const PREVIEW_SAMPLES: Record<FontGroup, { className: string; content: React.ReactNode }> = {
+  narration: {
+    className: 'font-preview-narration',
+    content: 'The tavern door creaks open, letting in a gust of cold mountain air.',
+  },
+  dialog: {
+    className: 'font-preview-dialog',
+    content: <>
+      <span className="font-preview-dialog-name">Elena</span>
+      <span className="font-preview-dialog-emotion">(whispered)</span>
+      {' The dragon stirs at dusk.'}
+    </>,
+  },
+  intention: {
+    className: 'font-preview-intention',
+    content: <>
+      <span className="font-preview-intention-label">Gareth:</span>
+      {' I want to inspect the old mine entrance.'}
+    </>,
+  },
+  heading: {
+    className: 'font-preview-heading',
+    content: "Dragon's Hollow",
+  },
+  ui: {
+    className: 'font-preview-ui',
+    content: 'Quest Board — 3 adventures available',
+  },
+}
+
+function fontStyle(g: FontGroupSettings): React.CSSProperties {
+  const font = FONT_LIST.find(f => f.name === g.family)
+  const fallback = font ? ({ serif: 'Georgia, serif', 'sans-serif': 'system-ui, sans-serif', monospace: 'monospace', display: 'Georgia, serif' }[font.category] ?? 'Georgia, serif') : 'Georgia, serif'
+  return { fontFamily: `'${g.family}', ${fallback}`, fontSize: `${g.size}px`, fontStyle: g.style }
+}
+
+function FontPreview({ fontSettings }: { fontSettings: FontSettings }) {
+  return (
+    <div className="font-preview">
+      <div className="font-preview-label">Preview</div>
+      <div className="font-preview-scene">
+        {FONT_GROUPS.map(group => {
+          const sample = PREVIEW_SAMPLES[group]
+          return (
+            <div key={group} className={`font-preview-line ${sample.className}`} style={fontStyle(fontSettings[group])}>
+              {sample.content}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 export default function AppSettings({ onWidthChange }: AppSettingsProps) {
@@ -270,41 +324,44 @@ export default function AppSettings({ onWidthChange }: AppSettingsProps) {
 
       <div className="settings-section">
         <h3 className="panel-heading">Font Settings</h3>
-        <div className="font-settings-grid">
-          {FONT_GROUPS.map(group => {
-            const g = settings.font_settings[group]
-            return (
-              <div key={group} className="font-group-row">
-                <span className="font-group-label">{FONT_GROUP_LABELS[group]}</span>
-                <select
-                  className="font-group-family"
-                  value={g.family}
-                  onChange={e => patchFontGroup(group, { family: e.target.value })}
-                >
-                  {FONT_LIST.map(f => (
-                    <option key={f.name} value={f.name}>{f.name}</option>
-                  ))}
-                </select>
-                <div className="font-group-size">
-                  <input
-                    type="number"
-                    min={10}
-                    max={32}
-                    value={g.size}
-                    onChange={e => patchFontGroup(group, { size: Number(e.target.value) })}
-                  />
-                  <span className="font-size-unit">px</span>
+        <div className="font-settings-layout">
+          <div className="font-settings-grid">
+            {FONT_GROUPS.map(group => {
+              const g = settings.font_settings[group]
+              return (
+                <div key={group} className="font-group-row">
+                  <span className="font-group-label">{FONT_GROUP_LABELS[group]}</span>
+                  <select
+                    className="font-group-family"
+                    value={g.family}
+                    onChange={e => patchFontGroup(group, { family: e.target.value })}
+                  >
+                    {FONT_LIST.map(f => (
+                      <option key={f.name} value={f.name}>{f.name}</option>
+                    ))}
+                  </select>
+                  <div className="font-group-size">
+                    <input
+                      type="number"
+                      min={10}
+                      max={32}
+                      value={g.size}
+                      onChange={e => patchFontGroup(group, { size: Number(e.target.value) })}
+                    />
+                    <span className="font-size-unit">px</span>
+                  </div>
+                  <button
+                    className={`font-style-toggle ${g.style === 'italic' ? 'font-style-toggle--active' : ''}`}
+                    onClick={() => patchFontGroup(group, { style: g.style === 'italic' ? 'normal' : 'italic' })}
+                    title={g.style === 'italic' ? 'Switch to normal' : 'Switch to italic'}
+                  >
+                    <i className="fa-solid fa-italic" />
+                  </button>
                 </div>
-                <button
-                  className={`font-style-toggle ${g.style === 'italic' ? 'font-style-toggle--active' : ''}`}
-                  onClick={() => patchFontGroup(group, { style: g.style === 'italic' ? 'normal' : 'italic' })}
-                  title={g.style === 'italic' ? 'Switch to normal' : 'Switch to italic'}
-                >
-                  <i className="fa-solid fa-italic" />
-                </button>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
+          <FontPreview fontSettings={settings.font_settings} />
         </div>
       </div>
     </div>
