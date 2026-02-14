@@ -1,4 +1,4 @@
-"""Tests for persona storage, CRUD, and merge logic."""
+"""Tests for character and persona storage."""
 
 import json
 
@@ -6,7 +6,50 @@ from backend import storage
 from backend.characters import new_persona
 
 
-# ── new_persona ──────────────────────────────────────────────
+# ── Characters ──────────────────────────────────────────
+
+
+def test_get_characters_empty():
+    """Returns [] for a new adventure."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    assert storage.get_characters(adv["slug"]) == []
+
+
+def test_save_and_get_characters_roundtrip():
+    """Save + read round-trip."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    chars = [{"name": "Gareth", "slug": "gareth", "states": {"core": [], "persistent": [], "temporal": []}, "overflow_pending": False}]
+    storage.save_characters(adv["slug"], chars)
+    result = storage.get_characters(adv["slug"])
+    assert len(result) == 1
+    assert result[0]["name"] == "Gareth"
+
+
+def test_embark_writes_characters_json():
+    """Embarking writes characters.json automatically."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    path = storage.adventures_dir() / adv["slug"] / "characters.json"
+    assert path.is_file()
+
+
+def test_get_character_by_slug():
+    """Find a single character by slug."""
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    chars = [
+        {"name": "Gareth", "slug": "gareth", "states": {"core": [], "persistent": [], "temporal": []}, "overflow_pending": False},
+        {"name": "Elena", "slug": "elena", "states": {"core": [], "persistent": [], "temporal": []}, "overflow_pending": False},
+    ]
+    storage.save_characters(adv["slug"], chars)
+    assert storage.get_character(adv["slug"], "gareth")["name"] == "Gareth"
+    assert storage.get_character(adv["slug"], "elena")["name"] == "Elena"
+    assert storage.get_character(adv["slug"], "nobody") is None
+
+
+# ── Personas: new_persona ────────────────────────────────
 
 
 def test_new_persona_structure():
@@ -21,7 +64,7 @@ def test_new_persona_structure():
     assert "chattiness" not in p
 
 
-# ── Global personas CRUD ─────────────────────────────────────
+# ── Personas: Global CRUD ────────────────────────────────
 
 
 def test_global_personas_crud():
@@ -34,18 +77,16 @@ def test_global_personas_crud():
     assert len(result) == 1
     assert result[0]["name"] == "Aldric"
 
-    # Update
     result[0]["description"] = "A wanderer"
     storage.save_global_personas(result)
     reloaded = storage.get_global_personas()
     assert reloaded[0]["description"] == "A wanderer"
 
-    # Delete
     storage.save_global_personas([])
     assert storage.get_global_personas() == []
 
 
-# ── Adventure personas CRUD ──────────────────────────────────
+# ── Personas: Adventure CRUD ─────────────────────────────
 
 
 def test_adventure_personas_crud():
@@ -62,12 +103,11 @@ def test_adventure_personas_crud():
     assert len(result) == 1
     assert result[0]["name"] == "Kira"
 
-    # Delete
     storage.save_adventure_personas(slug, [])
     assert storage.get_adventure_personas(slug) == []
 
 
-# ── Merge logic ──────────────────────────────────────────────
+# ── Personas: Merge logic ────────────────────────────────
 
 
 def test_merged_personas_precedence():
@@ -136,7 +176,7 @@ def test_merged_personas_no_local():
     assert merged[0]["source"] == "global"
 
 
-# ── Embark ────────────────────────────────────────────────────
+# ── Personas: Embark ─────────────────────────────────────
 
 
 def test_embark_creates_empty_personas():
@@ -148,7 +188,7 @@ def test_embark_creates_empty_personas():
     assert json.loads(path.read_text()) == []
 
 
-# ── update_adventure with active_persona ─────────────────────
+# ── Personas: update_adventure with active_persona ───────
 
 
 def test_update_adventure_active_persona():

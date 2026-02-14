@@ -84,28 +84,22 @@ class LLMSequence:
 
 @pytest.mark.asyncio
 async def test_full_flow_single_character(tmp_path):
-    """Player intention → narrator → extractor → char intention → narrator → extractor → lorebook.
+    """Player intention -> narrator -> extractor -> char intention -> narrator -> extractor -> lorebook.
 
     Verifies the exact LLM call sequence and message structure for a single round.
     """
     gareth = new_character("Gareth")
-    gareth["chattiness"] = 100  # always activates
+    gareth["chattiness"] = 100
     adv, slug = _setup_adventure(tmp_path, characters=[gareth])
     story_roles = storage.get_story_roles(slug)
     story_roles["max_rounds"] = 1
 
     llm_seq = LLMSequence([
-        # Call 0: narrator resolves player intention
         "The tavern door creaks open. Gareth looks up from his ale.",
-        # Call 1: extractor for Gareth (Phase 1 — Gareth named in narration)
         json.dumps({"state_changes": [{"category": "temporal", "label": "Alert", "value": 7}]}),
-        # Call 2: Gareth's character intention (round 1)
         "I want to see who just walked in.",
-        # Call 3: narrator resolves Gareth's intention
         "Gareth(cautious): Who goes there?\nHe reaches for his sword hilt.",
-        # Call 4: extractor for Gareth (round 1)
         json.dumps({"state_changes": [{"category": "temporal", "label": "Suspicious", "value": 8}]}),
-        # Call 5: lorebook extractor
         json.dumps({"lorebook_entries": []}),
     ])
 
@@ -120,17 +114,14 @@ async def test_full_flow_single_character(tmp_path):
             characters=storage.get_characters(slug),
         )
 
-    # Exactly 6 LLM calls
     assert llm_seq.call_count == 6
 
-    # Messages: player + narrator (no sandbox)
     msgs = result["messages"]
     assert len(msgs) == 2
     assert msgs[0]["role"] == "player"
     assert msgs[0]["text"] == "I push open the tavern door"
     assert msgs[1]["role"] == "narrator"
 
-    # Narrator segments: Phase 1 narration + round 1 dialog+narration
     segs = msgs[1]["segments"]
     narration_segs = [s for s in segs if s["type"] == "narration" and s["text"].strip()]
     dialog_segs = [s for s in segs if s["type"] == "dialog"]
@@ -139,7 +130,6 @@ async def test_full_flow_single_character(tmp_path):
     assert dialog_segs[0]["character"] == "Gareth"
     assert dialog_segs[0]["emotion"] == "cautious"
 
-    # Character states were updated by extractor
     chars = storage.get_characters(slug)
     temporal_labels = {s["label"] for s in chars[0]["states"]["temporal"]}
     assert "Alert" in temporal_labels
@@ -157,12 +147,11 @@ async def test_full_flow_message_order_with_sandbox(tmp_path):
     story_roles["sandbox"] = True
 
     llm_seq = LLMSequence([
-        "The room is dim.",                                             # narrator phase 1
-        # (no phase 1 extractor — narration doesn't mention Gareth)
-        "I reach for my sword.",                                       # Gareth intention
-        "Gareth(wary): He draws his blade slowly.",                    # narrator round 1
-        json.dumps({"state_changes": []}),                             # extractor round 1
-        json.dumps({"lorebook_entries": []}),                          # lorebook
+        "The room is dim.",
+        "I reach for my sword.",
+        "Gareth(wary): He draws his blade slowly.",
+        json.dumps({"state_changes": []}),
+        json.dumps({"lorebook_entries": []}),
     ])
 
     with patch("backend.pipeline.llm.generate", new_callable=AsyncMock, side_effect=llm_seq):
@@ -178,7 +167,6 @@ async def test_full_flow_message_order_with_sandbox(tmp_path):
 
     msgs = result["messages"]
     roles = [m["role"] for m in msgs]
-    # player → intention → narrator
     assert roles == ["player", "intention", "narrator"]
 
     intention_msg = msgs[1]
@@ -197,12 +185,12 @@ async def test_nonsandbox_hides_intentions(tmp_path):
     story_roles["sandbox"] = False
 
     llm_seq = LLMSequence([
-        "The room is dim.",                    # narrator phase 1
-        json.dumps({"state_changes": []}),     # extractor phase 1
-        "I draw my weapon.",                   # Gareth intention (still generated, just not shown)
-        "Gareth(alert): Who goes there?",      # narrator round 1
-        json.dumps({"state_changes": []}),     # extractor round 1
-        json.dumps({"lorebook_entries": []}),  # lorebook
+        "The room is dim.",
+        json.dumps({"state_changes": []}),
+        "I draw my weapon.",
+        "Gareth(alert): Who goes there?",
+        json.dumps({"state_changes": []}),
+        json.dumps({"lorebook_entries": []}),
     ])
 
     with patch("backend.pipeline.llm.generate", new_callable=AsyncMock, side_effect=llm_seq):
@@ -226,7 +214,7 @@ async def test_nonsandbox_hides_intentions(tmp_path):
 
 @pytest.mark.asyncio
 async def test_multiple_characters_one_round(tmp_path):
-    """Two characters both activate in a single round — each gets intention + resolution."""
+    """Two characters both activate in a single round."""
     gareth = new_character("Gareth")
     gareth["chattiness"] = 100
     elena = new_character("Elena")
@@ -238,25 +226,15 @@ async def test_multiple_characters_one_round(tmp_path):
     story_roles["sandbox"] = True
 
     llm_seq = LLMSequence([
-        # Phase 1
         "A stranger enters. Gareth and Elena notice immediately.",
-        # Extractor for Gareth (named in phase 1)
         json.dumps({"state_changes": []}),
-        # Extractor for Elena (named in phase 1)
         json.dumps({"state_changes": []}),
-        # Round 1: Gareth intention
         "I want to confront the stranger.",
-        # Round 1: narrator resolves Gareth
         "Gareth(stern): State your business.",
-        # Round 1: extractor for Gareth
         json.dumps({"state_changes": []}),
-        # Round 1: Elena intention
         "I'll observe from a distance.",
-        # Round 1: narrator resolves Elena
         "Elena watches quietly from behind the bar.\nElena(curious): Interesting...",
-        # Round 1: extractor for Elena
         json.dumps({"state_changes": []}),
-        # Lorebook extractor
         json.dumps({"lorebook_entries": []}),
     ])
 
@@ -273,12 +251,10 @@ async def test_multiple_characters_one_round(tmp_path):
 
     msgs = result["messages"]
     roles = [m["role"] for m in msgs]
-    # player → intention(Gareth) → intention(Elena) → narrator
     assert roles == ["player", "intention", "intention", "narrator"]
     assert msgs[1]["character"] == "Gareth"
     assert msgs[2]["character"] == "Elena"
 
-    # Narrator segments include dialog from both characters
     segs = msgs[-1]["segments"]
     dialog_chars = [s["character"] for s in segs if s["type"] == "dialog"]
     assert "Gareth" in dialog_chars
@@ -297,18 +273,16 @@ async def test_max_rounds_caps_loop(tmp_path):
     story_roles = storage.get_story_roles(slug)
     story_roles["max_rounds"] = 2
 
-    # Call sequence: narrator, extractor(phase1, Gareth named), then 2 rounds
-    # of (intention, narrator, extractor), then lorebook = 9 calls total
     llm_seq = LLMSequence([
-        "Gareth sits in the corner.",          # 0: narrator phase 1
-        json.dumps({"state_changes": []}),     # 1: extractor phase 1 (Gareth named)
-        "I look around.",                      # 2: Gareth intention (round 1)
-        "Gareth glances about.",               # 3: narrator round 1
-        json.dumps({"state_changes": []}),     # 4: extractor round 1
-        "I keep watching.",                    # 5: Gareth intention (round 2)
-        "Gareth continues to watch.",          # 6: narrator round 2
-        json.dumps({"state_changes": []}),     # 7: extractor round 2
-        json.dumps({"lorebook_entries": []}),  # 8: lorebook
+        "Gareth sits in the corner.",
+        json.dumps({"state_changes": []}),
+        "I look around.",
+        "Gareth glances about.",
+        json.dumps({"state_changes": []}),
+        "I keep watching.",
+        "Gareth continues to watch.",
+        json.dumps({"state_changes": []}),
+        json.dumps({"lorebook_entries": []}),
     ])
 
     with patch("backend.pipeline.llm.generate", new_callable=AsyncMock, side_effect=llm_seq):
@@ -322,11 +296,10 @@ async def test_max_rounds_caps_loop(tmp_path):
             characters=storage.get_characters(slug),
         )
 
-    # Exactly 9 LLM calls: narrator + ext_p1 + 2*(intention + narrator + extractor) + lorebook
     assert llm_seq.call_count == 9
 
 
-# ── Test: No characters → no rounds ──────────────────────
+# ── Test: No characters -> no rounds ──────────────────────
 
 
 @pytest.mark.asyncio
@@ -336,8 +309,8 @@ async def test_no_characters_skips_rounds(tmp_path):
     story_roles = storage.get_story_roles(slug)
 
     llm_seq = LLMSequence([
-        "The empty tavern greets you with silence.",  # narrator phase 1
-        json.dumps({"lorebook_entries": []}),         # lorebook extractor
+        "The empty tavern greets you with silence.",
+        json.dumps({"lorebook_entries": []}),
     ])
 
     with patch("backend.pipeline.llm.generate", new_callable=AsyncMock, side_effect=llm_seq):
@@ -351,13 +324,12 @@ async def test_no_characters_skips_rounds(tmp_path):
             characters=[],
         )
 
-    # Only 2 LLM calls: narrator + lorebook
     assert llm_seq.call_count == 2
     assert len(result["messages"]) == 2
     assert result["messages"][1]["segments"][0]["text"] == "The empty tavern greets you with silence."
 
 
-# ── Test: Character with 0 chattiness not named → not activated ──
+# ── Test: Character with 0 chattiness not named -> not activated ──
 
 
 @pytest.mark.asyncio
@@ -369,9 +341,7 @@ async def test_zero_chattiness_not_named_skips_character(tmp_path):
     story_roles = storage.get_story_roles(slug)
 
     llm_seq = LLMSequence([
-        # narrator phase 1 — does NOT mention Bob
         "The tavern is empty and quiet.",
-        # lorebook extractor
         json.dumps({"lorebook_entries": []}),
     ])
 
@@ -386,7 +356,6 @@ async def test_zero_chattiness_not_named_skips_character(tmp_path):
             characters=storage.get_characters(slug),
         )
 
-    # Only narrator + lorebook — no character rounds
     assert llm_seq.call_count == 2
     assert len(result["messages"]) == 2
 
@@ -403,16 +372,11 @@ async def test_extractor_runs_phase1_for_named_character(tmp_path):
     story_roles = storage.get_story_roles(slug)
 
     llm_seq = LLMSequence([
-        # narrator phase 1 — mentions Gareth
         "Gareth waves from the bar.",
-        # extractor for Gareth (Phase 1)
         json.dumps({"state_changes": [{"category": "temporal", "label": "Friendly", "value": 9}]}),
-        # lorebook extractor
         json.dumps({"lorebook_entries": []}),
     ])
 
-    # Disable intention connection to isolate the Phase 1 extractor
-    # (otherwise Gareth would activate in rounds too since he's named)
     with patch("backend.pipeline.llm.generate", new_callable=AsyncMock, side_effect=llm_seq):
         result = await run_pipeline(
             slug=slug,
@@ -424,10 +388,7 @@ async def test_extractor_runs_phase1_for_named_character(tmp_path):
             characters=storage.get_characters(slug),
         )
 
-    # 3 calls: narrator, extractor, lorebook
     assert llm_seq.call_count == 3
-
-    # Character state was updated
     chars = storage.get_characters(slug)
     assert any(s["label"] == "Friendly" for s in chars[0]["states"]["temporal"])
 
@@ -441,9 +402,7 @@ async def test_extractor_skipped_for_unnamed_character_phase1(tmp_path):
     story_roles = storage.get_story_roles(slug)
 
     llm_seq = LLMSequence([
-        # narrator phase 1 — does NOT mention Bob
         "The tavern is silent.",
-        # lorebook extractor
         json.dumps({"lorebook_entries": []}),
     ])
 
@@ -458,7 +417,6 @@ async def test_extractor_skipped_for_unnamed_character_phase1(tmp_path):
             characters=storage.get_characters(slug),
         )
 
-    # Only 2 calls: narrator + lorebook (no extractor for Bob)
     assert llm_seq.call_count == 2
 
 
@@ -478,12 +436,11 @@ async def test_lorebook_extractor_receives_all_narrations(tmp_path):
     round1_narration = "Gareth inspects the old fireplace."
 
     llm_seq = LLMSequence([
-        phase1_narration,                      # 0: narrator phase 1
-        # (no phase 1 extractor — Gareth not mentioned in phase 1)
-        "I want to check the fireplace.",      # 1: Gareth intention
-        round1_narration,                      # 2: narrator round 1
-        json.dumps({"state_changes": []}),     # 3: extractor round 1
-        json.dumps({"lorebook_entries": []}),  # 4: lorebook extractor
+        phase1_narration,
+        "I want to check the fireplace.",
+        round1_narration,
+        json.dumps({"state_changes": []}),
+        json.dumps({"lorebook_entries": []}),
     ])
 
     with patch("backend.pipeline.llm.generate", new_callable=AsyncMock, side_effect=llm_seq):
@@ -497,7 +454,6 @@ async def test_lorebook_extractor_receives_all_narrations(tmp_path):
             characters=storage.get_characters(slug),
         )
 
-    # The lorebook extractor prompt (last call, index 4) should contain both narrations
     lorebook_prompt = llm_seq.prompt(4)
     assert phase1_narration in lorebook_prompt
     assert round1_narration in lorebook_prompt
@@ -515,11 +471,8 @@ async def test_persona_extractor_runs_when_named(tmp_path):
     story_roles = storage.get_story_roles(slug)
 
     llm_seq = LLMSequence([
-        # narrator phase 1 — mentions Aldric
         "Aldric steps into the dim tavern.",
-        # persona extractor (Aldric named)
         json.dumps({"state_changes": [{"category": "temporal", "label": "Cautious", "value": 8}]}),
-        # lorebook extractor
         json.dumps({"lorebook_entries": []}),
     ])
 
@@ -534,10 +487,7 @@ async def test_persona_extractor_runs_when_named(tmp_path):
             characters=[],
         )
 
-    # 3 calls: narrator, persona extractor, lorebook
     assert llm_seq.call_count == 3
-
-    # Persona states updated in adventure-local storage
     local_personas = storage.get_adventure_personas(slug)
     assert len(local_personas) == 1
     assert any(s["label"] == "Cautious" for s in local_personas[0]["states"]["temporal"])
@@ -553,8 +503,8 @@ async def test_empty_narrator_response(tmp_path):
     story_roles = storage.get_story_roles(slug)
 
     llm_seq = LLMSequence([
-        "",                                    # narrator returns empty
-        json.dumps({"lorebook_entries": []}),  # lorebook extractor
+        "",
+        json.dumps({"lorebook_entries": []}),
     ])
 
     with patch("backend.pipeline.llm.generate", new_callable=AsyncMock, side_effect=llm_seq):
@@ -568,11 +518,9 @@ async def test_empty_narrator_response(tmp_path):
             characters=[],
         )
 
-    # Should still have player + narrator
     assert len(result["messages"]) == 2
     narrator_msg = result["messages"][1]
     assert narrator_msg["role"] == "narrator"
-    # Segments exist even if empty
     assert narrator_msg["segments"] is not None
 
 
@@ -586,17 +534,13 @@ async def test_empty_narrator_with_character_rounds(tmp_path):
     story_roles = storage.get_story_roles(slug)
     story_roles["max_rounds"] = 2
 
-    # Every narrator call returns empty; intentions return text
     async def mock_gen(url, key, prompt):
-        # If prompt contains "Intention" or uses the character_intention template,
-        # we detect it by whether the prompt talks about "what YOU want to do"
         if "what YOU want to do" in prompt or "State what" in prompt:
             return "I want to do something."
         if "state_changes" in prompt or "state changes" in prompt or "State Label" in prompt:
             return json.dumps({"state_changes": []})
         if "lorebook" in prompt.lower() or "world facts" in prompt.lower():
             return json.dumps({"lorebook_entries": []})
-        # Narrator calls return empty
         return ""
 
     with patch("backend.pipeline.llm.generate", new_callable=AsyncMock, side_effect=mock_gen):
@@ -610,12 +554,11 @@ async def test_empty_narrator_with_character_rounds(tmp_path):
             characters=storage.get_characters(slug),
         )
 
-    # Pipeline should not crash
     narrator_msg = result["messages"][-1]
     assert narrator_msg["role"] == "narrator"
 
 
-# ── Test: No intention connection → no character rounds ───
+# ── Test: No intention connection -> no character rounds ───
 
 
 @pytest.mark.asyncio
@@ -627,9 +570,9 @@ async def test_no_intention_connection_skips_rounds(tmp_path):
     story_roles = storage.get_story_roles(slug)
 
     llm_seq = LLMSequence([
-        "Gareth nods at you.",                 # narrator phase 1
-        json.dumps({"state_changes": []}),     # extractor for Gareth
-        json.dumps({"lorebook_entries": []}),  # lorebook
+        "Gareth nods at you.",
+        json.dumps({"state_changes": []}),
+        json.dumps({"lorebook_entries": []}),
     ])
 
     with patch("backend.pipeline.llm.generate", new_callable=AsyncMock, side_effect=llm_seq):
@@ -643,12 +586,11 @@ async def test_no_intention_connection_skips_rounds(tmp_path):
             characters=storage.get_characters(slug),
         )
 
-    # Only 3 calls: narrator + extractor + lorebook. No intention or round narrator.
     assert llm_seq.call_count == 3
-    assert len(result["messages"]) == 2  # player + narrator only
+    assert len(result["messages"]) == 2
 
 
-# ── Test: No extractor connection → states not updated ────
+# ── Test: No extractor connection -> states not updated ────
 
 
 @pytest.mark.asyncio
@@ -661,11 +603,9 @@ async def test_no_extractor_connection_skips_extraction(tmp_path):
     story_roles["max_rounds"] = 1
 
     llm_seq = LLMSequence([
-        "Gareth looks up.",           # narrator phase 1
-        "I want to investigate.",     # Gareth intention
-        "Gareth searches the room.",  # narrator round 1
-        # No extractor calls at all
-        # No lorebook either (extractor conn is used for lorebook)
+        "Gareth looks up.",
+        "I want to investigate.",
+        "Gareth searches the room.",
     ])
 
     with patch("backend.pipeline.llm.generate", new_callable=AsyncMock, side_effect=llm_seq):
@@ -679,10 +619,7 @@ async def test_no_extractor_connection_skips_extraction(tmp_path):
             characters=storage.get_characters(slug),
         )
 
-    # 3 calls: narrator, intention, narrator (no extractors)
     assert llm_seq.call_count == 3
-
-    # Character states unchanged
     chars = storage.get_characters(slug)
     assert chars[0]["states"]["temporal"] == []
 
@@ -694,15 +631,15 @@ async def test_no_extractor_connection_skips_extraction(tmp_path):
 async def test_character_states_ticked_at_end(tmp_path):
     """Character states are ticked (temporal decay, persistent growth) after the pipeline."""
     gareth = new_character("Gareth")
-    gareth["chattiness"] = 0  # won't activate
+    gareth["chattiness"] = 0
     gareth["states"]["temporal"] = [{"label": "Angry", "value": 3}]
     gareth["states"]["persistent"] = [{"label": "Loyal", "value": 10}]
     adv, slug = _setup_adventure(tmp_path, characters=[gareth])
     story_roles = storage.get_story_roles(slug)
 
     llm_seq = LLMSequence([
-        "The room is quiet.",                  # narrator phase 1
-        json.dumps({"lorebook_entries": []}),  # lorebook
+        "The room is quiet.",
+        json.dumps({"lorebook_entries": []}),
     ])
 
     with patch("backend.pipeline.llm.generate", new_callable=AsyncMock, side_effect=llm_seq):
@@ -717,9 +654,7 @@ async def test_character_states_ticked_at_end(tmp_path):
         )
 
     chars = storage.get_characters(slug)
-    # temporal ticks -1: 3-1=2
     assert chars[0]["states"]["temporal"][0]["value"] == 2
-    # persistent ticks +1: 10+1=11
     assert chars[0]["states"]["persistent"][0]["value"] == 11
 
 
@@ -735,8 +670,8 @@ async def test_persona_ticked_at_end(tmp_path):
     story_roles = storage.get_story_roles(slug)
 
     llm_seq = LLMSequence([
-        "The path ahead is dark.",             # narrator
-        json.dumps({"lorebook_entries": []}),  # lorebook
+        "The path ahead is dark.",
+        json.dumps({"lorebook_entries": []}),
     ])
 
     with patch("backend.pipeline.llm.generate", new_callable=AsyncMock, side_effect=llm_seq):
@@ -751,7 +686,6 @@ async def test_persona_ticked_at_end(tmp_path):
         )
 
     local_personas = storage.get_adventure_personas(slug)
-    # temporal ticks -1: 5-1=4
     assert local_personas[0]["states"]["temporal"][0]["value"] == 4
 
 
@@ -769,12 +703,12 @@ async def test_messages_persisted_to_storage(tmp_path):
     story_roles["sandbox"] = True
 
     llm_seq = LLMSequence([
-        "Gareth is here.",                     # narrator phase 1
-        json.dumps({"state_changes": []}),     # extractor
-        "I nod.",                              # Gareth intention
-        "Gareth(friendly): Welcome!",          # narrator round 1
-        json.dumps({"state_changes": []}),     # extractor
-        json.dumps({"lorebook_entries": []}),  # lorebook
+        "Gareth is here.",
+        json.dumps({"state_changes": []}),
+        "I nod.",
+        "Gareth(friendly): Welcome!",
+        json.dumps({"state_changes": []}),
+        json.dumps({"lorebook_entries": []}),
     ])
 
     with patch("backend.pipeline.llm.generate", new_callable=AsyncMock, side_effect=llm_seq):
@@ -788,7 +722,6 @@ async def test_messages_persisted_to_storage(tmp_path):
             characters=storage.get_characters(slug),
         )
 
-    # Messages are persisted
     stored_msgs = storage.get_messages(slug)
     roles = [m["role"] for m in stored_msgs]
     assert roles == ["player", "intention", "narrator"]
@@ -807,16 +740,11 @@ async def test_nickname_triggers_phase1_extractor(tmp_path):
     story_roles = storage.get_story_roles(slug)
 
     llm_seq = LLMSequence([
-        # narrator mentions "Cap" but not "Gareth"
         "Cap raises his mug from the corner.",
-        # extractor for Gareth (triggered by nickname "Cap")
         json.dumps({"state_changes": [{"category": "temporal", "label": "Relaxed", "value": 6}]}),
-        # lorebook
         json.dumps({"lorebook_entries": []}),
     ])
 
-    # Disable intention connection to prevent rounds (nickname in narration_so_far
-    # would activate Gareth in every round despite chattiness=0)
     with patch("backend.pipeline.llm.generate", new_callable=AsyncMock, side_effect=llm_seq):
         await run_pipeline(
             slug=slug,
@@ -846,12 +774,11 @@ async def test_narrator_text_field_matches_segments(tmp_path):
     story_roles["max_rounds"] = 1
 
     llm_seq = LLMSequence([
-        "The door opens.",                     # 0: narrator phase 1
-        # (no phase 1 extractor — Gareth not mentioned)
-        "I greet the newcomer.",               # 1: Gareth intention
-        "Gareth(warm): Welcome, friend!",      # 2: narrator round 1
-        json.dumps({"state_changes": []}),     # 3: extractor round 1
-        json.dumps({"lorebook_entries": []}),  # 4: lorebook
+        "The door opens.",
+        "I greet the newcomer.",
+        "Gareth(warm): Welcome, friend!",
+        json.dumps({"state_changes": []}),
+        json.dumps({"lorebook_entries": []}),
     ])
 
     with patch("backend.pipeline.llm.generate", new_callable=AsyncMock, side_effect=llm_seq):
@@ -866,7 +793,6 @@ async def test_narrator_text_field_matches_segments(tmp_path):
         )
 
     narrator_msg = result["messages"][-1]
-    # text field should contain both phase1 narration and round dialog
     assert "The door opens." in narrator_msg["text"]
     assert "Gareth(warm): Welcome, friend!" in narrator_msg["text"]
 
