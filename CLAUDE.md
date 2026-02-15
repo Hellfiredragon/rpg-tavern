@@ -12,6 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - ALWAYS run `scripts/arch.sh` and `scripts/routes.sh` to verify descriptions are current before finishing
 - ALWAYS update `backend/demo.py` when data model or storage changes so `--demo` generates valid demo data
 - ALWAYS run `git done` when work is done — stages all changes, commits with `.gitmessage`, and pushes. Do NOT ask for confirmation
+- ALWAYS document new helper scripts in the Scripts section of this file
 
 ## Project Overview
 
@@ -56,10 +57,17 @@ cd frontend && bun run build     # Build to backend/static/
 cd frontend && bun run lint      # ESLint
 ```
 
-## Architecture
+## Scripts
 
-Run `scripts/arch.sh` to print the file tree with descriptions extracted from source headers.
-Run `scripts/routes.sh` to print all backend API and frontend page routes.
+```bash
+scripts/arch.sh              # Print file tree with descriptions from source headers
+scripts/routes.sh            # Print all backend API and frontend page routes
+scripts/last.sh              # Show the most recently used adventure
+scripts/last.sh --messages   # Also show messages (last 20)
+scripts/last.sh -m -n 5     # Show last 5 messages (-n 0 for all)
+```
+
+## Architecture
 
 Every source file has a header comment describing its purpose:
 - **Python:** module docstring (`"""..."""`)
