@@ -117,18 +117,21 @@ async def test_full_flow_single_character(tmp_path):
     assert llm_seq.call_count == 6
 
     msgs = result["messages"]
-    assert len(msgs) == 2
     assert msgs[0]["role"] == "player"
     assert msgs[0]["text"] == "I push open the tavern door"
-    assert msgs[1]["role"] == "narrator"
 
-    segs = msgs[1]["segments"]
-    narration_segs = [s for s in segs if s["type"] == "narration" and s["text"].strip()]
-    dialog_segs = [s for s in segs if s["type"] == "dialog"]
-    assert len(narration_segs) >= 1
-    assert len(dialog_segs) == 1
-    assert dialog_segs[0]["character"] == "Gareth"
-    assert dialog_segs[0]["emotion"] == "cautious"
+    # Phase 1: narrator text (narration only, no dialog)
+    assert msgs[1]["role"] == "narrator"
+    assert "tavern door creaks open" in msgs[1]["text"]
+
+    # Intention always stored
+    assert msgs[2]["role"] == "intention"
+
+    # Character round: dialog + narration
+    dialog_msgs = [m for m in msgs if m["role"] == "dialog"]
+    assert len(dialog_msgs) == 1
+    assert dialog_msgs[0]["character"] == "Gareth"
+    assert dialog_msgs[0]["emotion"] == "cautious"
 
     chars = storage.get_characters(slug)
     temporal_labels = {s["label"] for s in chars[0]["states"]["temporal"]}
@@ -137,14 +140,13 @@ async def test_full_flow_single_character(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_full_flow_message_order_with_sandbox(tmp_path):
-    """In sandbox mode, intention messages appear between player and narrator."""
+async def test_full_flow_message_order_with_intentions(tmp_path):
+    """Intentions always appear between narration messages."""
     gareth = new_character("Gareth")
     gareth["chattiness"] = 100
     adv, slug = _setup_adventure(tmp_path, characters=[gareth])
     story_roles = storage.get_story_roles(slug)
     story_roles["max_rounds"] = 1
-    story_roles["sandbox"] = True
 
     llm_seq = LLMSequence([
         "The room is dim.",
@@ -167,46 +169,12 @@ async def test_full_flow_message_order_with_sandbox(tmp_path):
 
     msgs = result["messages"]
     roles = [m["role"] for m in msgs]
-    assert roles == ["player", "intention", "narrator"]
+    # player, narrator(Phase 1), intention, dialog(round)
+    assert roles == ["player", "narrator", "intention", "dialog"]
 
-    intention_msg = msgs[1]
+    intention_msg = msgs[2]
     assert intention_msg["character"] == "Gareth"
     assert intention_msg["text"] == "I reach for my sword."
-
-
-@pytest.mark.asyncio
-async def test_nonsandbox_hides_intentions(tmp_path):
-    """With sandbox=False, intention messages are NOT in the output."""
-    gareth = new_character("Gareth")
-    gareth["chattiness"] = 100
-    adv, slug = _setup_adventure(tmp_path, characters=[gareth])
-    story_roles = storage.get_story_roles(slug)
-    story_roles["max_rounds"] = 1
-    story_roles["sandbox"] = False
-
-    llm_seq = LLMSequence([
-        "The room is dim.",
-        json.dumps({"state_changes": []}),
-        "I draw my weapon.",
-        "Gareth(alert): Who goes there?",
-        json.dumps({"state_changes": []}),
-        json.dumps({"lorebook_entries": []}),
-    ])
-
-    with patch("backend.pipeline.llm.generate", new_callable=AsyncMock, side_effect=llm_seq):
-        result = await run_pipeline(
-            slug=slug,
-            player_message="I look around",
-            adventure=adv,
-            config=_config(),
-            story_roles=story_roles,
-            history=[],
-            characters=storage.get_characters(slug),
-        )
-
-    roles = [m["role"] for m in result["messages"]]
-    assert "intention" not in roles
-    assert roles == ["player", "narrator"]
 
 
 # ── Test: Multiple characters in one round ────────────────
@@ -223,7 +191,6 @@ async def test_multiple_characters_one_round(tmp_path):
     adv, slug = _setup_adventure(tmp_path, characters=[gareth, elena])
     story_roles = storage.get_story_roles(slug)
     story_roles["max_rounds"] = 1
-    story_roles["sandbox"] = True
 
     llm_seq = LLMSequence([
         "A stranger enters. Gareth and Elena notice immediately.",
@@ -250,13 +217,15 @@ async def test_multiple_characters_one_round(tmp_path):
         )
 
     msgs = result["messages"]
-    roles = [m["role"] for m in msgs]
-    assert roles == ["player", "intention", "intention", "narrator"]
-    assert msgs[1]["character"] == "Gareth"
-    assert msgs[2]["character"] == "Elena"
+    # player, narrator(Phase 1), intention(Gareth), dialog(Gareth),
+    # intention(Elena), narrator(Elena watches...), dialog(Elena)
+    intention_msgs = [m for m in msgs if m["role"] == "intention"]
+    assert len(intention_msgs) == 2
+    assert intention_msgs[0]["character"] == "Gareth"
+    assert intention_msgs[1]["character"] == "Elena"
 
-    segs = msgs[-1]["segments"]
-    dialog_chars = [s["character"] for s in segs if s["type"] == "dialog"]
+    dialog_msgs = [m for m in msgs if m["role"] == "dialog"]
+    dialog_chars = [m["character"] for m in dialog_msgs]
     assert "Gareth" in dialog_chars
     assert "Elena" in dialog_chars
 
@@ -326,7 +295,8 @@ async def test_no_characters_skips_rounds(tmp_path):
 
     assert llm_seq.call_count == 2
     assert len(result["messages"]) == 2
-    assert result["messages"][1]["segments"][0]["text"] == "The empty tavern greets you with silence."
+    assert result["messages"][1]["role"] == "narrator"
+    assert result["messages"][1]["text"] == "The empty tavern greets you with silence."
 
 
 # ── Test: Character with 0 chattiness not named -> not activated ──
@@ -498,7 +468,7 @@ async def test_persona_extractor_runs_when_named(tmp_path):
 
 @pytest.mark.asyncio
 async def test_empty_narrator_response(tmp_path):
-    """When narrator returns empty text, pipeline still produces a valid message."""
+    """When narrator returns empty text, pipeline still produces valid output."""
     adv, slug = _setup_adventure(tmp_path)
     story_roles = storage.get_story_roles(slug)
 
@@ -518,16 +488,14 @@ async def test_empty_narrator_response(tmp_path):
             characters=[],
         )
 
-    assert len(result["messages"]) == 2
-    narrator_msg = result["messages"][1]
-    assert narrator_msg["role"] == "narrator"
-    assert narrator_msg["segments"] is not None
+    # Only player message (empty narration produces no narrator messages)
+    assert result["messages"][0]["role"] == "player"
 
 
 @pytest.mark.asyncio
 async def test_empty_narrator_with_character_rounds(tmp_path):
     """When narrator returns empty for both Phase 1 and rounds,
-    empty segments accumulate but the pipeline doesn't crash."""
+    the pipeline doesn't crash."""
     gareth = new_character("Gareth")
     gareth["chattiness"] = 100
     adv, slug = _setup_adventure(tmp_path, characters=[gareth])
@@ -554,8 +522,8 @@ async def test_empty_narrator_with_character_rounds(tmp_path):
             characters=storage.get_characters(slug),
         )
 
-    narrator_msg = result["messages"][-1]
-    assert narrator_msg["role"] == "narrator"
+    # Should have at least player message + intention
+    assert result["messages"][0]["role"] == "player"
 
 
 # ── Test: No intention connection -> no character rounds ───
@@ -700,7 +668,6 @@ async def test_messages_persisted_to_storage(tmp_path):
     adv, slug = _setup_adventure(tmp_path, characters=[gareth])
     story_roles = storage.get_story_roles(slug)
     story_roles["max_rounds"] = 1
-    story_roles["sandbox"] = True
 
     llm_seq = LLMSequence([
         "Gareth is here.",
@@ -724,7 +691,8 @@ async def test_messages_persisted_to_storage(tmp_path):
 
     stored_msgs = storage.get_messages(slug)
     roles = [m["role"] for m in stored_msgs]
-    assert roles == ["player", "intention", "narrator"]
+    # player, narrator(Phase 1), intention, dialog(round)
+    assert roles == ["player", "narrator", "intention", "dialog"]
 
 
 # ── Test: Nickname activates extractor ────────────────────
@@ -761,12 +729,12 @@ async def test_nickname_triggers_phase1_extractor(tmp_path):
     assert any(s["label"] == "Relaxed" for s in chars[0]["states"]["temporal"])
 
 
-# ── Test: Combined segments text field ────────────────────
+# ── Test: Narrator text in individual messages ─────────────
 
 
 @pytest.mark.asyncio
-async def test_narrator_text_field_matches_segments(tmp_path):
-    """The narrator message text field is the plain-text version of all segments."""
+async def test_narrator_text_in_individual_messages(tmp_path):
+    """Each narrator and dialog message contains its own text."""
     gareth = new_character("Gareth")
     gareth["chattiness"] = 100
     adv, slug = _setup_adventure(tmp_path, characters=[gareth])
@@ -792,9 +760,14 @@ async def test_narrator_text_field_matches_segments(tmp_path):
             characters=storage.get_characters(slug),
         )
 
-    narrator_msg = result["messages"][-1]
-    assert "The door opens." in narrator_msg["text"]
-    assert "Gareth(warm): Welcome, friend!" in narrator_msg["text"]
+    narrator_msgs = [m for m in result["messages"] if m["role"] == "narrator"]
+    assert any("The door opens." in m["text"] for m in narrator_msgs)
+
+    dialog_msgs = [m for m in result["messages"] if m["role"] == "dialog"]
+    assert len(dialog_msgs) == 1
+    assert dialog_msgs[0]["text"] == "Welcome, friend!"
+    assert dialog_msgs[0]["character"] == "Gareth"
+    assert dialog_msgs[0]["emotion"] == "warm"
 
 
 # ── Test: Lorebook entries are actually saved ─────────────

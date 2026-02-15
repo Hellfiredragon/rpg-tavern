@@ -82,6 +82,31 @@ def test_build_context_history_format():
     assert lines[2] == "You see a tavern."
 
 
+def test_build_context_dialog_role():
+    """Dialog messages get is_dialog=True and character/emotion fields in enriched msgs."""
+    messages = [
+        {"role": "player", "text": "I enter"},
+        {"role": "narrator", "text": "The door opens."},
+        {"role": "dialog", "character": "Gareth", "emotion": "stern", "text": "Who goes there?"},
+        {"role": "intention", "character": "Gareth", "text": "I want to investigate."},
+    ]
+    ctx = build_context({"title": "T", "description": "D"}, messages, "next")
+
+    # Enriched msgs
+    assert ctx["msgs"][2]["is_dialog"] is True
+    assert ctx["msgs"][2]["is_player"] is False
+    assert ctx["msgs"][2]["is_narrator"] is False
+    assert ctx["msgs"][2]["character"] == "Gareth"
+    assert ctx["msgs"][2]["emotion"] == "stern"
+    # Intention has no is_dialog
+    assert ctx["msgs"][3]["is_dialog"] is False
+    assert ctx["msgs"][3]["character"] == "Gareth"
+
+    # History format
+    assert "Gareth(stern): Who goes there?" in ctx["history"]
+    assert "I want to investigate." in ctx["history"]
+
+
 def test_build_context_empty_messages():
     ctx = build_context({"title": "T", "description": "D"}, [], "hello")
     assert ctx["msgs"] == []

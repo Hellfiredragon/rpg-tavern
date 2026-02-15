@@ -11,7 +11,7 @@ from backend.pipeline import run_pipeline
 
 @pytest.mark.asyncio
 async def test_run_pipeline_basic(tmp_path):
-    """Pipeline produces narrator message with segments."""
+    """Pipeline produces individual narrator messages."""
     storage.init_storage(tmp_path)
     storage.create_template("Test", "A dark tavern")
     adv = storage.embark_template("test", "Run")
@@ -45,13 +45,12 @@ async def test_run_pipeline_basic(tmp_path):
     assert len(result["messages"]) == 2
     assert result["messages"][0]["role"] == "player"
     assert result["messages"][1]["role"] == "narrator"
-    assert result["messages"][1]["segments"] is not None
-    assert result["messages"][1]["segments"][0]["type"] == "narration"
+    assert result["messages"][1]["text"] == "The tavern door swings open."
 
 
 @pytest.mark.asyncio
 async def test_run_pipeline_with_dialog(tmp_path):
-    """Pipeline parses dialog in narrator output into segments."""
+    """Pipeline parses dialog in narrator output into separate dialog messages."""
     storage.init_storage(tmp_path)
     storage.create_template("Test", "A tavern")
     adv = storage.embark_template("test", "Run")
@@ -86,11 +85,14 @@ async def test_run_pipeline_with_dialog(tmp_path):
             characters=storage.get_characters(slug),
         )
 
-    narrator_msg = result["messages"][1]
-    assert len(narrator_msg["segments"]) == 2
-    assert narrator_msg["segments"][0]["type"] == "narration"
-    assert narrator_msg["segments"][1]["type"] == "dialog"
-    assert narrator_msg["segments"][1]["character"] == "Gareth"
+    msgs = result["messages"]
+    assert len(msgs) == 3
+    assert msgs[0]["role"] == "player"
+    assert msgs[1]["role"] == "narrator"
+    assert msgs[1]["text"] == "Gareth looks up."
+    assert msgs[2]["role"] == "dialog"
+    assert msgs[2]["character"] == "Gareth"
+    assert msgs[2]["emotion"] == "stern"
 
 
 @pytest.mark.asyncio
@@ -166,15 +168,21 @@ async def test_run_pipeline_character_loop(tmp_path):
             characters=storage.get_characters(slug),
         )
 
-    narrator_msg = result["messages"][-1]
-    assert narrator_msg["role"] == "narrator"
-    assert len(narrator_msg["segments"]) >= 2
-    assert result["messages"][0]["role"] == "player"
+    # Should have: player, narrator("The tavern is quiet."), intention, dialog
+    msgs = result["messages"]
+    assert msgs[0]["role"] == "player"
+    # Phase 1 narration
+    assert msgs[1]["role"] == "narrator"
+    # Intention always stored
+    assert msgs[2]["role"] == "intention"
+    # Character round resolution
+    assert msgs[3]["role"] == "dialog"
+    assert msgs[3]["character"] == "Gareth"
 
 
 @pytest.mark.asyncio
-async def test_run_pipeline_sandbox_shows_intentions(tmp_path):
-    """In sandbox mode, intention messages are included."""
+async def test_run_pipeline_intentions_always_stored(tmp_path):
+    """Intention messages are always included, regardless of sandbox mode."""
     storage.init_storage(tmp_path)
     storage.create_template("Test", "A tavern")
     adv = storage.embark_template("test", "Run")
@@ -195,7 +203,7 @@ async def test_run_pipeline_sandbox_shows_intentions(tmp_path):
         },
     }
     story_roles = storage.get_story_roles(slug)
-    story_roles["sandbox"] = True
+    story_roles["sandbox"] = False  # sandbox OFF, but intentions still stored
 
     call_count = 0
 
@@ -266,10 +274,9 @@ async def test_run_pipeline_player_name_in_prompt(tmp_path):
         )
 
     assert "Joe" in captured_prompt
-    narrator_msg = result["messages"][1]
-    dialog_segs = [s for s in narrator_msg["segments"] if s["type"] == "dialog"]
-    assert len(dialog_segs) == 1
-    assert dialog_segs[0]["character"] == "Joe"
+    dialog_msgs = [m for m in result["messages"] if m["role"] == "dialog"]
+    assert len(dialog_msgs) == 1
+    assert dialog_msgs[0]["character"] == "Joe"
 
 
 @pytest.mark.asyncio
@@ -400,7 +407,6 @@ async def test_run_pipeline_persona_nicknames_in_known_names(tmp_path):
             characters=[],
         )
 
-    narrator_msg = result["messages"][1]
-    dialog_segs = [s for s in narrator_msg["segments"] if s["type"] == "dialog"]
-    assert len(dialog_segs) == 1
-    assert dialog_segs[0]["character"] == "Al"
+    dialog_msgs = [m for m in result["messages"] if m["role"] == "dialog"]
+    assert len(dialog_msgs) == 1
+    assert dialog_msgs[0]["character"] == "Al"

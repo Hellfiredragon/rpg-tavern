@@ -7,7 +7,7 @@ Template variables (nested paths via dot notation):
   title, description     — adventure metadata
   message                — current player message
   history                — pre-formatted history (> prefix for player lines)
-  msgs                   — message objects for {{#each}} (.role, .text, .ts, .is_player, .is_narrator)
+  msgs                   — message objects for {{#each}} (.role, .text, .ts, .is_player, .is_narrator, .is_dialog, .character, .emotion)
   player_name            — player character name (or "the adventurer")
   player.description     — active persona description
   player.states          — active persona visible states (>=6)
@@ -113,12 +113,19 @@ def build_context(
             "ts": msg.get("ts", ""),
             "is_player": msg["role"] == "player",
             "is_narrator": msg["role"] == "narrator",
+            "is_dialog": msg["role"] == "dialog",
+            "character": msg.get("character", ""),
+            "emotion": msg.get("emotion", ""),
         })
 
     history_parts: list[str] = []
     for msg in messages:
         if msg["role"] == "player":
             history_parts.append(f"> {msg['text']}")
+        elif msg["role"] == "dialog":
+            char = msg.get("character", "?")
+            emo = msg.get("emotion", "")
+            history_parts.append(f"{char}({emo}): {msg['text']}")
         else:
             history_parts.append(msg["text"])
         history_parts.append("")

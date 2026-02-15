@@ -23,8 +23,8 @@ You are the Game Master narrating an RPG adventure.
 
 {{/if}}
 ## Recent History
-{{#last msgs 6}}
-{{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}
+{{#last msgs 20}}
+{{#if is_player}}> {{text}}{{else}}{{#if is_dialog}}{{character}}({{emotion}}): {{text}}{{else}}{{text}}{{/if}}{{/if}}
 
 {{/last}}
 {{#if turn.narration}}
@@ -35,10 +35,11 @@ You are the Game Master narrating an RPG adventure.
 ## Intention to Resolve
 {{intention}}
 
-Narrate the outcome of this intention in the third person. The player \
-character is {{player_name}}. Use character states to inform success or \
-failure — strong states make related actions easier, weak or absent states \
-make them harder.
+Narrate the outcome of this intention in the third person. Begin by \
+describing what the player character ({{player_name}}) does, then show \
+how the world reacts. Use character states to inform success or failure — \
+strong states make related actions easier, weak or absent states make them \
+harder.
 
 Write dialog in this exact format:
 Name(emotion): Dialog text here.
@@ -62,8 +63,8 @@ You are {{char.name}} in an RPG adventure. The player character is \
 {{/each}}
 
 ## Recent History
-{{#last msgs 6}}
-{{#if is_player}}> {{text}}{{else}}{{text}}{{/if}}
+{{#last msgs 20}}
+{{#if is_player}}> {{text}}{{else}}{{#if is_dialog}}{{character}}({{emotion}}): {{text}}{{else}}{{text}}{{/if}}{{/if}}
 
 {{/last}}
 ## What Just Happened

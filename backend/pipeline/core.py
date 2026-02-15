@@ -1,4 +1,7 @@
-"""Main pipeline loop: intention/resolution with character rounds."""
+"""Main pipeline loop: intention/resolution with character rounds.
+
+Emits individual messages per narration paragraph and dialog line (role=narrator
+or role=dialog). Character intentions are always stored (role=intention)."""
 
 import logging
 from datetime import datetime, timezone
@@ -60,7 +63,6 @@ async def run_pipeline(
     now = datetime.now(timezone.utc).isoformat()
     player_msg = {"role": "player", "text": player_message, "ts": now}
     new_messages: list[dict] = [player_msg]
-    all_segments: list[Segment] = []
 
     # Resolve connections
     narrator_conn = _resolve_connection(config, story_roles, "narrator")
@@ -71,7 +73,6 @@ async def run_pipeline(
     extractor_conn = _resolve_connection(config, story_roles, "extractor")
 
     max_rounds = story_roles.get("max_rounds", 3)
-    sandbox = story_roles.get("sandbox", False)
 
     # Player name (fallback for old adventures without the field)
     player_name = adventure.get("player_name", "") or "the adventurer"
@@ -130,6 +131,27 @@ async def run_pipeline(
             **extra,
         )
 
+    # Helper: convert parsed segments into individual messages
+    def _segments_to_messages(segments: list[Segment]) -> list[dict]:
+        msgs: list[dict] = []
+        for seg in segments:
+            if seg["type"] == "dialog":
+                msgs.append({
+                    "role": "dialog",
+                    "character": seg["character"],
+                    "emotion": seg.get("emotion", ""),
+                    "text": seg["text"],
+                    "ts": now,
+                })
+            else:
+                if seg["text"].strip():
+                    msgs.append({
+                        "role": "narrator",
+                        "text": seg["text"],
+                        "ts": now,
+                    })
+        return msgs
+
     # ── Phase 1: Resolve player intention ─────────────────
 
     narration_so_far_parts: list[str] = []
@@ -149,7 +171,7 @@ async def run_pipeline(
         )
 
         segments = parse_narrator_output(narrator_text, known_names)
-        all_segments.extend(segments)
+        new_messages.extend(_segments_to_messages(segments))
         narration_so_far_parts.append(segments_to_text(segments))
 
     narration_so_far = "\n\n".join(narration_so_far_parts)
@@ -245,14 +267,13 @@ async def run_pipeline(
                 int_prompt,
             )
 
-            # Store intention message (visible in sandbox mode)
-            if sandbox:
-                new_messages.append({
-                    "role": "intention",
-                    "character": char["name"],
-                    "text": intention_text.strip(),
-                    "ts": now,
-                })
+            # Store intention message (always visible)
+            new_messages.append({
+                "role": "intention",
+                "character": char["name"],
+                "text": intention_text.strip(),
+                "ts": now,
+            })
 
             # ── Narrator resolves intention ──
             if narrator_prompt_tpl:
@@ -274,7 +295,7 @@ async def run_pipeline(
                 )
 
                 segments = parse_narrator_output(resolution_text, known_names)
-                all_segments.extend(segments)
+                new_messages.extend(_segments_to_messages(segments))
                 resolution_plain = segments_to_text(segments)
                 narration_so_far_parts.append(resolution_plain)
                 narration_so_far = "\n\n".join(narration_so_far_parts)
@@ -373,17 +394,6 @@ async def run_pipeline(
         if not replaced:
             local_personas.append(active_persona)
         storage.save_adventure_personas(slug, local_personas)
-
-    # ── Build narrator message with segments ──────────────
-
-    combined_text = segments_to_text(all_segments)
-    narrator_msg = {
-        "role": "narrator",
-        "text": combined_text,
-        "segments": all_segments,
-        "ts": now,
-    }
-    new_messages.append(narrator_msg)
 
     storage.append_messages(slug, new_messages)
     return {"messages": new_messages}

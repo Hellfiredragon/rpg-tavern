@@ -244,9 +244,21 @@ export default function AdventureView({ slug, kind, initialTab, onTabChange, onW
                     </div>
                   )
                 }
+                if (msg.role === 'dialog') {
+                  return (
+                    <div key={i} className="chat-msg-wrapper">
+                      <div className="chat-msg chat-msg--narrator">
+                        <div className="dialog-card">
+                          <span className="dialog-character">{msg.character}</span>
+                          {msg.emotion && <span className="dialog-emotion">{msg.emotion}</span>}
+                          <span className="dialog-text">{msg.text}</span>
+                        </div>
+                      </div>
+                      {actions}
+                    </div>
+                  )
+                }
                 if (msg.role === 'intention') {
-                  const isSandbox = storyRoles?.sandbox
-                  if (!isSandbox) return null
                   return (
                     <div key={i} className="chat-msg-wrapper">
                       <div className="chat-msg chat-msg--intention">

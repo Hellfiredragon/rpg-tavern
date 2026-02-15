@@ -110,27 +110,16 @@ def create_demo_data() -> None:
     ]
     storage.save_lorebook(adventure["slug"], lorebook_entries)
 
-    # Add demo messages with segment format
+    # Add demo messages — individual messages per narration/dialog line
     now = datetime.now(timezone.utc).isoformat()
     demo_messages = [
-        {
-            "role": "player",
-            "text": "I approach the village elder",
-            "ts": now,
-        },
-        {
-            "role": "narrator",
-            "text": "The elder rises from his bench, eyes narrowing.\n"
-            "Gareth(stern): Another adventurer? We've had enough of those.\n"
-            "Elena(hopeful): Wait, Gareth. Maybe this one can help.",
-            "segments": [
-                {"type": "narration", "text": "The elder rises from his bench, eyes narrowing."},
-                {"type": "dialog", "character": "Gareth", "emotion": "stern", "text": "Another adventurer? We've had enough of those."},
-                {"type": "dialog", "character": "Elena", "emotion": "hopeful", "text": "Wait, Gareth. Maybe this one can help."},
-            ],
-            "ts": now,
-        },
+        {"role": "player", "text": "I approach the village elder", "ts": now},
+        {"role": "narrator", "text": "You approach the village elder. The elder rises from his bench, eyes narrowing.", "ts": now},
+        {"role": "dialog", "character": "Gareth", "emotion": "stern", "text": "Another adventurer? We've had enough of those.", "ts": now},
+        {"role": "dialog", "character": "Elena", "emotion": "hopeful", "text": "Wait, Gareth. Maybe this one can help.", "ts": now},
+        {"role": "intention", "character": "Gareth", "text": "I want to size up this newcomer — are they a real warrior or just another fool?", "ts": now},
+        {"role": "narrator", "text": "Gareth steps forward, his hand resting on the pommel of his sword as he studies you with hard eyes.", "ts": now},
     ]
     storage.append_messages(adventure["slug"], demo_messages)
 
-    print(f"Created {len(DEMO_TEMPLATES)} demo templates + 1 demo adventure + 3 characters + 1 persona + 3 lorebook entries + demo messages.")
+    print(f"Created {len(DEMO_TEMPLATES)} demo templates + 1 demo adventure + 3 characters + 1 persona + 3 lorebook entries + {len(demo_messages)} demo messages.")

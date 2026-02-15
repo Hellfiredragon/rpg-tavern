@@ -48,11 +48,12 @@ export interface ChatSegment {
 }
 
 export interface ChatMessage {
-  role: 'player' | 'narrator' | 'intention'
+  role: 'player' | 'narrator' | 'dialog' | 'intention'
   text: string
   ts: string
   segments?: ChatSegment[]
   character?: string
+  emotion?: string
 }
 
 export interface StoryRoleConfig {
