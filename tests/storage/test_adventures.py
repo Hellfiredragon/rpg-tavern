@@ -118,6 +118,33 @@ def test_delete_adventure_missing():
     assert storage.delete_adventure("nope") is False
 
 
+# ── updated_at ──────────────────────────────────────────
+
+
+def test_embark_sets_updated_at():
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    assert "updated_at" in adv
+    assert adv["updated_at"] == adv["created_at"]
+
+
+def test_update_adventure_sets_updated_at():
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    original = adv["updated_at"]
+    updated = storage.update_adventure(adv["slug"], {"player_name": "Joe"})
+    assert updated["updated_at"] >= original
+
+
+def test_append_messages_touches_updated_at():
+    storage.create_template("Quest", "Desc")
+    adv = storage.embark_template("quest", "Run")
+    original = adv["updated_at"]
+    storage.append_messages(adv["slug"], [{"role": "player", "text": "hello"}])
+    loaded = storage.get_adventure(adv["slug"])
+    assert loaded["updated_at"] >= original
+
+
 # ── Name generation ──────────────────────────────────────
 
 

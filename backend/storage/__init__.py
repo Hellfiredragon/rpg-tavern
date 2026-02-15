@@ -55,6 +55,7 @@ from .adventures import (  # noqa: F401
     generate_adventure_name,
     get_adventure,
     list_adventures,
+    touch_adventure,
     update_adventure,
 )
 

@@ -3,6 +3,7 @@
 import json
 from typing import Any
 
+from .adventures import touch_adventure
 from .core import adventures_dir
 
 
@@ -20,6 +21,7 @@ def append_messages(slug: str, messages: list[dict[str, Any]]) -> None:
     existing = get_messages(slug)
     existing.extend(messages)
     path.write_text(json.dumps(existing, indent=2))
+    touch_adventure(slug)
 
 
 def delete_message(slug: str, index: int) -> list[dict[str, Any]]:
@@ -30,4 +32,5 @@ def delete_message(slug: str, index: int) -> list[dict[str, Any]]:
     messages.pop(index)
     path = adventures_dir() / slug / "messages.json"
     path.write_text(json.dumps(messages, indent=2))
+    touch_adventure(slug)
     return messages

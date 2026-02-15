@@ -45,9 +45,20 @@ def update_adventure(slug: str, fields: dict[str, Any]) -> dict[str, Any] | None
     for key, value in fields.items():
         if key in allowed:
             adventure[key] = value
+    adventure["updated_at"] = datetime.now(timezone.utc).isoformat()
     path = adventures_dir() / f"{slug}.json"
     path.write_text(json.dumps(adventure, indent=2))
     return adventure
+
+
+def touch_adventure(slug: str) -> None:
+    """Update the adventure's updated_at timestamp."""
+    adventure = get_adventure(slug)
+    if adventure is None:
+        return
+    adventure["updated_at"] = datetime.now(timezone.utc).isoformat()
+    path = adventures_dir() / f"{slug}.json"
+    path.write_text(json.dumps(adventure, indent=2))
 
 
 def embark_template(
@@ -71,13 +82,15 @@ def embark_template(
         target_slug = f"{base_slug}-{counter}"
         counter += 1
 
+    now = datetime.now(timezone.utc).isoformat()
     adventure = {
         "title": adventure_title,
         "slug": target_slug,
         "description": template["description"],
         "template_slug": template_slug,
         "player_name": player_name,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": now,
+        "updated_at": now,
     }
     (adventures_dir() / f"{target_slug}.json").write_text(
         json.dumps(adventure, indent=2)
