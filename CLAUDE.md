@@ -59,14 +59,17 @@ Every Python source file has a module docstring (`"""..."""`) describing its pur
 
 ### MCP Integration
 
-- MCP server lives in `backend/mcp_server.py` — exposes `lookup_lorebook` tool
+- MCP server lives in `backend/mcp_server.py` — exposes two tools:
+  - `lookup_lorebook(keys)` — fetch entries by key
+  - `store_lorebook_entry(key, name, description)` — upsert an entry
 - Lorebook loaded from `data/lorebook.json` (or injected via `set_lorebook()` for tests)
-- FastMCP returns one `TextContent` per result entry, each containing a JSON-encoded dict
+- Inspect stored state in tests via `get_lorebook()`
+- FastMCP returns one `TextContent` per result, each containing a JSON-encoded dict
 - In tests: use `mcp.shared.memory.create_connected_server_and_client_session` for in-process MCP
 
 ### Pipeline flow
 
-1. Build narration prompt (system context + lorebook key hints + player input)
-2. Call `llm.generate()` → narration text
-3. Build extraction prompt (narration + key list) → call `llm.generate()` → parse JSON array
-4. Call MCP `lookup_lorebook` with extracted keys → activated lore entries
+1. Narration prompt: player input only (no lorebook) → `llm.generate()` → narration text
+2. Extraction prompt: narration + all existing lorebook entries → `llm.generate()` → JSON array
+3. For each extracted entry: call MCP `store_lorebook_entry` to persist it
+- `TurnResult.stored_entries` — list of entries stored this turn
