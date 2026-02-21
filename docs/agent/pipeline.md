@@ -10,7 +10,7 @@ The pipeline is a sequence of **narrow, specialised LLM calls**. Each stage has 
 
 Every LLM call produces exactly one **output**. The stream is the shared record of the adventure; each stage receives a filtered view of it.
 
-The Narrator's output is a **beat script** — a structured list of narration segments and dialog cues. The orchestrator expands the script: narration beats are appended directly as `narration` messages; dialog cues trigger one **Character Dialog** LLM call each, appending a `dialog` message. Every other stage produces a single message directly.
+The Narrator's output is a **beat script** — a structured list of narration segments and dialog cues. The orchestrator expands the script: narration beats are appended directly as `narration` messages; character cues trigger one **Character Dialog** LLM call each; persona cues trigger one **Persona Dialog** LLM call; persona verbatim beats are appended directly from the player's intention text without any LLM call. Every other stage produces a single message directly.
 
 ---
 
@@ -35,7 +35,7 @@ mood         — (dialog only) emotional register of the speaker, e.g. "tensed",
 
 **`narration`** — action, atmosphere, and scene description. Produced by the Narrator (from its beat script). Never contains spoken words — dialog is always a separate `dialog` message owned by the speaker.
 
-**`dialog`** — spoken words, owned by the character or persona who speaks them. Produced by the Character Dialog stage, one message per cue. Carries a `mood` field that captures the speaker's emotional register at the moment of speaking (e.g. `tensed`, `warm`, `suspicious`). Public — heard by everyone in the scene.
+**`dialog`** — spoken words, owned by the character or persona who speaks them. Produced by the Character Dialog or Persona Dialog stage (one message per cue), or lifted verbatim from the player's intention text. Carries a `mood` field that captures the speaker's emotional register at the moment of speaking (e.g. `tensed`, `warm`, `suspicious`). Public — heard by everyone in the scene.
 
 **`intention`** — what a persona or character declares they want to do. Never shown to other characters during play. Player sees their own; others only in Debug/Sandbox mode.
 
@@ -57,6 +57,7 @@ mood         — (dialog only) emotional register of the speaker, e.g. "tensed",
 | **NPC Intent** (per NPC)    | ✗              | ✓ all past       | ✓ all past       | ◐ own past       | ◐ own     |
 | **Narrator**                | ✓              | ✓ all past       | ✓ all past       | ✓ resolving only | ✗         |
 | **Character Dialog**        | ✗              | ✓ all past       | ✓ all past       | ✗                | ✗         |
+| **Persona Dialog**          | ✗              | ✓ all past       | ✓ all past       | ✗                | ✗         |
 | **Persona Extractor**       | ✗              | ✓ all past       | ✓ all past       | ◐ last own only  | ◐ own     |
 | **Character Extractor**     | ✗              | ✓ all past       | ✓ all past       | ◐ last own only  | ◐ own     |
 | **Lore Extractor**          | ✗              | ✓ current only   | ✓ current only   | ✗                | ✗         |
@@ -67,7 +68,9 @@ mood         — (dialog only) emotional register of the speaker, e.g. "tensed",
 - **The Narrator sees exactly one intention per call** — the one it is currently resolving. Called once per intention, building on the growing narration history within the turn.
 - **The Narrator never sees thoughts.** It narrates observable outcomes, not inner states.
 - **Dialog is public.** All stages treat past `dialog` messages the same as past `narration` — everyone heard what was said.
-- **Character Dialog receives no intentions.** It receives only the narration/dialog history and the cue from the Narrator's beat script (character id, mood, context hint). It does not see the current intention being resolved.
+- **Character Dialog and Persona Dialog receive no intentions.** They receive only the narration/dialog history and the cue from the Narrator's beat script (id, mood, context hint). They do not see the current intention being resolved.
+- **Persona verbatim dialog is never generated.** When the player's intention contains explicit spoken words, the Narrator places a `persona_verbatim` beat in the script. The orchestrator lifts the words directly from the intention and appends them as a persona `dialog` message — no LLM call.
+- **The Narrator resolves what actually happens.** The player's intention is a declaration of will, not a guarantee. The Narrator determines the outcome. A player who intends to fly away without magic will be narrated attempting and failing. The persona's dialog is placed in the beat script at the moment it fits the scene, not necessarily at the start.
 - **Extractors do not see the current round's messages.** They run in parallel with the Narrator beat-script expansion and receive only past narrations and dialogs (before this round). State is determined by intention + world history — the current round's messages will be available to extractors in the *next* round.
 - **The Lore Extractor sees only the current round's narration and dialog** — the new messages just produced. It never re-processes past rounds.
 - **Thoughts are always private** to their owner. No stage receives another character's thoughts.
@@ -102,13 +105,17 @@ TURN START
 ├─ 3. Narrator  ──────────────────────────────────────┐  parallel
 │     Resolves the persona intention.                  │
 │     Produces: beat script (narration beats +         │
-│               dialog cues for any NPC who speaks)    │
-│     Orchestrator expands the script:                 ▼
-│       • narration beat → narrator/narration message  Persona Extractor
-│       • dialog cue    → Character Dialog LLM call    Updates persona state
-│                         → <character_id>/dialog msg  via MCP.
-│     (beats appended in script order; seq assigned    Produces: system message
-│      as each message lands in the stream)            (internal)
+│               persona and character dialog beats)    │
+│     Orchestrator expands the script in order:        ▼
+│       • narration beat     → narrator/narration msg  Persona Extractor
+│       • persona_verbatim   → <persona_id>/dialog msg Updates persona state
+│                              (no LLM call; words     via MCP.
+│                               lifted from intention) Produces: system message
+│       • persona_cue        → Persona Dialog LLM call (internal)
+│                              → <persona_id>/dialog
+│       • cue (character)    → Character Dialog LLM
+│                              → <character_id>/dialog
+│     (seq assigned as each message lands in stream)
 │
 ├─ 4. NPC Activation Order
 │     Determine which NPCs act and in what order:
@@ -126,8 +133,8 @@ TURN START
        ├─ Narrator  ──────────────────────────────────────┐  parallel
        │   Resolves this NPC's intention.                  │
        │   Produces: beat script (narration beats +        │
-       │             dialog cues for the NPC and any       │
-       │             bystanders who react)                  │
+       │             character cues, persona cues, and     │
+       │             persona_verbatim beats as needed)      │
        │   Orchestrator expands beats as above.            ▼
        │                                          Character Extractor
        │                                          Updates NPC state via MCP.
@@ -161,14 +168,20 @@ TURN END — wait for player
 - Produces: a **beat script** — a structured JSON array of beats, in scene order:
   ```json
   [
-    { "type": "narration", "content": "<atmospheric prose, no spoken words>" },
-    { "type": "cue", "character": "<character_id>", "mood": "<emotion>", "context": "<what prompts this speech>" },
-    { "type": "narration", "content": "<continues scene>" }
+    { "type": "narration",        "content": "<atmospheric prose, no spoken words>" },
+    { "type": "persona_verbatim", "mood": "<emotion>",
+      "content": "<exact words lifted from the player's intention>" },
+    { "type": "narration",        "content": "<continues scene>" },
+    { "type": "cue",              "character": "<character_id>", "mood": "<emotion>",
+      "context": "<what prompts this speech>" },
+    { "type": "persona_cue",      "mood": "<emotion>",
+      "context": "<what prompts this persona speech, when player wrote no explicit words>" }
   ]
   ```
 - Writes: nothing
-- Called once per intention. The orchestrator expands the beat script into stream messages: narration beats are appended as `narrator/narration`; each cue triggers one Character Dialog call whose result is appended as `<character_id>/dialog` before the next beat is processed.
-- The Narrator must not write spoken words in narration beats. Any character speech must be a `cue` beat — even single interjections.
+- Called once per intention. The orchestrator expands the beat script in order: `narration` → append narrator message; `persona_verbatim` → append persona dialog message directly (no LLM call); `persona_cue` → fire Persona Dialog LLM → append persona dialog message; `cue` → fire Character Dialog LLM → append character dialog message.
+- The Narrator must not write spoken words in narration beats. All speech — persona or character — must be a beat.
+- The Narrator resolves what actually happens. The player's intention is a declaration of will, not a guarantee of outcome. Impossible actions (flying without magic, lifting a boulder) are narrated as failed attempts.
 
 ### Character Dialog
 - Receives: all past narrations and dialogs, the cue from the Narrator's beat script (`character_id`, `mood`, `context`), injected character state (manifest states only)
@@ -176,6 +189,13 @@ TURN END — wait for player
 - Writes: nothing
 - Fired once per `cue` beat, sequentially, in script order. Each call sees the messages appended by previous beats in the same script expansion (so a character's second line of dialog knows what they just said on their first line).
 - Must produce only the spoken words — no stage directions, no attribution ("he said"), no action. The surrounding narration beats provide that context.
+
+### Persona Dialog
+- Receives: all past narrations and dialogs, the cue from the Narrator's beat script (`mood`, `context`), injected persona description and state (manifest states only)
+- Produces: one `dialog` message — `owner=<persona_id>`, `type=dialog`, `mood=<from cue>`, `content=<spoken words only>`
+- Writes: nothing
+- Fired once per `persona_cue` beat. Not fired for `persona_verbatim` beats — those are appended directly by the orchestrator from the player's intention text.
+- Must produce only the spoken words — no stage directions, no attribution. Must stay consistent with the persona's described voice, tone, and character.
 
 ### Persona Extractor
 - Receives: own last intention, own thoughts, all past narrations and dialogs (not including current round)
@@ -203,7 +223,7 @@ TURN END — wait for player
 - System prompts define role and constraints. World state and the filtered message view are injected alongside.
 - Do not merge two stages into one prompt to save on API calls. Separation is intentional.
 - Every LLM call returns exactly one output. The output type is fixed per stage.
-- The Narrator returns a structured beat script (JSON). Character Dialog returns free-form prose (spoken words only). All other stages return structured pydantic models.
+- The Narrator returns a structured beat script (JSON). Character Dialog and Persona Dialog return free-form prose (spoken words only). All other stages return structured pydantic models.
 - Chain-of-thought scratch-work is permitted inside a stage but must not appear in the returned output.
 
 ### Context Injection — Template Variables
@@ -251,7 +271,7 @@ On `location_change`:
 - Fetch all required world state before each stage runs.
 - Build the correctly filtered message view for each stage per the visibility matrix.
 - Assign `turn_id` (increments per player submission) and `seq` (increments per appended message within a turn) before appending any message to the stream.
-- Expand Narrator beat scripts in order: append each `narration` beat immediately; for each `cue` beat, fire one Character Dialog LLM call and append the returned `dialog` message before advancing to the next beat.
+- Expand Narrator beat scripts in order: `narration` → append immediately; `persona_verbatim` → extract spoken words from the player's intention and append as a persona `dialog` message (no LLM call); `persona_cue` → fire Persona Dialog LLM → append result; `cue` → fire Character Dialog LLM → append result. Advance to the next beat only after the current message is appended.
 - Run the Narrator beat-script expansion and the paired Extractor in parallel where indicated. The Extractor does not wait for the expansion to complete — it runs on the pre-round state.
 - Execute MCP writes after the paired Narrator expansion completes — never before.
 - Log every stage input and output with `turn_id` + `seq` for debugging.
