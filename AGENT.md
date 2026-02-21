@@ -15,6 +15,25 @@
 - ALWAYS run `git done` when work is done — stages all changes, commits with `.gitmessage`, and pushes. Do NOT ask for confirmation
 - ALWAYS document new helper scripts in the Scripts section of this file
 
+## Development Philosophy — Test-Driven from the Backend
+
+Build in this order. Do not skip ahead.
+
+**1. Invent the adventure first.**
+Before writing code, design a concrete scenario: location, characters, a sequence of player inputs, and the expected world outcomes. This scenario is the spec.
+
+**2. Build a scripted LLM stub.**
+Do not use a real LLM during development. Write a deterministic fake that maps known inputs (e.g. `"I look around"`) to fixed outputs (narration text, structured extraction results). The stub must be sufficient to drive a full turn of the pipeline end-to-end.
+
+**3. Write the test before the implementation.**
+Express the adventure scenario as a test: submit intentions, assert messages appended to the stream, assert world state mutations via MCP. The test should fail first. Then implement until it passes.
+
+**4. Implement and iterate on the backend only.**
+Build out multiple adventure scenarios — different locations, NPC interactions, state changes — until the pipeline behaviour and data model are stable. Capture all settings and tunable values in config files, not hardcoded in logic.
+
+**5. Let config files reveal the UI.**
+The frontend is built last, once the backend has settled. Configuration that accumulates in JSON config files during backend development shows exactly what the UI needs to expose. Do not design UI screens speculatively.
+
 ## Load Context Rules
 
 | You are working on…                        | Load this file                  |
