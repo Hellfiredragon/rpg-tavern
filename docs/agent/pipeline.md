@@ -8,7 +8,9 @@
 
 The pipeline is a sequence of **narrow, specialised LLM calls**. Each stage has one job. No stage does everything. Stages are composable and independently replaceable.
 
-Every LLM call produces exactly one **message** appended to the adventure's message stream. The stream is the shared record of the adventure; each stage receives a filtered view of it.
+Every LLM call produces exactly one **output**. The stream is the shared record of the adventure; each stage receives a filtered view of it.
+
+The Narrator's output is a **beat script** — a structured list of narration segments and dialog cues. The orchestrator expands the script: narration beats are appended directly as `narration` messages; dialog cues trigger one **Character Dialog** LLM call each, appending a `dialog` message. Every other stage produces a single message directly.
 
 ---
 
@@ -22,15 +24,18 @@ An adventure is a sequence of messages. Every pipeline stage reads from and appe
 owner        — who produced this message
              system | narrator | <persona_id> | <character_id>
 type         — what kind of content it carries
-             narration | intention | thought | scene_marker
+             narration | dialog | intention | thought | scene_marker
 turn_id      — which player turn produced it (increments each time the player submits)
-seq          — position within the turn (narration and extractions share the same turn_id)
+seq          — position within the turn (increments per message, including dialog)
 content      — the message text
+mood         — (dialog only) emotional register of the speaker, e.g. "tensed", "warm", "cautious"
 ```
 
 ### Message Types
 
-**`narration`** — what happened in the world. Produced by the Narrator after each intention. The primary output the player reads. May include action, dialog, atmosphere.
+**`narration`** — action, atmosphere, and scene description. Produced by the Narrator (from its beat script). Never contains spoken words — dialog is always a separate `dialog` message owned by the speaker.
+
+**`dialog`** — spoken words, owned by the character or persona who speaks them. Produced by the Character Dialog stage, one message per cue. Carries a `mood` field that captures the speaker's emotional register at the moment of speaking (e.g. `tensed`, `warm`, `suspicious`). Public — heard by everyone in the scene.
 
 **`intention`** — what a persona or character declares they want to do. Never shown to other characters during play. Player sees their own; others only in Debug/Sandbox mode.
 
@@ -46,24 +51,27 @@ content      — the message text
 
 ✓ = visible &nbsp; ✗ = not visible &nbsp; ◐ = own only
 
-| Stage                    | `scene_marker` | `narration`      | `intention`      | `thought` |
-|--------------------------|----------------|------------------|------------------|-----------|
-| **Persona Intent**       | ✗              | ✓ all past       | ◐ own past       | ◐ own     |
-| **NPC Intent** (per NPC) | ✗              | ✓ all past       | ◐ own past       | ◐ own     |
-| **Narrator**             | ✓              | ✓ all past       | ✓ resolving only | ✗         |
-| **Persona Extractor**    | ✗              | ✓ all past       | ◐ last own only  | ◐ own     |
-| **Character Extractor**  | ✗              | ✓ all past       | ◐ last own only  | ◐ own     |
-| **Lore Extractor**       | ✗              | ✓ current only   | ✗                | ✗         |
+| Stage                       | `scene_marker` | `narration`      | `dialog`         | `intention`      | `thought` |
+|-----------------------------|----------------|------------------|------------------|------------------|-----------|
+| **Persona Intent**          | ✗              | ✓ all past       | ✓ all past       | ◐ own past       | ◐ own     |
+| **NPC Intent** (per NPC)    | ✗              | ✓ all past       | ✓ all past       | ◐ own past       | ◐ own     |
+| **Narrator**                | ✓              | ✓ all past       | ✓ all past       | ✓ resolving only | ✗         |
+| **Character Dialog**        | ✗              | ✓ all past       | ✓ all past       | ✗                | ✗         |
+| **Persona Extractor**       | ✗              | ✓ all past       | ✓ all past       | ◐ last own only  | ◐ own     |
+| **Character Extractor**     | ✗              | ✓ all past       | ✓ all past       | ◐ last own only  | ◐ own     |
+| **Lore Extractor**          | ✗              | ✓ current only   | ✓ current only   | ✗                | ✗         |
 
 **Key rules:**
 
 - **NPCs see their own past intentions but no others'.** They know what they themselves have previously declared, and what the world has narrated — nothing about what any other character intends.
 - **The Narrator sees exactly one intention per call** — the one it is currently resolving. Called once per intention, building on the growing narration history within the turn.
 - **The Narrator never sees thoughts.** It narrates observable outcomes, not inner states.
-- **Extractors do not see the current narration.** They run in parallel with the Narrator and receive only past narrations (before this round). State is determined by intention + world history — if a thief intends to steal, their morality is affected by that intention regardless of whether the narrator says they succeeded. The narration from this round will be available to extractors in the *next* round.
-- **The Lore Extractor sees only the current round's narration** — the single new narration just produced. It never re-processes past narrations.
+- **Dialog is public.** All stages treat past `dialog` messages the same as past `narration` — everyone heard what was said.
+- **Character Dialog receives no intentions.** It receives only the narration/dialog history and the cue from the Narrator's beat script (character id, mood, context hint). It does not see the current intention being resolved.
+- **Extractors do not see the current round's messages.** They run in parallel with the Narrator beat-script expansion and receive only past narrations and dialogs (before this round). State is determined by intention + world history — the current round's messages will be available to extractors in the *next* round.
+- **The Lore Extractor sees only the current round's narration and dialog** — the new messages just produced. It never re-processes past rounds.
 - **Thoughts are always private** to their owner. No stage receives another character's thoughts.
-- **Player visibility (UI):** narrations + own intentions + own thoughts in normal mode. All intentions visible in Debug/Sandbox mode only.
+- **Player visibility (UI):** narrations + dialogs + own intentions + own thoughts in normal mode. All intentions visible in Debug/Sandbox mode only.
 
 ### State Visibility Threshold
 
@@ -78,7 +86,7 @@ This allows internal state (e.g. a slowly building rage, a hidden curse) to infl
 
 ## Turn Structure
 
-A **turn** begins when the player submits an intention and ends when the pipeline returns to waiting for the player. The narrator fires multiple times within a single turn — once for the persona, once per activated NPC.
+A **turn** begins when the player submits an intention and ends when the pipeline returns to waiting for the player. The Narrator fires once per intention (persona + each activated NPC), producing a beat script the orchestrator expands into interleaved narration and dialog messages.
 
 ```
 TURN START
@@ -91,14 +99,16 @@ TURN START
 │     Player chooses active persona and writes an intention (optionally a thought first).
 │     Produces: thought? + intention (owner = persona)
 │
-├─ 3. Narrator  ─────────────────────────────┐  parallel
-│     Resolves the persona intention.         │
-│     Produces: narration (owner = narrator)  │
-│                                             ▼
-│                                    Persona Extractor
-│                                    Updates persona state (mana, wounds,
-│                                    morality, mood, …) via MCP.
-│                                    Produces: system message (internal)
+├─ 3. Narrator  ──────────────────────────────────────┐  parallel
+│     Resolves the persona intention.                  │
+│     Produces: beat script (narration beats +         │
+│               dialog cues for any NPC who speaks)    │
+│     Orchestrator expands the script:                 ▼
+│       • narration beat → narrator/narration message  Persona Extractor
+│       • dialog cue    → Character Dialog LLM call    Updates persona state
+│                         → <character_id>/dialog msg  via MCP.
+│     (beats appended in script order; seq assigned    Produces: system message
+│      as each message lands in the stream)            (internal)
 │
 ├─ 4. NPC Activation Order
 │     Determine which NPCs act and in what order:
@@ -110,20 +120,22 @@ TURN START
 └─ 5. For each activated NPC (in order):
        │
        ├─ NPC Intent
-       │   NPC sees own past intentions and all past narrations.
+       │   NPC sees own past intentions, narrations, and dialogs.
        │   Produces: thought? + intention (owner = character)
        │
-       ├─ Narrator  ─────────────────────────────┐  parallel
-       │   Resolves this NPC's intention.         │
-       │   Produces: narration (owner = narrator) │
-       │                                          ▼
-       │                                 Character Extractor
-       │                                 Updates NPC state (mood, wounds,
-       │                                 abilities, …) via MCP.
-       │                                 Produces: system message (internal)
+       ├─ Narrator  ──────────────────────────────────────┐  parallel
+       │   Resolves this NPC's intention.                  │
+       │   Produces: beat script (narration beats +        │
+       │             dialog cues for the NPC and any       │
+       │             bystanders who react)                  │
+       │   Orchestrator expands beats as above.            ▼
+       │                                          Character Extractor
+       │                                          Updates NPC state via MCP.
+       │                                          Produces: system message
+       │                                          (internal)
        │
        └─ Lore Extractor
-           Reads the new narration only.
+           Reads all narration + dialog from the current round.
            Extracts new or changed world facts → writes via MCP.
            Produces: system message (internal)
 
@@ -145,28 +157,43 @@ TURN END — wait for player
 - Writes: nothing
 
 ### Narrator
-- Receives: scene markers, all past narrations, the single intention being resolved, injected world state (location, relevant lore)
-- Produces: `narration`
+- Receives: scene markers, all past narrations and dialogs, the single intention being resolved, injected world state (location, relevant lore), injected character list for the scene
+- Produces: a **beat script** — a structured JSON array of beats, in scene order:
+  ```json
+  [
+    { "type": "narration", "content": "<atmospheric prose, no spoken words>" },
+    { "type": "cue", "character": "<character_id>", "mood": "<emotion>", "context": "<what prompts this speech>" },
+    { "type": "narration", "content": "<continues scene>" }
+  ]
+  ```
 - Writes: nothing
-- Called once per intention. Each call has the narrations from earlier in the same turn available, so the story flows continuously within a turn.
+- Called once per intention. The orchestrator expands the beat script into stream messages: narration beats are appended as `narrator/narration`; each cue triggers one Character Dialog call whose result is appended as `<character_id>/dialog` before the next beat is processed.
+- The Narrator must not write spoken words in narration beats. Any character speech must be a `cue` beat — even single interjections.
+
+### Character Dialog
+- Receives: all past narrations and dialogs, the cue from the Narrator's beat script (`character_id`, `mood`, `context`), injected character state (manifest states only)
+- Produces: one `dialog` message — `owner=<character_id>`, `type=dialog`, `mood=<from cue>`, `content=<spoken words only>`
+- Writes: nothing
+- Fired once per `cue` beat, sequentially, in script order. Each call sees the messages appended by previous beats in the same script expansion (so a character's second line of dialog knows what they just said on their first line).
+- Must produce only the spoken words — no stage directions, no attribution ("he said"), no action. The surrounding narration beats provide that context.
 
 ### Persona Extractor
-- Receives: own last intention, own thoughts, all past narrations (not including current round)
+- Receives: own last intention, own thoughts, all past narrations and dialogs (not including current round)
 - Produces: `system` (internal summary of changes)
 - Writes: persona state via MCP (mana, wounds, morality, status effects, inventory, …)
 - Runs in parallel with the Narrator. State is driven by what the persona *intended*, grounded in the world history leading up to this moment — not by what the narrator ultimately resolves. A failed theft still costs morality; an attempted spell still drains mana.
 
 ### Character Extractor
-- Receives: own last intention, own thoughts, all past narrations (not including current round)
+- Receives: own last intention, own thoughts, all past narrations and dialogs (not including current round)
 - Produces: `system` (internal summary of changes)
 - Writes: character state via MCP (mood, wounds, magical state, …)
-- Runs in parallel with the Narrator. Same principle as the Persona Extractor — intent drives state change, not narrated outcome.
+- Runs in parallel with the Narrator beat-script expansion. Same principle as the Persona Extractor — intent drives state change, not narrated outcome.
 
 ### Lore Extractor
-- Receives: the current round's narration only (the single new narration just produced), injected current lorebook snapshot
+- Receives: all narration and dialog messages from the current round (every beat the Narrator just produced and expanded), injected current lorebook snapshot
 - Produces: `system` (internal summary of extracted facts)
 - Writes: lorebook via MCP
-- Scoped strictly to the current narration. Never re-processes past narrations. Extracts only facts that are new or changed.
+- Scoped strictly to the current round. Never re-processes past rounds. Extracts only facts that are new or changed.
 
 ---
 
@@ -175,9 +202,9 @@ TURN END — wait for player
 - Each stage has its own system prompt. System prompts are not shared between stages.
 - System prompts define role and constraints. World state and the filtered message view are injected alongside.
 - Do not merge two stages into one prompt to save on API calls. Separation is intentional.
-- Every LLM call returns exactly one message. The output type is fixed per stage.
-- Narrator prose is the only free-form text output. All other stages return structured pydantic models.
-- Chain-of-thought scratch-work is permitted inside a stage but must not appear in the returned message.
+- Every LLM call returns exactly one output. The output type is fixed per stage.
+- The Narrator returns a structured beat script (JSON). Character Dialog returns free-form prose (spoken words only). All other stages return structured pydantic models.
+- Chain-of-thought scratch-work is permitted inside a stage but must not appear in the returned output.
 
 ### Context Injection — Template Variables
 
@@ -192,7 +219,7 @@ Prompts are Handlebars templates. Available variables per stage:
 | `{{chars.summary}}`           | Narrative summary of all characters in scene             |
 | `{{turn.narration}}`          | Current turn's narration (where available)               |
 | `{{lore.text}}`               | Lorebook entries relevant to the current context         |
-| `{{msgs}}`                    | Filtered message stream; enriched with `is_dialog`, `character`, `emotion` fields |
+| `{{msgs}}`                    | Filtered message stream (narration, dialog, intention, thought per visibility rules) |
 
 Use `{{#last msgs 20}}` to limit message history passed to a prompt.
 
@@ -223,9 +250,10 @@ On `location_change`:
 - Inject scene markers when location or scene state changes.
 - Fetch all required world state before each stage runs.
 - Build the correctly filtered message view for each stage per the visibility matrix.
-- Assign `turn_id` (increments per player submission) and `seq` (increments per message within a turn) before appending any message to the stream.
-- Run Narrator and Extractor in parallel where indicated.
-- Execute MCP writes after the paired Narrator call completes — never before.
+- Assign `turn_id` (increments per player submission) and `seq` (increments per appended message within a turn) before appending any message to the stream.
+- Expand Narrator beat scripts in order: append each `narration` beat immediately; for each `cue` beat, fire one Character Dialog LLM call and append the returned `dialog` message before advancing to the next beat.
+- Run the Narrator beat-script expansion and the paired Extractor in parallel where indicated. The Extractor does not wait for the expansion to complete — it runs on the pre-round state.
+- Execute MCP writes after the paired Narrator expansion completes — never before.
 - Log every stage input and output with `turn_id` + `seq` for debugging.
 
 ---
