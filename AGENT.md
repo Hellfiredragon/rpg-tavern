@@ -14,6 +14,7 @@
 - ALWAYS use semantic commit prefixes: `feat(topic):`, `fix(topic):`, `chore(topic):`, `refactor(topic):`, `test(topic):`, `docs(topic):`
 - ALWAYS run `git done` when work is done — stages all changes, commits with `.gitmessage`, and pushes. Do NOT ask for confirmation
 - ALWAYS document new helper scripts in the Scripts section of this file
+- ALWAYS create a `current_plan_NNN.md` in the repo root when agreeing on a new plan with the user. NNN is a zero-padded incrementing number starting at 001. Find the highest existing number with `ls current_plan_*.md` and increment. The plan file must list every step with a status checkbox (`- [ ]` / `- [x]`). Update the checkboxes as steps are completed.
 
 ## Development Philosophy — Test-Driven from the Backend
 
