@@ -48,13 +48,14 @@ NARRATOR_T1 = json.dumps([
         "type": "cue",
         "character": "brunolf",
         "mood": "neutral",
+        "intention": "I'll offer the newcomer a drink and get a read on him.",
         "context": "Newcomer walked in soaked and armed. Brunolf is sizing him up.",
     },
     {
         "type": "narration",
         "content": (
-            "He sets a clay mug in front of you without being asked, "
-            "his eyes flicking briefly to the sword at your hip."
+            "Brunolf sets a clay mug in front of Aldric without being asked, "
+            "his eyes flicking briefly to the sword at Aldric's hip."
         ),
     },
 ])
@@ -81,7 +82,7 @@ NARRATOR_T2 = json.dumps([
     {
         "type": "narration",
         "content": (
-            "Brunolf's expression tightens. He glances toward the corner "
+            "Brunolf's expression tightens. Brunolf glances toward the corner "
             "and lowers his voice."
         ),
     },
@@ -89,6 +90,7 @@ NARRATOR_T2 = json.dumps([
         "type": "cue",
         "character": "brunolf",
         "mood": "tensed",
+        "intention": "I'll tell him what I know — carefully.",
         "context": (
             "Aldric asked directly about Isolde. Brunolf knows about "
             "the bandits and her suspicious arrival two nights ago."
@@ -96,12 +98,13 @@ NARRATOR_T2 = json.dumps([
     },
     {
         "type": "narration",
-        "content": "He refills your mug without asking.",
+        "content": "Brunolf refills Aldric's mug without asking.",
     },
     {
         "type": "cue",
         "character": "brunolf",
         "mood": "tensed",
+        "intention": "I'll warn him about the road trouble.",
         "context": "Continue — warn about bandit trouble on the Millhaven-Estfeld road.",
     },
 ])
@@ -140,14 +143,16 @@ NARRATOR_T3_PLAYER = json.dumps([
 ])
 
 NARRATOR_T3_ISOLDE = json.dumps([
-    {"type": "narration", "content": "The merchant sets down her cup and crosses the room."},
+    {"type": "narration", "content": "Isolde sets down her cup and crosses the room."},
     {
         "type": "cue", "character": "isolde", "mood": "desperate",
+        "intention": "I want to test if this stranger is reliable.",
         "context": "Isolde approaches and sizes up the sellsword.",
     },
-    {"type": "narration", "content": "She stops beside you."},
+    {"type": "narration", "content": "Isolde stops beside Aldric."},
     {
         "type": "cue", "character": "isolde", "mood": "desperate",
+        "intention": "I'll name my destination and show I can pay.",
         "context": "Isolde names her destination and offers payment.",
     },
 ])
@@ -339,8 +344,8 @@ class TestTurn1:
             llm=stub_t1,
             rng=random.Random(1234),
         )
-        # intention + narration + dialog(brunolf) + narration = 4
-        assert len(messages) == 4
+        # intention + narration + intention(brunolf) + dialog(brunolf) + narration = 5
+        assert len(messages) == 5
 
     async def test_message_sequence(self, storage: Storage, stub_t1: StubLLM) -> None:
         messages = await run_turn(
@@ -354,8 +359,9 @@ class TestTurn1:
         assert [(m.seq, m.owner, m.type) for m in messages] == [
             (1, "aldric",   "intention"),
             (2, "narrator", "narration"),
-            (3, "brunolf",  "dialog"),
-            (4, "narrator", "narration"),
+            (3, "brunolf",  "intention"),  # from cue intention field
+            (4, "brunolf",  "dialog"),
+            (5, "narrator", "narration"),
         ]
 
     async def test_all_turn_id_1(self, storage: Storage, stub_t1: StubLLM) -> None:
@@ -411,7 +417,7 @@ class TestTurn1:
             llm=stub_t1,
             rng=random.Random(1234),
         )
-        assert len(storage.get_messages("broken-compass")) == 4
+        assert len(storage.get_messages("broken-compass")) == 5
 
     async def test_no_lore_after_turn1(
         self, storage: Storage, stub_t1: StubLLM
@@ -459,13 +465,15 @@ class TestTurn2:
             rng=random.Random(1234),
         )
         assert [(m.seq, m.owner, m.type) for m in messages] == [
-            (5,  "aldric",   "intention"),
-            (6,  "narrator", "narration"),
-            (7,  "aldric",   "dialog"),    # persona_verbatim
-            (8,  "narrator", "narration"),
-            (9,  "brunolf",  "dialog"),    # cue 1
-            (10, "narrator", "narration"),
-            (11, "brunolf",  "dialog"),    # cue 2
+            (6,  "aldric",   "intention"),
+            (7,  "narrator", "narration"),
+            (8,  "aldric",   "dialog"),    # persona_verbatim
+            (9,  "narrator", "narration"),
+            (10, "brunolf",  "intention"), # cue 1 intention
+            (11, "brunolf",  "dialog"),    # cue 1 dialog
+            (12, "narrator", "narration"),
+            (13, "brunolf",  "intention"), # cue 2 intention
+            (14, "brunolf",  "dialog"),    # cue 2 dialog
         ]
 
     async def test_persona_verbatim_lifted_from_intention(
@@ -538,11 +546,14 @@ class TestTurn2:
         )
         types = [m.type for m in messages]
         # narration must appear between the two brunolf dialog messages
-        brunolf_idxs = [i for i, m in enumerate(messages) if m.owner == "brunolf"]
-        assert brunolf_idxs[1] - brunolf_idxs[0] > 1, (
-            "Expected a narration beat between the two Brunolf dialog messages"
+        brunolf_dialog_idxs = [
+            i for i, m in enumerate(messages)
+            if m.owner == "brunolf" and m.type == "dialog"
+        ]
+        assert brunolf_dialog_idxs[1] - brunolf_dialog_idxs[0] > 1, (
+            "Expected narration (and an intention) between the two Brunolf dialog messages"
         )
-        assert types[brunolf_idxs[0] + 1] == "narration"
+        assert types[brunolf_dialog_idxs[0] + 1] == "narration"
 
     async def test_lore_entry_created(
         self, storage_after_t1: Storage, stub_t2: StubLLM
@@ -570,8 +581,8 @@ class TestTurn2:
             llm=stub_t2,
             rng=random.Random(1234),
         )
-        # 4 from turn 1 + 7 from turn 2
-        assert len(storage_after_t1.get_messages("broken-compass")) == 11
+        # 5 from turn 1 + 9 from turn 2
+        assert len(storage_after_t1.get_messages("broken-compass")) == 14
 
     async def test_brunolf_state_applied(
         self, storage_after_t1: Storage, stub_t2: StubLLM
@@ -680,8 +691,9 @@ class TestTurn3:
             llm=stub_t3,
         )
         # player: intention + narration = 2
-        # isolde: intention + narration + dialog + narration + dialog = 5
-        assert len(messages) == 7
+        # isolde round: intention(npc_intent) + narration + intention(cue1) + dialog(cue1)
+        #               + narration + intention(cue2) + dialog(cue2) = 7
+        assert len(messages) == 9
 
     async def test_all_llm_responses_consumed(
         self, storage_after_t2: Storage, stub_t3: StubLLM

@@ -99,6 +99,8 @@ async def run_turn(
 
         elif beat_type == "cue":
             char_id = beat["character"]
+            if beat.get("intention"):
+                _append(owner=char_id, type="intention", content=beat["intention"])
             text = await llm("character_dialog", _dialog_prompt(beat, new_messages))
             _append(
                 owner=char_id, type="dialog",
@@ -160,6 +162,8 @@ async def run_turn(
                 _append(owner="narrator", type="narration", content=beat["content"])
             elif beat_type == "cue":
                 char_id = beat["character"]
+                if beat.get("intention"):
+                    _append(owner=char_id, type="intention", content=beat["intention"])
                 text = await llm("character_dialog", _dialog_prompt(beat, new_messages))
                 _append(owner=char_id, type="dialog", content=text.strip(), mood=beat.get("mood"))
                 npc_char_ids_spoken.add(char_id)
@@ -289,8 +293,8 @@ def _narrator_prompt(
         f"History:\n{history_text}\n\n"
         f"Intention: {intention}\n\n"
         "Return a beat script as a JSON array. Each element is one of:\n"
-        '  {"type":"narration","content":"<prose, no spoken words>"}\n'
-        '  {"type":"cue","character":"<id>","mood":"<emotion>","context":"<hint>"}\n'
+        "  {\"type\":\"narration\",\"content\":\"<prose using character names, never you/your>\"}\n"
+        '  {"type":"cue","character":"<id>","mood":"<emotion>","intention":"<first-person intent>","context":"<hint>"}\n'
         '  {"type":"persona_verbatim","mood":"<emotion>","content":"<exact words from intention>"}\n'
         '  {"type":"persona_cue","mood":"<emotion>","context":"<hint>"}\n'
         "Return only the JSON array, no other text."

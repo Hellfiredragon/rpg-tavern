@@ -113,7 +113,9 @@ TURN START
 │                               lifted from intention) Produces: system message
 │       • persona_cue        → Persona Dialog LLM call (internal)
 │                              → <persona_id>/dialog
-│       • cue (character)    → Character Dialog LLM
+│       • cue (character)    → if intention field present:
+│                                <character_id>/intention msg
+│                              → Character Dialog LLM
 │                              → <character_id>/dialog
 │     (seq assigned as each message lands in stream)
 │
@@ -173,6 +175,7 @@ TURN END — wait for player
       "content": "<exact words lifted from the player's intention>" },
     { "type": "narration",        "content": "<continues scene>" },
     { "type": "cue",              "character": "<character_id>", "mood": "<emotion>",
+      "intention": "<first-person declaration of what the character wants to do (optional)>",
       "context": "<what prompts this speech>" },
     { "type": "persona_cue",      "mood": "<emotion>",
       "context": "<what prompts this persona speech, when player wrote no explicit words>" }
@@ -181,6 +184,7 @@ TURN END — wait for player
 - Writes: nothing
 - Called once per intention. The orchestrator expands the beat script in order: `narration` → append narrator message; `persona_verbatim` → append persona dialog message directly (no LLM call); `persona_cue` → fire Persona Dialog LLM → append persona dialog message; `cue` → fire Character Dialog LLM → append character dialog message.
 - The Narrator must not write spoken words in narration beats. All speech — persona or character — must be a beat.
+- Narration beats must use character and persona names, never second-person pronouns ("you", "your") or generic pronouns for named characters. Write "Aldric steps forward" not "You step forward". Write "Brunolf sets a mug down" not "He sets a mug down".
 - The Narrator resolves what actually happens. The player's intention is a declaration of will, not a guarantee of outcome. Impossible actions (flying without magic, lifting a boulder) are narrated as failed attempts.
 
 ### Character Dialog
@@ -271,7 +275,7 @@ On `location_change`:
 - Fetch all required world state before each stage runs.
 - Build the correctly filtered message view for each stage per the visibility matrix.
 - Assign `turn_id` (increments per player submission) and `seq` (increments per appended message within a turn) before appending any message to the stream.
-- Expand Narrator beat scripts in order: `narration` → append immediately; `persona_verbatim` → extract spoken words from the player's intention and append as a persona `dialog` message (no LLM call); `persona_cue` → fire Persona Dialog LLM → append result; `cue` → fire Character Dialog LLM → append result. Advance to the next beat only after the current message is appended.
+- Expand Narrator beat scripts in order: `narration` → append immediately; `persona_verbatim` → extract spoken words from the player's intention and append as a persona `dialog` message (no LLM call); `persona_cue` → fire Persona Dialog LLM → append result; `cue` → if beat has `intention` field, append `owner=<character_id>, type=intention` message first, then fire Character Dialog LLM → append `dialog` result. Advance to the next beat only after all messages for that beat are appended.
 - Run the Narrator beat-script expansion and the paired Extractor in parallel where indicated. The Extractor does not wait for the expansion to complete — it runs on the pre-round state.
 - Execute MCP writes after the paired Narrator expansion completes — never before.
 - Log every stage input and output with `turn_id` + `seq` for debugging.
