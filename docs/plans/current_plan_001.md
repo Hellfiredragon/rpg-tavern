@@ -220,9 +220,9 @@ Step 3  (visibility matrix)
 
 ## Status
 
-- [ ] Step 1 — State change schema + storage methods
-- [ ] Step 2 — Wire extractors to storage
-- [ ] Step 3 — Message visibility matrix
-- [ ] Step 4 — NPC activation + intent stage
-- [ ] Step 5 — Context injection
-- [ ] Step 6 — MCP layer
+- [x] Step 1 — State change schema + storage methods
+- [x] Step 2 — Wire extractors to storage
+- [x] Step 3 — Message visibility matrix
+- [x] Step 4 — NPC activation + intent stage
+- [x] Step 5 — Context injection
+- [x] Step 6 — MCP layer
