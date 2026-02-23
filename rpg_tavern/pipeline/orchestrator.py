@@ -8,19 +8,23 @@ Turn flow:
        persona_verbatim → append persona/dialog from beat content (no LLM call)
        persona_cue      → call persona_dialog LLM → append persona/dialog
        cue              → call character_dialog LLM → append character/dialog
-  4. Call persona_extractor (state changes not yet applied in this iteration).
-  5. Call lore_extractor → parse entries → upsert into lorebook.
-  6. Persist all new messages to storage.
+                          track char_id in char_ids_spoken
+  4. Call persona_extractor → parse ExtractorResult → apply state changes.
+  5. For each char_id in char_ids_spoken: call character_extractor → apply.
+  6. Call lore_extractor → parse entries → upsert into lorebook.
+  7. Persist all new messages to storage.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import random
 from typing import Any
 
 from rpg_tavern.llm import LLM
-from rpg_tavern.models import Message
+from rpg_tavern.mcp import InProcessMcpClient, McpClient
+from rpg_tavern.models import Character, ExtractorResult, Message
 from rpg_tavern.storage import Storage
 
 logger = logging.getLogger(__name__)
@@ -33,14 +37,21 @@ async def run_turn(
     persona_id: str,
     intention: str,
     llm: LLM,
+    mcp: McpClient | None = None,
+    rng: random.Random | None = None,
 ) -> list[Message]:
     """Execute one player turn and return the new messages appended this turn."""
+    if rng is None:
+        rng = random.Random()
+    if mcp is None:
+        mcp = InProcessMcpClient(storage)
 
     existing = storage.get_messages(adventure_slug)
     turn_id = max((m.turn_id for m in existing), default=0) + 1
     seq = max((m.seq for m in existing), default=0)
 
     new_messages: list[Message] = []
+    char_ids_spoken: set[str] = set()
 
     def _append(owner: str, type: str, content: str, mood: str | None = None) -> Message:
         nonlocal seq
@@ -57,7 +68,12 @@ async def run_turn(
     _append(owner=persona_id, type="intention", content=intention)
 
     # 2. Narrator
-    narrator_output = await llm("narrator", _narrator_prompt(adventure_slug, storage, intention, existing))
+    characters = storage.get_characters(adventure_slug)
+    personas = storage.get_personas(adventure_slug)
+    narrator_output = await llm(
+        "narrator",
+        _narrator_prompt(adventure_slug, storage, intention, existing, characters, personas),
+    )
     beats = _parse_beat_script(narrator_output)
 
     # 3. Beat expansion
@@ -82,29 +98,116 @@ async def run_turn(
             )
 
         elif beat_type == "cue":
+            char_id = beat["character"]
             text = await llm("character_dialog", _dialog_prompt(beat, new_messages))
             _append(
-                owner=beat["character"], type="dialog",
+                owner=char_id, type="dialog",
                 content=text.strip(), mood=beat.get("mood"),
             )
+            char_ids_spoken.add(char_id)
 
         else:
             logger.warning("Unknown beat type %r — skipped", beat_type)
 
-    # 4. Persona extractor (state changes deferred to a future iteration)
-    await llm("persona_extractor", _extractor_prompt(persona_id, intention))
+    # 4. Persona extractor → apply state changes via MCP
+    persona_ext_output = await llm("persona_extractor", _extractor_prompt(persona_id, intention))
+    persona_result = _parse_extractor_output(persona_ext_output)
+    if persona_result.state_changes:
+        mcp.update_persona_state(adventure_slug, persona_id, persona_result.state_changes)
 
-    # 5. Lore extractor
+    # 5. Character extractors — one per character that spoke this round
+    for char_id in char_ids_spoken:
+        char_ext_output = await llm("character_extractor", _extractor_prompt(char_id, ""))
+        char_result = _parse_extractor_output(char_ext_output)
+        if char_result.state_changes:
+            mcp.update_character_state(adventure_slug, char_id, char_result.state_changes)
+
+    # 6. Lore extractor (player round)
     round_msgs = [m for m in new_messages if m.type in ("narration", "dialog")]
     lore_output = await llm("lore_extractor", _lore_prompt(round_msgs))
     lore_entries = _parse_lore_output(lore_output)
-    if lore_entries:
-        storage.append_lorebook_entries(adventure_slug, lore_entries)
+    for entry in lore_entries:
+        mcp.store_lorebook_entry(adventure_slug, entry["key"], entry["content"])
 
-    # 6. Persist
+    # 7. NPC activation loop
+    activated = activate_npcs(characters, rng)
+    for npc in activated:
+        # a. NPC declares intention
+        npc_all_msgs = existing + new_messages
+        npc_intent_text = await llm(
+            "npc_intent", _npc_intent_prompt(npc, npc_all_msgs)
+        )
+        _append(owner=npc.id, type="intention", content=npc_intent_text.strip())
+
+        # b. Narrator resolves NPC intention → beat script
+        npc_chars = storage.get_characters(adventure_slug)
+        npc_personas = storage.get_personas(adventure_slug)
+        npc_narrator_output = await llm(
+            "narrator",
+            _narrator_prompt(
+                adventure_slug, storage,
+                npc_intent_text.strip(),
+                existing + new_messages[:-1],  # all msgs except the just-appended intention
+                npc_chars, npc_personas,
+            ),
+        )
+        npc_beats = _parse_beat_script(npc_narrator_output)
+        npc_char_ids_spoken: set[str] = set()
+
+        for beat in npc_beats:
+            beat_type = beat.get("type")
+            if beat_type == "narration":
+                _append(owner="narrator", type="narration", content=beat["content"])
+            elif beat_type == "cue":
+                char_id = beat["character"]
+                text = await llm("character_dialog", _dialog_prompt(beat, new_messages))
+                _append(owner=char_id, type="dialog", content=text.strip(), mood=beat.get("mood"))
+                npc_char_ids_spoken.add(char_id)
+            elif beat_type == "persona_verbatim":
+                _append(owner=persona_id, type="dialog", content=beat["content"], mood=beat.get("mood"))
+            elif beat_type == "persona_cue":
+                text = await llm("persona_dialog", _dialog_prompt(beat, new_messages))
+                _append(owner=persona_id, type="dialog", content=text.strip(), mood=beat.get("mood"))
+            else:
+                logger.warning("NPC round: unknown beat type %r — skipped", beat_type)
+
+        # c. Character extractors for this NPC round (via MCP)
+        for char_id in npc_char_ids_spoken:
+            char_ext_output = await llm("character_extractor", _extractor_prompt(char_id, ""))
+            char_result = _parse_extractor_output(char_ext_output)
+            if char_result.state_changes:
+                mcp.update_character_state(adventure_slug, char_id, char_result.state_changes)
+
+        # d. Lore extractor for this NPC's sub-round (messages after NPC's intention)
+        npc_intention_seq = next(
+            m.seq for m in reversed(new_messages) if m.type == "intention" and m.owner == npc.id
+        )
+        npc_lore_msgs = [
+            m for m in new_messages
+            if m.type in ("narration", "dialog") and m.seq > npc_intention_seq
+        ]
+        npc_lore_output = await llm("lore_extractor", _lore_prompt(npc_lore_msgs))
+        npc_lore_entries = _parse_lore_output(npc_lore_output)
+        for entry in npc_lore_entries:
+            mcp.store_lorebook_entry(adventure_slug, entry["key"], entry["content"])
+
+    # 8. Persist
     storage.append_messages(adventure_slug, new_messages)
 
     return new_messages
+
+
+def activate_npcs(characters: list[Character], rng: random.Random) -> list[Character]:
+    """Return the characters that activate this round.
+
+    Baked characters always activate. Others activate if their chattiness
+    score beats a 0–100 roll.
+    """
+    activated = []
+    for char in characters:
+        if char.baked or rng.randint(0, 100) < char.chattiness:
+            activated.append(char)
+    return activated
 
 
 # ---------------------------------------------------------------------------
@@ -121,6 +224,15 @@ def _parse_beat_script(output: str) -> list[dict[str, Any]]:
     return beats
 
 
+def _parse_extractor_output(output: str) -> ExtractorResult:
+    try:
+        data = json.loads(output)
+        return ExtractorResult.model_validate(data)
+    except (json.JSONDecodeError, Exception):
+        logger.warning("Extractor returned invalid JSON: %r", output)
+        return ExtractorResult()
+
+
 def _parse_lore_output(output: str) -> list[dict]:
     try:
         data = json.loads(output)
@@ -135,15 +247,45 @@ def _parse_lore_output(output: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def _narrator_prompt(
-    slug: str, storage: Storage, intention: str, history: list[Message]
+    slug: str,
+    storage: Storage,
+    intention: str,
+    history: list[Message],
+    characters: list[Character],
+    personas: list,
 ) -> str:
     adv = storage.get_adventure(slug)
     setting = adv.setting if adv else ""
     history_text = "\n".join(
         f"[{m.type}:{m.owner}] {m.content}" for m in history[-20:]
     )
+    # Manifest states: value >= 6
+    char_context_lines = []
+    for char in characters:
+        manifest = [s for s in char.states if s.get("value", 0) >= 6]
+        state_str = (
+            ", ".join(f"{s['label']}={s['value']}" for s in manifest)
+            if manifest else "none"
+        )
+        char_context_lines.append(
+            f"  {char.name} ({char.id}): {char.description} [states: {state_str}]"
+        )
+    persona_context_lines = []
+    for persona in personas:
+        manifest = [s for s in persona.states if s.get("value", 0) >= 6]
+        state_str = (
+            ", ".join(f"{s['label']}={s['value']}" for s in manifest)
+            if manifest else "none"
+        )
+        persona_context_lines.append(
+            f"  {persona.name} ({persona.id}): {persona.description} [states: {state_str}]"
+        )
+    char_section = "\n".join(char_context_lines) or "  (none)"
+    persona_section = "\n".join(persona_context_lines) or "  (none)"
     return (
         f"Setting: {setting}\n\n"
+        f"Characters:\n{char_section}\n\n"
+        f"Personas:\n{persona_section}\n\n"
         f"History:\n{history_text}\n\n"
         f"Intention: {intention}\n\n"
         "Return a beat script as a JSON array. Each element is one of:\n"
@@ -171,6 +313,28 @@ def _extractor_prompt(persona_id: str, intention: str) -> str:
         f"Persona: {persona_id}\n"
         f"Intention: {intention}\n\n"
         'Return JSON: {"state_changes": []}'
+    )
+
+
+def _npc_intent_prompt(npc: Character, history: list[Message]) -> str:
+    history_text = "\n".join(
+        f"[{m.type}:{m.owner}] {m.content}"
+        for m in history[-20:]
+        if m.type in ("narration", "dialog")
+        or (m.type == "intention" and m.owner == npc.id)
+    )
+    manifest = [s for s in npc.states if s.get("value", 0) >= 6]
+    state_str = (
+        ", ".join(f"{s['label']}={s['value']}" for s in manifest)
+        if manifest else "none"
+    )
+    return (
+        f"Character: {npc.name} ({npc.id})\n"
+        f"Description: {npc.description}\n"
+        f"Manifest states: {state_str}\n\n"
+        f"Scene so far:\n{history_text}\n\n"
+        "Declare one intention for this character right now. "
+        "Return only the intention text, nothing else."
     )
 
 

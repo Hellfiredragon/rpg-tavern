@@ -3,7 +3,7 @@
 import pytest
 from pathlib import Path
 
-from rpg_tavern.models import Adventure, Character, Message, Persona
+from rpg_tavern.models import Adventure, Character, Message, Persona, StateChange
 from rpg_tavern.storage import Storage
 
 
@@ -234,3 +234,142 @@ class TestLorebook:
         storage.append_lorebook_entries(adventure.slug, [{"key": "a", "content": "A."}])
         storage.append_lorebook_entries(adventure.slug, [{"key": "b", "content": "B."}])
         assert len(storage.get_lorebook(adventure.slug)) == 2
+
+
+# ---------------------------------------------------------------------------
+# State changes
+# ---------------------------------------------------------------------------
+
+class TestCharacterStateChanges:
+    def _char(self, storage: Storage, adventure: Adventure) -> None:
+        storage.save_character(
+            adventure.slug,
+            Character(id="brunolf", name="Brunolf", description="Innkeeper."),
+        )
+
+    def test_apply_adds_new_entry(
+        self, storage: Storage, adventure: Adventure
+    ) -> None:
+        self._char(storage, adventure)
+        storage.apply_character_state_changes(
+            adventure.slug, "brunolf",
+            [StateChange(category="temporal", label="Cautious", value=3)],
+        )
+        char = storage.get_characters(adventure.slug)[0]
+        entry = next(s for s in char.states if s["label"] == "Cautious")
+        assert entry["value"] == 3
+        assert entry["category"] == "temporal"
+
+    def test_apply_upserts_existing_entry(
+        self, storage: Storage, adventure: Adventure
+    ) -> None:
+        self._char(storage, adventure)
+        storage.apply_character_state_changes(
+            adventure.slug, "brunolf",
+            [StateChange(category="temporal", label="Cautious", value=3)],
+        )
+        storage.apply_character_state_changes(
+            adventure.slug, "brunolf",
+            [StateChange(category="temporal", label="Cautious", value=7)],
+        )
+        chars = storage.get_characters(adventure.slug)
+        cautious = [s for s in chars[0].states if s["label"] == "Cautious"]
+        assert len(cautious) == 1
+        assert cautious[0]["value"] == 7
+
+    def test_clamps_value_above_10(
+        self, storage: Storage, adventure: Adventure
+    ) -> None:
+        self._char(storage, adventure)
+        storage.apply_character_state_changes(
+            adventure.slug, "brunolf",
+            [StateChange(category="core", label="Strength", value=15)],
+        )
+        char = storage.get_characters(adventure.slug)[0]
+        entry = next(s for s in char.states if s["label"] == "Strength")
+        assert entry["value"] == 10
+
+    def test_clamps_value_below_0(
+        self, storage: Storage, adventure: Adventure
+    ) -> None:
+        self._char(storage, adventure)
+        storage.apply_character_state_changes(
+            adventure.slug, "brunolf",
+            [StateChange(category="core", label="Strength", value=-5)],
+        )
+        char = storage.get_characters(adventure.slug)[0]
+        entry = next(s for s in char.states if s["label"] == "Strength")
+        assert entry["value"] == 0
+
+    def test_category_isolation(
+        self, storage: Storage, adventure: Adventure
+    ) -> None:
+        """Same label in different categories → two separate entries."""
+        self._char(storage, adventure)
+        storage.apply_character_state_changes(
+            adventure.slug, "brunolf",
+            [
+                StateChange(category="temporal", label="Alert", value=4),
+                StateChange(category="persistent", label="Alert", value=8),
+            ],
+        )
+        char = storage.get_characters(adventure.slug)[0]
+        temporal = next(s for s in char.states if s["category"] == "temporal")
+        persistent = next(s for s in char.states if s["category"] == "persistent")
+        assert temporal["value"] == 4
+        assert persistent["value"] == 8
+
+    def test_raises_for_missing_character(
+        self, storage: Storage, adventure: Adventure
+    ) -> None:
+        with pytest.raises(ValueError, match="no-one"):
+            storage.apply_character_state_changes(
+                adventure.slug, "no-one",
+                [StateChange(category="temporal", label="X", value=1)],
+            )
+
+
+class TestPersonaStateChanges:
+    def _persona(self, storage: Storage, adventure: Adventure) -> None:
+        storage.save_persona(
+            adventure.slug,
+            Persona(id="aldric", name="Aldric", description="Sellsword."),
+        )
+
+    def test_apply_adds_new_entry(
+        self, storage: Storage, adventure: Adventure
+    ) -> None:
+        self._persona(storage, adventure)
+        storage.apply_persona_state_changes(
+            adventure.slug, "aldric",
+            [StateChange(category="persistent", label="Reputation", value=6)],
+        )
+        persona = storage.get_personas(adventure.slug)[0]
+        entry = next(s for s in persona.states if s["label"] == "Reputation")
+        assert entry["value"] == 6
+
+    def test_apply_upserts_existing_entry(
+        self, storage: Storage, adventure: Adventure
+    ) -> None:
+        self._persona(storage, adventure)
+        storage.apply_persona_state_changes(
+            adventure.slug, "aldric",
+            [StateChange(category="persistent", label="Reputation", value=4)],
+        )
+        storage.apply_persona_state_changes(
+            adventure.slug, "aldric",
+            [StateChange(category="persistent", label="Reputation", value=9)],
+        )
+        persona = storage.get_personas(adventure.slug)[0]
+        entries = [s for s in persona.states if s["label"] == "Reputation"]
+        assert len(entries) == 1
+        assert entries[0]["value"] == 9
+
+    def test_raises_for_missing_persona(
+        self, storage: Storage, adventure: Adventure
+    ) -> None:
+        with pytest.raises(ValueError, match="ghost"):
+            storage.apply_persona_state_changes(
+                adventure.slug, "ghost",
+                [StateChange(category="temporal", label="X", value=1)],
+            )

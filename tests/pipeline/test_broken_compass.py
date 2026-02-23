@@ -21,6 +21,8 @@ This test is the spec. It will fail until the pipeline modules are implemented.
 """
 
 import json
+import random
+
 import pytest
 
 from rpg_tavern.models import Character, Persona
@@ -61,6 +63,10 @@ BRUNOLF_DIALOG_T1 = "Rough night to be on the road. You come far?"
 
 EXTRACTOR_EMPTY = json.dumps({"state_changes": []})
 LORE_EMPTY = json.dumps({"entries": []})
+
+BRUNOLF_EXTRACTOR_T2 = json.dumps({"state_changes": [
+    {"category": "temporal", "label": "Cautious", "value": 3},
+]})
 
 NARRATOR_T2 = json.dumps([
     {
@@ -120,6 +126,39 @@ LORE_T2 = json.dumps({
         }
     ]
 })
+
+# ---------------------------------------------------------------------------
+# Turn 3 stub data — Aldric sits quietly; Isolde (baked) approaches him.
+# ---------------------------------------------------------------------------
+
+INTENTION_T3 = "I sit quietly and watch the room."
+
+ISOLDE_INTENT = "The sellsword knows about the road. I'll approach him."
+
+NARRATOR_T3_PLAYER = json.dumps([
+    {"type": "narration", "content": "You settle back and nurse your drink."},
+])
+
+NARRATOR_T3_ISOLDE = json.dumps([
+    {"type": "narration", "content": "The merchant sets down her cup and crosses the room."},
+    {
+        "type": "cue", "character": "isolde", "mood": "desperate",
+        "context": "Isolde approaches and sizes up the sellsword.",
+    },
+    {"type": "narration", "content": "She stops beside you."},
+    {
+        "type": "cue", "character": "isolde", "mood": "desperate",
+        "context": "Isolde names her destination and offers payment.",
+    },
+])
+
+ISOLDE_DIALOG_A = "You look like someone who knows how to use that."
+ISOLDE_DIALOG_B = "I need to reach Estfeld by tomorrow night. I can pay well."
+
+ISOLDE_EXTRACTOR = json.dumps({"state_changes": [
+    {"category": "temporal", "label": "Frightened", "value": 6},
+    {"category": "temporal", "label": "Desperate",  "value": 5},
+]})
 
 
 # ---------------------------------------------------------------------------
@@ -214,20 +253,34 @@ def storage(tmp_path: pytest.TempPathFactory) -> Storage:
 @pytest.fixture
 def stub_t1() -> StubLLM:
     return StubLLM({
-        "narrator":          [NARRATOR_T1],
-        "character_dialog":  [BRUNOLF_DIALOG_T1],
-        "persona_extractor": [EXTRACTOR_EMPTY],
-        "lore_extractor":    [LORE_EMPTY],
+        "narrator":            [NARRATOR_T1],
+        "character_dialog":    [BRUNOLF_DIALOG_T1],
+        "character_extractor": [EXTRACTOR_EMPTY],  # brunolf spoke once
+        "persona_extractor":   [EXTRACTOR_EMPTY],
+        "lore_extractor":      [LORE_EMPTY],
     })
 
 
 @pytest.fixture
 def stub_t2() -> StubLLM:
     return StubLLM({
-        "narrator":          [NARRATOR_T2],
-        "character_dialog":  [BRUNOLF_DIALOG_T2_A, BRUNOLF_DIALOG_T2_B],
-        "persona_extractor": [EXTRACTOR_EMPTY],
-        "lore_extractor":    [LORE_T2],
+        "narrator":            [NARRATOR_T2],
+        "character_dialog":    [BRUNOLF_DIALOG_T2_A, BRUNOLF_DIALOG_T2_B],
+        "character_extractor": [BRUNOLF_EXTRACTOR_T2],  # brunolf spoke twice → one extractor call
+        "persona_extractor":   [EXTRACTOR_EMPTY],
+        "lore_extractor":      [LORE_T2],
+    })
+
+
+@pytest.fixture
+def stub_t3() -> StubLLM:
+    return StubLLM({
+        "narrator":            [NARRATOR_T3_PLAYER, NARRATOR_T3_ISOLDE],
+        "npc_intent":          [ISOLDE_INTENT],
+        "character_dialog":    [ISOLDE_DIALOG_A, ISOLDE_DIALOG_B],
+        "character_extractor": [ISOLDE_EXTRACTOR],
+        "persona_extractor":   [EXTRACTOR_EMPTY],
+        "lore_extractor":      [LORE_EMPTY, LORE_EMPTY],  # player round + Isolde round
     })
 
 
@@ -240,8 +293,34 @@ async def storage_after_t1(storage: Storage, stub_t1: StubLLM) -> Storage:
         persona_id="aldric",
         intention=INTENTION_T1,
         llm=stub_t1,
+        rng=random.Random(1234),  # seed where neither NPC activates
     )
     return storage
+
+
+@pytest.fixture
+async def storage_after_t2(
+    storage_after_t1: Storage, stub_t2: StubLLM
+) -> Storage:
+    """Storage with turns 1–2 committed. Characters updated for T3 (Isolde baked)."""
+    await run_turn(
+        storage=storage_after_t1,
+        adventure_slug="broken-compass",
+        persona_id="aldric",
+        intention=INTENTION_T2,
+        llm=stub_t2,
+        rng=random.Random(1234),
+    )
+    # Prepare T3: Brunolf won't activate (chattiness=0), Isolde always activates (baked)
+    chars = storage_after_t1.get_characters("broken-compass")
+    for char in chars:
+        if char.id == "brunolf":
+            char.chattiness = 0
+            storage_after_t1.save_character("broken-compass", char)
+        elif char.id == "isolde":
+            char.baked = True
+            storage_after_t1.save_character("broken-compass", char)
+    return storage_after_t1
 
 
 # ---------------------------------------------------------------------------
@@ -258,6 +337,7 @@ class TestTurn1:
             persona_id="aldric",
             intention=INTENTION_T1,
             llm=stub_t1,
+            rng=random.Random(1234),
         )
         # intention + narration + dialog(brunolf) + narration = 4
         assert len(messages) == 4
@@ -269,6 +349,7 @@ class TestTurn1:
             persona_id="aldric",
             intention=INTENTION_T1,
             llm=stub_t1,
+            rng=random.Random(1234),
         )
         assert [(m.seq, m.owner, m.type) for m in messages] == [
             (1, "aldric",   "intention"),
@@ -284,6 +365,7 @@ class TestTurn1:
             persona_id="aldric",
             intention=INTENTION_T1,
             llm=stub_t1,
+            rng=random.Random(1234),
         )
         assert all(m.turn_id == 1 for m in messages)
 
@@ -296,6 +378,7 @@ class TestTurn1:
             persona_id="aldric",
             intention=INTENTION_T1,
             llm=stub_t1,
+            rng=random.Random(1234),
         )
         for m in messages:
             if m.type == "narration":
@@ -310,6 +393,7 @@ class TestTurn1:
             persona_id="aldric",
             intention=INTENTION_T1,
             llm=stub_t1,
+            rng=random.Random(1234),
         )
         dialog = next(m for m in messages if m.type == "dialog")
         assert dialog.owner == "brunolf"
@@ -325,6 +409,7 @@ class TestTurn1:
             persona_id="aldric",
             intention=INTENTION_T1,
             llm=stub_t1,
+            rng=random.Random(1234),
         )
         assert len(storage.get_messages("broken-compass")) == 4
 
@@ -337,6 +422,7 @@ class TestTurn1:
             persona_id="aldric",
             intention=INTENTION_T1,
             llm=stub_t1,
+            rng=random.Random(1234),
         )
         assert storage.get_lorebook("broken-compass") == []
 
@@ -349,6 +435,7 @@ class TestTurn1:
             persona_id="aldric",
             intention=INTENTION_T1,
             llm=stub_t1,
+            rng=random.Random(1234),
         )
         stub_t1.assert_exhausted()
 
@@ -369,6 +456,7 @@ class TestTurn2:
             persona_id="aldric",
             intention=INTENTION_T2,
             llm=stub_t2,
+            rng=random.Random(1234),
         )
         assert [(m.seq, m.owner, m.type) for m in messages] == [
             (5,  "aldric",   "intention"),
@@ -389,6 +477,7 @@ class TestTurn2:
             persona_id="aldric",
             intention=INTENTION_T2,
             llm=stub_t2,
+            rng=random.Random(1234),
         )
         persona_dialog = next(
             m for m in messages if m.type == "dialog" and m.owner == "aldric"
@@ -407,6 +496,7 @@ class TestTurn2:
             persona_id="aldric",
             intention=INTENTION_T2,
             llm=stub_t2,
+            rng=random.Random(1234),
         )
         persona_dialog_calls = [
             c for c in stub_t2.calls if c[0] == "persona_dialog"
@@ -424,6 +514,7 @@ class TestTurn2:
             persona_id="aldric",
             intention=INTENTION_T2,
             llm=stub_t2,
+            rng=random.Random(1234),
         )
         brunolf_lines = [
             m for m in messages if m.owner == "brunolf" and m.type == "dialog"
@@ -443,6 +534,7 @@ class TestTurn2:
             persona_id="aldric",
             intention=INTENTION_T2,
             llm=stub_t2,
+            rng=random.Random(1234),
         )
         types = [m.type for m in messages]
         # narration must appear between the two brunolf dialog messages
@@ -461,6 +553,7 @@ class TestTurn2:
             persona_id="aldric",
             intention=INTENTION_T2,
             llm=stub_t2,
+            rng=random.Random(1234),
         )
         lorebook = storage_after_t1.get_lorebook("broken-compass")
         assert len(lorebook) == 1
@@ -475,9 +568,27 @@ class TestTurn2:
             persona_id="aldric",
             intention=INTENTION_T2,
             llm=stub_t2,
+            rng=random.Random(1234),
         )
         # 4 from turn 1 + 7 from turn 2
         assert len(storage_after_t1.get_messages("broken-compass")) == 11
+
+    async def test_brunolf_state_applied(
+        self, storage_after_t1: Storage, stub_t2: StubLLM
+    ) -> None:
+        await run_turn(
+            storage=storage_after_t1,
+            adventure_slug="broken-compass",
+            persona_id="aldric",
+            intention=INTENTION_T2,
+            llm=stub_t2,
+            rng=random.Random(1234),
+        )
+        chars = storage_after_t1.get_characters("broken-compass")
+        brunolf = next(c for c in chars if c.id == "brunolf")
+        cautious = next(s for s in brunolf.states if s["label"] == "Cautious")
+        assert cautious["value"] == 3
+        assert cautious["category"] == "temporal"
 
     async def test_all_llm_responses_consumed(
         self, storage_after_t1: Storage, stub_t2: StubLLM
@@ -488,5 +599,98 @@ class TestTurn2:
             persona_id="aldric",
             intention=INTENTION_T2,
             llm=stub_t2,
+            rng=random.Random(1234),
         )
         stub_t2.assert_exhausted()
+
+
+# ---------------------------------------------------------------------------
+# Turn 3 tests
+# ---------------------------------------------------------------------------
+
+class TestTurn3:
+    """Aldric sits quietly; Isolde (baked) approaches and makes her pitch."""
+
+    async def test_isolde_intention_in_stream(
+        self, storage_after_t2: Storage, stub_t3: StubLLM
+    ) -> None:
+        messages = await run_turn(
+            storage=storage_after_t2,
+            adventure_slug="broken-compass",
+            persona_id="aldric",
+            intention=INTENTION_T3,
+            llm=stub_t3,
+        )
+        assert any(m.owner == "isolde" and m.type == "intention" for m in messages)
+
+    async def test_isolde_dialog_in_stream(
+        self, storage_after_t2: Storage, stub_t3: StubLLM
+    ) -> None:
+        messages = await run_turn(
+            storage=storage_after_t2,
+            adventure_slug="broken-compass",
+            persona_id="aldric",
+            intention=INTENTION_T3,
+            llm=stub_t3,
+        )
+        isolde_lines = [m for m in messages if m.owner == "isolde" and m.type == "dialog"]
+        assert len(isolde_lines) == 2
+        assert isolde_lines[0].content == ISOLDE_DIALOG_A
+        assert isolde_lines[1].content == ISOLDE_DIALOG_B
+        assert isolde_lines[0].mood == "desperate"
+
+    async def test_isolde_state_applied(
+        self, storage_after_t2: Storage, stub_t3: StubLLM
+    ) -> None:
+        await run_turn(
+            storage=storage_after_t2,
+            adventure_slug="broken-compass",
+            persona_id="aldric",
+            intention=INTENTION_T3,
+            llm=stub_t3,
+        )
+        chars = storage_after_t2.get_characters("broken-compass")
+        isolde = next(c for c in chars if c.id == "isolde")
+        frightened = next(s for s in isolde.states if s["label"] == "Frightened")
+        assert frightened["value"] == 6
+
+    async def test_brunolf_does_not_activate(
+        self, storage_after_t2: Storage, stub_t3: StubLLM
+    ) -> None:
+        messages = await run_turn(
+            storage=storage_after_t2,
+            adventure_slug="broken-compass",
+            persona_id="aldric",
+            intention=INTENTION_T3,
+            llm=stub_t3,
+        )
+        brunolf_intentions = [
+            m for m in messages if m.owner == "brunolf" and m.type == "intention"
+        ]
+        assert brunolf_intentions == []
+
+    async def test_message_count(
+        self, storage_after_t2: Storage, stub_t3: StubLLM
+    ) -> None:
+        messages = await run_turn(
+            storage=storage_after_t2,
+            adventure_slug="broken-compass",
+            persona_id="aldric",
+            intention=INTENTION_T3,
+            llm=stub_t3,
+        )
+        # player: intention + narration = 2
+        # isolde: intention + narration + dialog + narration + dialog = 5
+        assert len(messages) == 7
+
+    async def test_all_llm_responses_consumed(
+        self, storage_after_t2: Storage, stub_t3: StubLLM
+    ) -> None:
+        await run_turn(
+            storage=storage_after_t2,
+            adventure_slug="broken-compass",
+            persona_id="aldric",
+            intention=INTENTION_T3,
+            llm=stub_t3,
+        )
+        stub_t3.assert_exhausted()

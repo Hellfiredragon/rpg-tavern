@@ -22,7 +22,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from rpg_tavern.models import Adventure, Character, Message, Persona
+from rpg_tavern.models import Adventure, Character, Message, Persona, StateChange
 
 
 class Storage:
@@ -138,6 +138,51 @@ class Storage:
         if not path.exists():
             return []
         return self._read_json(path)
+
+    # ------------------------------------------------------------------
+    # State changes
+    # ------------------------------------------------------------------
+
+    def _apply_state_changes(
+        self, current: list[dict], changes: list[StateChange]
+    ) -> list[dict]:
+        """Upsert state entries by (category, label). Clamps value to 0–10."""
+        index: dict[tuple[str, str], int] = {
+            (s["category"], s["label"]): i for i, s in enumerate(current)
+        }
+        result = list(current)
+        for change in changes:
+            clamped = max(0, min(10, change.value))
+            entry = {"category": change.category, "label": change.label, "value": clamped}
+            key = (change.category, change.label)
+            if key in index:
+                result[index[key]] = entry
+            else:
+                index[key] = len(result)
+                result.append(entry)
+        return result
+
+    def apply_character_state_changes(
+        self, adventure_slug: str, char_id: str, changes: list[StateChange]
+    ) -> None:
+        chars = self.get_characters(adventure_slug)
+        for char in chars:
+            if char.id == char_id:
+                char.states = self._apply_state_changes(char.states, changes)
+                self.save_character(adventure_slug, char)
+                return
+        raise ValueError(f"Character {char_id!r} not found in {adventure_slug!r}")
+
+    def apply_persona_state_changes(
+        self, adventure_slug: str, persona_id: str, changes: list[StateChange]
+    ) -> None:
+        personas = self.get_personas(adventure_slug)
+        for persona in personas:
+            if persona.id == persona_id:
+                persona.states = self._apply_state_changes(persona.states, changes)
+                self.save_persona(adventure_slug, persona)
+                return
+        raise ValueError(f"Persona {persona_id!r} not found in {adventure_slug!r}")
 
     def append_lorebook_entries(
         self, adventure_slug: str, entries: list[dict]

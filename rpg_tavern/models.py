@@ -19,6 +19,8 @@ MessageType = Literal[
     "system",
 ]
 
+StateCategoryType = Literal["temporal", "persistent", "core"]
+
 
 class Message(BaseModel):
     """A single entry in an adventure's append-only message stream."""
@@ -31,6 +33,20 @@ class Message(BaseModel):
     mood: str | None = None  # present on dialog messages only
 
 
+class StateChange(BaseModel):
+    """A single state mutation produced by an extractor stage."""
+
+    category: StateCategoryType
+    label: str
+    value: int  # clamped to 0–10 when written to storage
+
+
+class ExtractorResult(BaseModel):
+    """Structured output returned by persona and character extractor stages."""
+
+    state_changes: list[StateChange] = Field(default_factory=list)
+
+
 class Character(BaseModel):
     """An NPC in the adventure."""
 
@@ -38,6 +54,7 @@ class Character(BaseModel):
     name: str
     description: str
     chattiness: int = 50  # 0–100; governs activation probability
+    baked: bool = False   # baked NPCs always activate regardless of chattiness roll
     states: list[dict] = Field(default_factory=list)
 
 
