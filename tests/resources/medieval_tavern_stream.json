@@ -1,0 +1,532 @@
+{
+  "adventure": "the_broken_compass",
+  "player_name": "Aldric",
+  "active_persona": "Aldric",
+  "characters": [
+    {
+      "name": "Brunolf",
+      "description": "Grizzled dwarven innkeeper with a braided beard and a war-hammer under the counter.",
+      "chattiness": 80,
+      "baked": true,
+      "initial_state": {
+        "temporary": {},
+        "persistent": {
+          "protectiveness of guests": { "value": 12, "label": "urge" },
+          "distrust of Theron": { "value": 13, "label": "urge" }
+        },
+        "identity": {
+          "The Honest Barkeep": { "value": 22, "label": "focus" }
+        }
+      }
+    },
+    {
+      "name": "Maren",
+      "description": "Elven herbalist passing through. Quiet, observant, hides a scar across her left palm.",
+      "chattiness": 45,
+      "baked": false,
+      "initial_state": {
+        "temporary": {},
+        "persistent": {
+          "need for blackthorn root": { "value": 12, "label": "urge" },
+          "wariness of dangerous men": { "value": 14, "label": "urge" }
+        },
+        "identity": {
+          "The Quiet Healer": { "value": 22, "label": "focus" }
+        }
+      }
+    },
+    {
+      "name": "Theron",
+      "description": "A cloaked sellsword nursing ale in the corner. Owes debts to dangerous people.",
+      "chattiness": 60,
+      "baked": false,
+      "initial_state": {
+        "temporary": {
+          "boredom": { "value": 8, "label": "hunch" }
+        },
+        "persistent": {
+          "debt to Harsk": { "value": 16, "label": "active" },
+          "survival instinct": { "value": 14, "label": "urge" }
+        },
+        "identity": {
+          "Self-Serving Pragmatist": { "value": 20, "label": "active" }
+        }
+      }
+    }
+  ],
+  "messages": [
+
+    { "turn_id": 0, "seq": 0,
+      "owner": "System", "type": "scene_marker",
+      "content": "",
+      "scene_marker": { "subtype": "scene_open", "payload": { "location": "The Broken Compass — a stone-walled tavern on the crossroads of the King's Road" } }
+    },
+
+    { "turn_id": 0, "seq": 1,
+      "owner": "Narrator", "type": "narration",
+      "content": "Rain hammers the shutters of The Broken Compass. Inside, hearth-light paints the low ceiling amber. A handful of travellers hunch over their cups, steam curling from bowls of root stew. Brunolf wipes the bar with a rag that has seen better decades. Near the door, a cloaked figure — Theron — tilts his chair against the wall, watching the room through half-closed eyes. At a table by the herb-garden window, Maren sorts dried leaves into cloth pouches, her scarred hand moving with practised calm."
+    },
+
+
+
+    { "turn_id": 1, "seq": 0,
+      "owner": "Aldric", "type": "intention",
+      "content": "I push through the door, shaking rain off my cloak, and walk to the bar. I set a silver piece on the counter and say: \"Ale, and whatever's hot. And I'll pay double if you can tell me how to cross the Greymount before the snows.\""
+    },
+
+    { "turn_id": 1, "seq": 1,
+      "owner": "System", "type": "system",
+      "content": "[Aldric Extractor]",
+      "extractor": {
+        "character": "Aldric",
+        "output": {
+          "amplify": ["determination", "fatigue from travel"],
+          "suppress": [],
+          "overflow": null,
+          "evolution": null
+        },
+        "resulting_state": {
+          "temporary": {
+            "determination": { "value": 3, "label": "hidden" },
+            "fatigue from travel": { "value": 3, "label": "hidden" }
+          },
+          "persistent": {},
+          "identity": {}
+        }
+      }
+    },
+
+    { "turn_id": 1, "seq": 2,
+      "owner": "Narrator", "type": "narration",
+      "content": "The door groans open. Aldric steps inside trailing a gust of wet wind that makes the candles flinch. Heads turn — a stranger in a road-worn cloak, mud to the knees. Aldric crosses to the bar, boots leaving dark prints on the flagstones, and sets a silver coin on the scarred oak with a quiet clink."
+    },
+
+    { "turn_id": 1, "seq": 3,
+      "owner": "Aldric", "type": "dialog",
+      "mood": "weary",
+      "content": "Ale, and whatever's hot. And I'll pay double if you can tell me how to cross the Greymount before the snows."
+    },
+
+    { "turn_id": 1, "seq": 4,
+      "owner": "Narrator", "type": "narration",
+      "content": "Brunolf's hand stops mid-wipe. His eyes — deep-set beneath craggy brows — fix on the coin, then on Aldric. A slow exhale through his nose."
+    },
+
+
+    { "turn_id": 1, "seq": 5,
+      "owner": "Brunolf", "type": "thought",
+      "content": "Another fool chasing the Greymount crossing before winter bites. The eastern pass is gone — rockslide took it. There's the goat trail, but I'm not sending a stranger up there alone. If he's got coin, maybe Theron will stir himself. That one's been drinking on credit for a tenday."
+    },
+
+    { "turn_id": 1, "seq": 6,
+      "owner": "Brunolf", "type": "intention",
+      "content": "I'll pour him an ale and give him the lay of the land — the pass is closed, but the goat trail exists. I won't volunteer as guide, but I'll leave the door open for someone else at the bar to pick up the offer."
+    },
+
+    { "turn_id": 1, "seq": 7,
+      "owner": "System", "type": "system",
+      "content": "[Brunolf Extractor]",
+      "extractor": {
+        "character": "Brunolf",
+        "output": {
+          "amplify": ["protectiveness of guests", "curiosity about stranger"],
+          "suppress": [],
+          "overflow": null,
+          "evolution": null
+        },
+        "resulting_state": {
+          "temporary": {
+            "curiosity about stranger": { "value": 3, "label": "hidden" }
+          },
+          "persistent": {
+            "protectiveness of guests": { "value": 15, "label": "urge" },
+            "distrust of Theron": { "value": 14, "label": "urge" }
+          },
+          "identity": {
+            "The Honest Barkeep": { "value": 24, "label": "focus" }
+          }
+        }
+      }
+    },
+
+    { "turn_id": 1, "seq": 8,
+      "owner": "Narrator", "type": "narration",
+      "content": "The dwarf reaches below the counter and draws up a clay mug, already filling it from the tap without looking."
+    },
+
+    { "turn_id": 1, "seq": 9,
+      "owner": "Brunolf", "type": "dialog",
+      "mood": "guarded",
+      "content": "Greymount before the snows. Aye, I've heard that wish before. Most who say it end up wintering here or worse. The eastern pass closed a tenday ago — rockslide. There's a goat trail the shepherds use, but you'd need a guide who knows the fog line. I'm not that guide."
+    },
+
+    { "turn_id": 1, "seq": 10,
+      "owner": "Narrator", "type": "narration",
+      "content": "Brunolf slides the mug across the bar. Foam sloshes over the rim. From the corner, the scrape of a chair."
+    },
+
+
+    { "turn_id": 1, "seq": 11,
+      "owner": "Theron", "type": "thought",
+      "content": "Greymount. Someone with silver who needs a guide. I know that trail better than anyone still breathing in this tavern. And the goat trail runs close to the Thornfield cache — close enough for a quiet detour. This could solve two problems at once."
+    },
+
+    { "turn_id": 1, "seq": 12,
+      "owner": "Theron", "type": "intention",
+      "content": "I'll lean forward and make myself known — let him see I'm listening. I offer that I know the fog line, but I want to hear what's driving him first. A man's reason tells you how much he'll pay."
+    },
+
+    { "turn_id": 1, "seq": 13,
+      "owner": "System", "type": "system",
+      "content": "[Theron Extractor]",
+      "extractor": {
+        "character": "Theron",
+        "output": {
+          "amplify": ["opportunism", "interest in stranger"],
+          "suppress": ["boredom"],
+          "overflow": null,
+          "evolution": null
+        },
+        "resulting_state": {
+          "temporary": {
+            "boredom": { "value": 5, "label": "hidden" },
+            "opportunism": { "value": 3, "label": "hidden" },
+            "interest in stranger": { "value": 3, "label": "hidden" }
+          },
+          "persistent": {
+            "debt to Harsk": { "value": 17, "label": "active" },
+            "survival instinct": { "value": 15, "label": "urge" }
+          },
+          "identity": {
+            "Self-Serving Pragmatist": { "value": 22, "label": "focus" }
+          }
+        }
+      }
+    },
+
+    { "turn_id": 1, "seq": 14,
+      "owner": "Narrator", "type": "narration",
+      "content": "Theron tilts forward, his hood shifting just enough to catch the firelight across a jaw rough with stubble. One boot drops from the chair rung to the floor — an unhurried announcement."
+    },
+
+    { "turn_id": 1, "seq": 15,
+      "owner": "Theron", "type": "dialog",
+      "mood": "calculating",
+      "content": "I know the fog line. Done the crossing twice — once in summer, once when I shouldn't have. What's on the other side that's worth freezing for?"
+    },
+
+
+
+    { "turn_id": 2, "seq": 0,
+      "owner": "Aldric", "type": "intention",
+      "content": "I pick up the ale, take a slow drink, then turn to face Theron without approaching. I want to size him up from the bar before committing. I say: \"A letter that needs delivering to the monastery at Kael's Reach. Nothing worth stealing, if that's what you're weighing.\""
+    },
+
+    { "turn_id": 2, "seq": 1,
+      "owner": "System", "type": "system",
+      "content": "[Aldric Extractor]",
+      "extractor": {
+        "character": "Aldric",
+        "output": {
+          "amplify": ["caution toward Theron", "determination"],
+          "suppress": [],
+          "overflow": null,
+          "evolution": null
+        },
+        "resulting_state": {
+          "temporary": {
+            "determination": { "value": 6, "label": "hunch" },
+            "fatigue from travel": { "value": 2, "label": "hidden" },
+            "caution toward Theron": { "value": 3, "label": "hidden" }
+          },
+          "persistent": {},
+          "identity": {}
+        }
+      }
+    },
+
+    { "turn_id": 2, "seq": 2,
+      "owner": "Narrator", "type": "narration",
+      "content": "Aldric lifts the mug, drinks — unhurried, deliberate — and turns on the stool to face the corner. The distance between them is a choice: close enough to talk, far enough to move. Aldric's hand rests on the bar, not on a weapon, but near one."
+    },
+
+    { "turn_id": 2, "seq": 3,
+      "owner": "Aldric", "type": "dialog",
+      "mood": "measured",
+      "content": "A letter that needs delivering to the monastery at Kael's Reach. Nothing worth stealing, if that's what you're weighing."
+    },
+
+    { "turn_id": 2, "seq": 4,
+      "owner": "Narrator", "type": "narration",
+      "content": "Theron's mouth twitches — not quite a smile. He rolls the empty cup between his palms."
+    },
+
+
+    { "turn_id": 2, "seq": 5,
+      "owner": "Theron", "type": "thought",
+      "content": "A letter to Kael's Reach. The monastery road passes close to the Thornfield cache. If this courier is half as green as he looks, I can detour without him noticing. Ten silver won't cover what I owe Harsk, but it buys time — and the cache buys the rest."
+    },
+
+    { "turn_id": 2, "seq": 6,
+      "owner": "Theron", "type": "intention",
+      "content": "I'll name a fair price — not so cheap it sounds desperate, not so steep he walks. Five to the trailhead, five at the ridge. I want to seem agreeable and professional — a reliable hire. I don't mention the Thornfield detour."
+    },
+
+    { "turn_id": 2, "seq": 7,
+      "owner": "System", "type": "system",
+      "content": "[Theron Extractor]",
+      "extractor": {
+        "character": "Theron",
+        "output": {
+          "amplify": ["greed", "deceptiveness"],
+          "suppress": ["interest in stranger"],
+          "overflow": "debt to Harsk",
+          "evolution": "Harsk's Shadow"
+        },
+        "resulting_state": {
+          "temporary": {
+            "boredom": { "value": 4, "label": "hidden" },
+            "opportunism": { "value": 2, "label": "hidden" },
+            "greed": { "value": 3, "label": "hidden" },
+            "deceptiveness": { "value": 3, "label": "hidden" }
+          },
+          "persistent": {
+            "debt to Harsk": { "value": 20, "label": "active" },
+            "survival instinct": { "value": 16, "label": "active" }
+          },
+          "identity": {
+            "Self-Serving Pragmatist": { "value": 24, "label": "focus" }
+          }
+        }
+      }
+    },
+
+    { "turn_id": 2, "seq": 8,
+      "owner": "Narrator", "type": "narration",
+      "content": "Theron sets down the cup and spreads his hands — an open gesture, palms up, the universal language of a man about to name a number."
+    },
+
+    { "turn_id": 2, "seq": 9,
+      "owner": "Theron", "type": "dialog",
+      "mood": "amused",
+      "content": "A letter. To a monastery. In winter. You're either very devoted or very desperate, and the devoted don't carry swords like that. Five silver to the trailhead. Another five when we reach the ridge. You buy the supplies."
+    },
+
+    { "turn_id": 2, "seq": 10,
+      "owner": "Narrator", "type": "narration",
+      "content": "Theron rises from the corner table in a single fluid motion — a fighter's economy, no wasted effort. The cloak falls open enough to show a short blade at his hip and the frayed edge of a leather map case. He crosses the room and extends a hand, palm up in the old traveller's greeting."
+    },
+
+    { "turn_id": 2, "seq": 11,
+      "owner": "Theron", "type": "dialog",
+      "mood": "businesslike",
+      "content": "First light, then. I'll need you provisioned for six days — the trail doesn't forgive short rations. Brunolf can put together a kit. We settle terms over breakfast."
+    },
+
+    { "turn_id": 2, "seq": 12,
+      "owner": "Narrator", "type": "narration",
+      "content": "Brunolf grunts from behind the bar — neither endorsement nor warning, just acknowledgement. Across the room, Maren's hands have gone still over her herb pouches. She does not look up, but the sorting has stopped."
+    },
+
+
+    { "turn_id": 2, "seq": 13,
+      "owner": "Maren", "type": "thought",
+      "content": "Kael's Reach. The monastery garden has blackthorn root — I've been trying to source it for months. If this stranger is headed that way, I could offer my healing skills in exchange for passage. But Theron... I've seen him in Velmere. He was drinking with Harsk's men. That's not company I want to keep."
+    },
+
+    { "turn_id": 2, "seq": 14,
+      "owner": "Maren", "type": "intention",
+      "content": "I want to approach Aldric quietly after Theron sits back down — not now, not in front of the sellsword. I'll wait for the right moment and offer my services as a healer for the journey, while hinting that his guide may not be trustworthy."
+    },
+
+    { "turn_id": 2, "seq": 15,
+      "owner": "System", "type": "system",
+      "content": "[Maren Extractor]",
+      "extractor": {
+        "character": "Maren",
+        "output": {
+          "amplify": ["wariness of dangerous men", "hope for passage north"],
+          "suppress": [],
+          "overflow": null,
+          "evolution": null
+        },
+        "resulting_state": {
+          "temporary": {
+            "hope for passage north": { "value": 3, "label": "hidden" }
+          },
+          "persistent": {
+            "need for blackthorn root": { "value": 13, "label": "urge" },
+            "wariness of dangerous men": { "value": 17, "label": "active" }
+          },
+          "identity": {
+            "The Quiet Healer": { "value": 24, "label": "focus" }
+          }
+        }
+      }
+    },
+
+    { "turn_id": 2, "seq": 16,
+      "owner": "Narrator", "type": "narration",
+      "content": "Maren resumes her sorting — but slower now, deliberate, the way someone moves when they are waiting rather than working. Her gaze lifts once to Aldric, brief and unreadable, before dropping back to the dried rosemary in her hand. She does not rise from her chair. Not yet."
+    },
+
+
+
+    { "turn_id": 3, "seq": 0,
+      "owner": "Aldric", "type": "intention",
+      "content": "I shake Theron's hand firmly and agree to the terms. Then I ask Brunolf for a room for the night and a bowl of that stew. I want to sit somewhere I can watch the room while I eat."
+    },
+
+    { "turn_id": 3, "seq": 1,
+      "owner": "System", "type": "system",
+      "content": "[Aldric Extractor]",
+      "extractor": {
+        "character": "Aldric",
+        "output": {
+          "amplify": ["resolve", "wariness"],
+          "suppress": [],
+          "overflow": null,
+          "evolution": null
+        },
+        "resulting_state": {
+          "temporary": {
+            "determination": { "value": 5, "label": "hidden" },
+            "fatigue from travel": { "value": 1, "label": "hidden" },
+            "caution toward Theron": { "value": 2, "label": "hidden" },
+            "resolve": { "value": 3, "label": "hidden" },
+            "wariness": { "value": 3, "label": "hidden" }
+          },
+          "persistent": {},
+          "identity": {}
+        }
+      }
+    },
+
+    { "turn_id": 3, "seq": 2,
+      "owner": "Narrator", "type": "narration",
+      "content": "Aldric clasps Theron's hand — a brief, firm grip. The deal is made in the way of travellers: a word and a handshake, binding until one of them decides it isn't. Theron nods once and returns to his corner, folding back into shadow like he'd never left it."
+    },
+
+    { "turn_id": 3, "seq": 3,
+      "owner": "Aldric", "type": "dialog",
+      "mood": "casual",
+      "content": "A room for the night. And a bowl of the stew, if there's any left."
+    },
+
+    { "turn_id": 3, "seq": 4,
+      "owner": "Narrator", "type": "narration",
+      "content": "Brunolf jerks a thumb toward the stairs."
+    },
+
+
+    { "turn_id": 3, "seq": 5,
+      "owner": "Brunolf", "type": "thought",
+      "content": "The lad shook on it too fast. Doesn't know what he's buying. Theron's been useful enough — carried freight, fixed a shutter once — but that goat trail passes Thornfield, and Thornfield is where Harsk's people stash goods between runs. I've kept my mouth shut about Theron's debts, but I won't send a paying guest into that blind."
+    },
+
+    { "turn_id": 3, "seq": 6,
+      "owner": "Brunolf", "type": "intention",
+      "content": "I'll give him the room and the stew, but I'm dropping a warning about Thornfield. Not enough to start a fight with Theron — just enough that the lad knows to keep his eyes open."
+    },
+
+    { "turn_id": 3, "seq": 7,
+      "owner": "System", "type": "system",
+      "content": "[Brunolf Extractor]",
+      "extractor": {
+        "character": "Brunolf",
+        "output": {
+          "amplify": ["protectiveness of guests", "distrust of Theron"],
+          "suppress": ["curiosity about stranger"],
+          "overflow": null,
+          "evolution": null
+        },
+        "resulting_state": {
+          "temporary": {},
+          "persistent": {
+            "protectiveness of guests": { "value": 18, "label": "active" },
+            "distrust of Theron": { "value": 17, "label": "active" }
+          },
+          "identity": {
+            "The Honest Barkeep": { "value": 26, "label": "focus" }
+          }
+        }
+      }
+    },
+
+    { "turn_id": 3, "seq": 8,
+      "owner": "Narrator", "type": "narration",
+      "content": "Brunolf ladles stew from a blackened pot into a chipped bowl and pushes it across the bar with a hunk of dark bread. His voice drops a register — not a whisper, but pitched for the near side of the bar."
+    },
+
+    { "turn_id": 3, "seq": 9,
+      "owner": "Brunolf", "type": "dialog",
+      "mood": "matter-of-fact",
+      "content": "Second door up the stairs. Two coppers for the bed, stew's included. And lad — the goat trail he's talking about runs past Thornfield. You'll want to know what that means before you go trusting a man you met over ale."
+    },
+
+    { "turn_id": 3, "seq": 10,
+      "owner": "Narrator", "type": "narration",
+      "content": "Aldric takes the bowl to a table against the back wall — stone at his shoulders, the whole room in front of him. The stew is thick, peppery, better than it looks. Rain keeps hammering. The fire pops and spits."
+    },
+
+
+    { "turn_id": 3, "seq": 11,
+      "owner": "Maren", "type": "thought",
+      "content": "Theron's back in his corner. The stranger is alone now, eating. This is the moment. If I wait until morning, Theron will have him out the door before I can speak. I need to be direct — offer something concrete. The willowbark bundle will show I'm useful before I open my mouth."
+    },
+
+    { "turn_id": 3, "seq": 12,
+      "owner": "Maren", "type": "intention",
+      "content": "I gather my herb pouches and approach Aldric's table. I'll set a willowbark bundle down as a healer's introduction, confirm what Brunolf hinted about Thornfield, and offer my skills as a second companion for the journey to Kael's Reach."
+    },
+
+    { "turn_id": 3, "seq": 13,
+      "owner": "System", "type": "system",
+      "content": "[Maren Extractor]",
+      "extractor": {
+        "character": "Maren",
+        "output": {
+          "amplify": ["resolve to act", "hope for passage north"],
+          "suppress": [],
+          "overflow": null,
+          "evolution": null
+        },
+        "resulting_state": {
+          "temporary": {
+            "hope for passage north": { "value": 6, "label": "hunch" },
+            "resolve to act": { "value": 3, "label": "hidden" }
+          },
+          "persistent": {
+            "need for blackthorn root": { "value": 14, "label": "urge" },
+            "wariness of dangerous men": { "value": 18, "label": "active" }
+          },
+          "identity": {
+            "The Quiet Healer": { "value": 26, "label": "focus" }
+          }
+        }
+      }
+    },
+
+    { "turn_id": 3, "seq": 14,
+      "owner": "Narrator", "type": "narration",
+      "content": "Maren rises from her table, gathering her pouches, and moves toward the back wall with the careful unhurried pace of someone who wants to seem incidental. She stops beside Aldric's table and sets a small cloth bundle down — dried willowbark and something that smells of mint. A healer's calling card."
+    },
+
+    { "turn_id": 3, "seq": 15,
+      "owner": "Maren", "type": "dialog",
+      "mood": "quiet",
+      "content": "Brunolf's right to warn you. Thornfield is a dead village — abandoned after the blight, but not empty. Theron knows people there. Not the kind who live in monasteries."
+    },
+
+    { "turn_id": 3, "seq": 16,
+      "owner": "Narrator", "type": "narration",
+      "content": "Maren does not sit down. Her voice is low enough that Theron, half a room away, would catch only murmur. Her scarred hand rests on the edge of the table — steady, unhurried."
+    },
+
+    { "turn_id": 3, "seq": 17,
+      "owner": "Maren", "type": "dialog",
+      "mood": "earnest",
+      "content": "I'm heading north as well. I know field medicine and mountain herbs. If you'd consider a second companion — one who doesn't have debts in Thornfield — I'd trade my skills for passage to Kael's Reach."
+    }
+  ]
+}
