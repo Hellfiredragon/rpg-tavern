@@ -51,7 +51,7 @@ async def run_turn(
     seq = max((m.seq for m in existing), default=0)
 
     new_messages: list[Message] = []
-    char_ids_spoken: set[str] = set()
+    char_ids_spoken: list[str] = []  # ordered; set semantics enforced on append
 
     def _append(owner: str, type: str, content: str, mood: str | None = None) -> Message:
         nonlocal seq
@@ -106,7 +106,8 @@ async def run_turn(
                 owner=char_id, type="dialog",
                 content=text.strip(), mood=beat.get("mood"),
             )
-            char_ids_spoken.add(char_id)
+            if char_id not in char_ids_spoken:
+                char_ids_spoken.append(char_id)
 
         else:
             logger.warning("Unknown beat type %r — skipped", beat_type)
@@ -152,7 +153,7 @@ async def run_turn(
             ),
         )
         npc_beats = _parse_beat_script(npc_narrator_output)
-        npc_char_ids_spoken: set[str] = set()
+        npc_char_ids_spoken: list[str] = []  # ordered; set semantics enforced on append
 
         for beat in npc_beats:
             beat_type = beat.get("type")
@@ -164,7 +165,8 @@ async def run_turn(
                     _append(owner=char_id, type="intention", content=beat["intention"])
                 text = await llm("character_dialog", _dialog_prompt(beat, new_messages))
                 _append(owner=char_id, type="dialog", content=text.strip(), mood=beat.get("mood"))
-                npc_char_ids_spoken.add(char_id)
+                if char_id not in npc_char_ids_spoken:
+                    npc_char_ids_spoken.append(char_id)
             elif beat_type == "persona_verbatim":
                 _append(owner=persona_id, type="dialog", content=beat["content"], mood=beat.get("mood"))
             elif beat_type == "persona_cue":
@@ -175,8 +177,8 @@ async def run_turn(
 
         # c. Character extractors for this NPC round (via MCP)
         # Always run for the NPC whose intention was resolved; also any other
-        # characters that spoke via cue beats in this round.
-        chars_to_extract = {npc.id} | npc_char_ids_spoken
+        # characters that spoke via cue beats in this round — in that order.
+        chars_to_extract = [npc.id] + [c for c in npc_char_ids_spoken if c != npc.id]
         for char_id in chars_to_extract:
             char_ext_output = await llm("character_extractor", _extractor_prompt(char_id, ""))
             char_result = _parse_extractor_output(char_ext_output)

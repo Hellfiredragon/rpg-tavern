@@ -1,0 +1,241 @@
+{
+  "adventure": {
+    "slug": "thornhaven-betrothal",
+    "title": "Thornhaven — A Midwinter Betrothal",
+    "setting": "The great hall of Thornhaven Keep on the night of the midwinter feast. Candles, wine, roasting meat. Snow beyond shuttered windows. The betrothal was announced three days ago; tonight is the first time Lady Isolde and Lord Cael have shared a table."
+  },
+  "player_name": "Isolde",
+  "active_persona": "Isolde",
+  "persona_description": "Lady Isolde Vane, daughter of the Earl of Vane. Sharp, observant, privately unconvinced that this arrangement will end well. She is making the best of it.",
+
+  "characters": [
+    {
+      "name": "Lord Cael",
+      "description": "A lord in his late thirties, formal and self-contained. A widower who fulfils his obligations without complaint. He does not offer warmth easily, but he does not withhold courtesy.",
+      "chattiness": 80,
+      "baked": true,
+      "initial_state": {
+        "temporary": {},
+        "persistent": {
+          "duty to lineage": 16,
+          "grief over lost wife": 14
+        },
+        "identity": {
+          "Man of Honour": 22
+        }
+      }
+    },
+    {
+      "name": "Sir Aldous",
+      "description": "A knight of decent birth and expensive habits. He was passed over twice when he petitioned for Lady Isolde's hand. He smiles often. None of the smiles are honest.",
+      "chattiness": 50,
+      "baked": false,
+      "initial_state": {
+        "temporary": {},
+        "persistent": {
+          "resentment toward Cael": 24,
+          "longing for Isolde": 12
+        },
+        "identity": {
+          "The Gentleman": 20
+        }
+      }
+    },
+    {
+      "name": "Brenna",
+      "description": "Lady Isolde's childhood attendant. She has an instinct for social danger and a gift for appearing exactly where she is needed.",
+      "chattiness": 80,
+      "baked": false,
+      "initial_state": {
+        "temporary": {
+          "excitement about feast": 3
+        },
+        "persistent": {
+          "protectiveness of Isolde": 15
+        },
+        "identity": {}
+      }
+    }
+  ],
+
+  "messages": [
+    {
+      "notes": "Turn 1 — Isolde approaches Cael. Lord Cael and Brenna activate.",
+      "edge_cases": [
+        "persona_cue: narrator generates Isolde's opening words (she wrote no explicit dialog)",
+        "suppress-to-zero: Brenna's excitement about feast (3) suppressed to 0 and removed"
+      ]
+    },
+    {
+      "turn_id": 1, "seq": 1, "owner": "Isolde", "type": "intention",
+      "content": "I make my way to Lord Cael's end of the table and take the seat to his left. I haven't decided how to open — I want to see how he receives me first."
+    },
+    {
+      "turn_id": 1, "seq": 2, "owner": "narrator", "type": "narration",
+      "content": "Isolde crosses the hall with the measured steps of a woman who has spent years learning to move through rooms where everyone is watching. The seat to Lord Cael's left has been empty for three years. She takes it without ceremony."
+    },
+    {
+      "turn_id": 1, "seq": 3, "owner": "Isolde", "type": "dialog", "mood": "cautious",
+      "content": "Lord Cael. I hope the feast is a pleasant one.",
+      "produced_by": "persona_cue — LLM generated"
+    },
+    {
+      "turn_id": 1, "seq": 4, "owner": "narrator", "type": "narration",
+      "content": "Cael's expression does not change. He sets down his cup."
+    },
+    {
+      "turn_id": 1, "seq": 5, "owner": "Lord Cael", "type": "intention",
+      "content": "I'll rise to greet her properly — whatever comes next can wait."
+    },
+    {
+      "turn_id": 1, "seq": 6, "owner": "narrator", "type": "narration",
+      "content": "Lord Cael rises from his chair — unhurried, deliberate, the way a man moves when he wants to convey that he has thought about the gesture."
+    },
+    {
+      "turn_id": 1, "seq": 7, "owner": "Lord Cael", "type": "dialog", "mood": "formal",
+      "content": "Lady Isolde. You are welcome at Thornhaven."
+    },
+    {
+      "turn_id": 1, "seq": 8, "owner": "narrator", "type": "narration",
+      "content": "He pours wine into the cup beside her place without being asked, then sits."
+    },
+    {
+      "turn_id": 1, "seq": 9, "owner": "Brenna", "type": "intention",
+      "content": "I'll appear at my lady's side and make sure Lord Cael knows she is cared for — and watched over."
+    },
+    {
+      "turn_id": 1, "seq": 10, "owner": "narrator", "type": "narration",
+      "content": "Brenna materialises at Isolde's shoulder with the discretion of long practice — there one moment, invisible the next."
+    },
+    {
+      "turn_id": 1, "seq": 11, "owner": "Brenna", "type": "dialog", "mood": "warm",
+      "content": "My lord, if you'll permit — my lady has been looking forward to this evening."
+    },
+    {
+      "turn_id": 1, "seq": 12, "owner": "narrator", "type": "narration",
+      "content": "She retreats a half-step before Cael can respond, leaving the comment to hang pleasantly in the air."
+    },
+    {
+      "notes": "Turn 2 — Isolde asks about the portrait. Cael and Brenna activate. Aldous interjects during Cael's round.",
+      "edge_cases": [
+        "NPC speaks in another NPC's round: Aldous cue (with embedded intention) appears in Cael's beat script",
+        "lore upsert: 'betrothal' key updated with new information about Lysa"
+      ]
+    },
+    {
+      "turn_id": 2, "seq": 13, "owner": "Isolde", "type": "intention",
+      "content": "There is a portrait above the hearth — a woman in a red dress. I ask about her. I say: 'My lord, who is the woman in the portrait? She is beautiful.'"
+    },
+    {
+      "turn_id": 2, "seq": 14, "owner": "narrator", "type": "narration",
+      "content": "Isolde's gaze drifts to the portrait above the hearth — a woman in a red dress, dark-haired, painted mid-laugh."
+    },
+    {
+      "turn_id": 2, "seq": 15, "owner": "Isolde", "type": "dialog", "mood": "curious",
+      "content": "My lord, who is the woman in the portrait? She is beautiful.",
+      "produced_by": "persona_verbatim"
+    },
+    {
+      "turn_id": 2, "seq": 16, "owner": "narrator", "type": "narration",
+      "content": "The question lands quietly. Cael's expression does something almost invisible."
+    },
+    {
+      "turn_id": 2, "seq": 17, "owner": "Lord Cael", "type": "intention",
+      "content": "I'll tell her — briefly, without dwelling. Lysa's portrait stays because removing it would be a kind of dishonesty I'm not capable of."
+    },
+    {
+      "turn_id": 2, "seq": 18, "owner": "narrator", "type": "narration",
+      "content": "Cael looks up at the portrait for a moment before he answers."
+    },
+    {
+      "turn_id": 2, "seq": 19, "owner": "Lord Cael", "type": "dialog", "mood": "measured",
+      "content": "Lady Lysa. My wife. She died three winters past."
+    },
+    {
+      "turn_id": 2, "seq": 20, "owner": "Sir Aldous", "type": "intention",
+      "content": "I'll slip into this tender moment — sympathy is a door I can walk through.",
+      "produced_by": "embedded intention in cue beat during Cael's round"
+    },
+    {
+      "turn_id": 2, "seq": 21, "owner": "Sir Aldous", "type": "dialog", "mood": "insinuating",
+      "content": "A great loss, my lord. Some wounds do not close."
+    },
+    {
+      "turn_id": 2, "seq": 22, "owner": "narrator", "type": "narration",
+      "content": "Sir Aldous has appeared at the edge of the candlelight without anyone noticing his approach."
+    },
+    {
+      "turn_id": 2, "seq": 23, "owner": "Brenna", "type": "intention",
+      "content": "I'll watch Aldous — I know his kind. I'll stay close to my lady."
+    },
+    {
+      "turn_id": 2, "seq": 24, "owner": "narrator", "type": "narration",
+      "content": "Brenna's expression does not change. Her eyes follow Aldous the way a cat watches a door."
+    },
+    {
+      "notes": "Turn 3 — Aldous makes his move. Cael shuts it down during Aldous's round.",
+      "edge_cases": [
+        "overflow + evolution: Aldous's 'resentment toward Cael' (persistent, 27) overflows to 30 → removed, identity 'The Scorned Suitor' created at 20",
+        "NPC speaks in NPC's round: Cael cue (with embedded intention) in Aldous's beat script"
+      ]
+    },
+    {
+      "turn_id": 3, "seq": 25, "owner": "Isolde", "type": "intention",
+      "content": "Aldous is circling too close. I stay in my seat, spine straight. I say: 'Sir Aldous. I was not aware you had been introduced to our end of the table.'"
+    },
+    {
+      "turn_id": 3, "seq": 26, "owner": "narrator", "type": "narration",
+      "content": "Isolde turns toward Aldous with the careful composure of someone who has decided what to do."
+    },
+    {
+      "turn_id": 3, "seq": 27, "owner": "Isolde", "type": "dialog", "mood": "cool",
+      "content": "Sir Aldous. I was not aware you had been introduced to our end of the table.",
+      "produced_by": "persona_verbatim"
+    },
+    {
+      "turn_id": 3, "seq": 28, "owner": "narrator", "type": "narration",
+      "content": "Aldous smiles — the expression reaching his eyes in a way that does not read as warmth."
+    },
+    {
+      "turn_id": 3, "seq": 29, "owner": "Sir Aldous", "type": "intention",
+      "content": "I'll charm her and position Cael as a lesser match — carefully. Just an implication."
+    },
+    {
+      "turn_id": 3, "seq": 30, "owner": "narrator", "type": "narration",
+      "content": "Aldous steps forward, adjusting his sleeve in a gesture designed to look idle."
+    },
+    {
+      "turn_id": 3, "seq": 31, "owner": "Sir Aldous", "type": "dialog", "mood": "charming",
+      "content": "Lady Isolde. The far end of the table offered nothing worth speaking to. I came to remedy that."
+    },
+    {
+      "turn_id": 3, "seq": 32, "owner": "Lord Cael", "type": "intention",
+      "content": "I'll end this in one sentence.",
+      "produced_by": "embedded intention in cue beat during Aldous's round"
+    },
+    {
+      "turn_id": 3, "seq": 33, "owner": "Lord Cael", "type": "dialog", "mood": "flat",
+      "content": "Sir Aldous. Your seat awaits you."
+    },
+    {
+      "turn_id": 3, "seq": 34, "owner": "narrator", "type": "narration",
+      "content": "Aldous holds Cael's gaze for exactly one second too long before he turns, smiles at Isolde, and goes."
+    },
+    {
+      "turn_id": 3, "seq": 35, "owner": "Brenna", "type": "intention",
+      "content": "I'll move in beside my lady — if Aldous won't leave the room, she shouldn't be without company."
+    },
+    {
+      "turn_id": 3, "seq": 36, "owner": "narrator", "type": "narration",
+      "content": "Brenna draws the chair beside Isolde closer and sits — not asking permission, not needing it."
+    },
+    {
+      "turn_id": 3, "seq": 37, "owner": "Brenna", "type": "dialog", "mood": "brisk",
+      "content": "My lady, the musicians are asking about the first set. Shall I tell them slower?"
+    },
+    {
+      "turn_id": 3, "seq": 38, "owner": "narrator", "type": "narration",
+      "content": "It is not subtle. It doesn't need to be."
+    }
+  ]
+}

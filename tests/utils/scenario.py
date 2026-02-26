@@ -62,6 +62,7 @@ class _NarratorContext:
     npc_id: str | None
     beats: list[dict] = field(default_factory=list)
     char_dialogs: list[str] = field(default_factory=list)
+    persona_dialogs: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -117,6 +118,15 @@ class Scenario:
         self._current_ctx.beats.append(
             {"type": "persona_verbatim", "mood": mood, "content": text}
         )
+        self._expected.append(_ExpectedMessage(self._persona_id, "dialog", text, mood))
+
+    def persona_cue(self, text: str, mood: str, context: str = "") -> None:
+        """Add a persona_cue beat — narrator generates persona dialog via LLM."""
+        self._require_context("persona_cue()")
+        self._current_ctx.beats.append(
+            {"type": "persona_cue", "mood": mood, "context": context}
+        )
+        self._current_ctx.persona_dialogs.append(text)
         self._expected.append(_ExpectedMessage(self._persona_id, "dialog", text, mood))
 
     def npc_intent(self, char_id: str, text: str) -> None:
@@ -277,8 +287,10 @@ class Scenario:
         npc_intent_texts = [text for _, text in self._npc_intents]
 
         char_dialog_texts: list[str] = []
+        persona_dialog_texts: list[str] = []
         for ctx in self._contexts:
             char_dialog_texts.extend(ctx.char_dialogs)
+            persona_dialog_texts.extend(ctx.persona_dialogs)
 
         persona_extractor_responses: list[str] = []
         char_extractor_responses: list[str] = []
@@ -303,6 +315,8 @@ class Scenario:
             responses["narrator"] = narrator_scripts
         if npc_intent_texts:
             responses["npc_intent"] = npc_intent_texts
+        if persona_dialog_texts:
+            responses["persona_dialog"] = persona_dialog_texts
         if char_dialog_texts:
             responses["character_dialog"] = char_dialog_texts
         if persona_extractor_responses:

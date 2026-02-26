@@ -68,6 +68,10 @@ def storage(tmp_path, stream) -> Storage:
                 description=char_data["description"],
                 chattiness=char_data["chattiness"],
                 baked=char_data.get("baked", False),
+                states=char_data.get(
+                    "initial_state",
+                    {"temporary": {}, "persistent": {}, "identity": {}},
+                ),
             ),
         )
 
