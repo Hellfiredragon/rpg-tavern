@@ -86,6 +86,45 @@ class _ExpectedMessage:
 
 
 # ---------------------------------------------------------------------------
+# NPC proxy — thin wrapper returned by Scenario.npc()
+# ---------------------------------------------------------------------------
+
+class NpcProxy:
+    """Returned by ``Scenario.npc(char_id)``; delegates to the parent scenario."""
+
+    def __init__(self, scenario: "Scenario", char_id: str) -> None:
+        self._s = scenario
+        self._char_id = char_id
+
+    def intent(self, text: str) -> None:
+        self._s.npc_intent(self._char_id, text)
+
+    def says(
+        self,
+        text: str,
+        mood: str,
+        context: str = "",
+        intention: str | None = None,
+    ) -> None:
+        self._s.npc_says(self._char_id, text, mood=mood, context=context, intention=intention)
+
+    def extractor(
+        self,
+        amplify: list[str] | None = None,
+        suppress: list[str] | None = None,
+        overflow: str | None = None,
+        evolution: str | None = None,
+    ) -> None:
+        self._s.npc_extractor(
+            self._char_id,
+            amplify=amplify,
+            suppress=suppress,
+            overflow=overflow,
+            evolution=evolution,
+        )
+
+
+# ---------------------------------------------------------------------------
 # Scenario class
 # ---------------------------------------------------------------------------
 
@@ -99,6 +138,10 @@ class Scenario:
     # ------------------------------------------------------------------
     # Script methods
     # ------------------------------------------------------------------
+
+    def npc(self, char_id: str) -> NpcProxy:
+        """Return a proxy that scopes intent/says/extractor calls to *char_id*."""
+        return NpcProxy(self, char_id)
 
     def player_intent(self, text: str) -> None:
         """Record the player's intention and open the persona's narrator context."""

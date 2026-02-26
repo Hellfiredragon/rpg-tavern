@@ -25,10 +25,12 @@ SLUG = _STREAM["adventure"]["slug"]
 
 async def test_medieval_tavern(storage: Storage) -> None:
     """Three-turn scenario: Aldric arrives, sizes up Theron, shakes on a deal."""
+    s = Scenario(storage, slug=SLUG, persona_id="Aldric")
+    brunolf = s.npc("Brunolf")
+    theron = s.npc("Theron")
+    maren = s.npc("Maren")
 
     # ── Turn 1: Aldric enters ─────────────────────────────────────────────────
-    s = Scenario(storage, slug=SLUG, persona_id="Aldric")
-
     s.player_intent(
         "I push through the door, shaking rain off my cloak, and walk to the bar. "
         "I set a silver piece on the counter."
@@ -51,16 +53,14 @@ async def test_medieval_tavern(storage: Storage) -> None:
     s.persona_extractor(amplify=["determination", "road-weariness"])
     s.lore()
 
-    s.npc_intent(
-        "Brunolf",
+    brunolf.intent(
         "I'll pour him an ale and tell him the pass is closed \u2014 but I'm not the guide.",
     )
     s.narrate(
         "The dwarf reaches below the counter and draws up a clay mug, already "
         "filling it from the tap without looking."
     )
-    s.npc_says(
-        "Brunolf",
+    brunolf.says(
         "The eastern pass closed a tenday ago \u2014 rockslide. There's a goat trail the "
         "shepherds use, but you'd need someone who knows the fog line. I'm not that guide.",
         mood="guarded",
@@ -70,12 +70,10 @@ async def test_medieval_tavern(storage: Storage) -> None:
         "Brunolf slides the mug across the bar. Foam sloshes over the rim. "
         "From the corner, the scrape of a chair."
     )
-    s.npc_extractor("Brunolf", amplify=["caution toward strangers",
-                                        "protectiveness of guests"])
+    brunolf.extractor(amplify=["caution toward strangers", "protectiveness of guests"])
     s.lore()
 
-    s.npc_intent(
-        "Theron",
+    theron.intent(
         "I'll lean forward and let the stranger see I'm listening \u2014 I know the fog line.",
     )
     s.narrate(
@@ -83,14 +81,13 @@ async def test_medieval_tavern(storage: Storage) -> None:
         "across a jaw rough with stubble. One boot drops from the chair rung to the "
         "floor \u2014 an unhurried announcement."
     )
-    s.npc_says(
-        "Theron",
+    theron.says(
         "I know the fog line. Done the crossing twice. What's on the other side "
         "that's worth freezing for?",
         mood="calculating",
         context="Theron overhears talk of Greymount and offers his knowledge.",
     )
-    s.npc_extractor("Theron", amplify=["opportunity sensing"])
+    theron.extractor(amplify=["opportunity sensing"])
     s.lore()
 
     await s.run_turn()
@@ -118,8 +115,7 @@ async def test_medieval_tavern(storage: Storage) -> None:
     s.persona_extractor(amplify=["curiosity", "assessment"])
     s.lore()
 
-    s.npc_intent(
-        "Theron",
+    theron.intent(
         "I'll name a fair price \u2014 five to the trailhead, five at the ridge. "
         "Professional. No mention of Thornfield.",
     )
@@ -127,8 +123,7 @@ async def test_medieval_tavern(storage: Storage) -> None:
         "Theron sets down the cup and spreads his hands \u2014 an open gesture, palms "
         "up, the universal language of a man about to name a number."
     )
-    s.npc_says(
-        "Theron",
+    theron.says(
         "Five silver to the trailhead. Another five when we reach the ridge. "
         "You buy the supplies.",
         mood="amused",
@@ -140,8 +135,7 @@ async def test_medieval_tavern(storage: Storage) -> None:
         "at his hip and the frayed edge of a leather map case. He crosses the room "
         "and extends a hand, palm up in the old traveller's greeting."
     )
-    s.npc_says(
-        "Theron",
+    theron.says(
         "First light. Six days' provisions \u2014 the trail doesn't forgive short rations.",
         mood="businesslike",
         context="Theron proposes departure at first light.",
@@ -151,15 +145,13 @@ async def test_medieval_tavern(storage: Storage) -> None:
         "acknowledgement. Across the room, Maren's hands have gone still over her "
         "herb pouches. She does not look up, but the sorting has stopped."
     )
-    s.npc_extractor("Theron", amplify=["opportunity sensing",
-                                       "self-serving calculation"])
+    theron.extractor(amplify=["opportunity sensing", "self-serving calculation"])
     s.lore(
         greymount_pass="Eastern pass closed by rockslide. Goat trail exists via fog line.",
         kaels_reach="Monastery north of Greymount. Aldric carries a letter there.",
     )
 
-    s.npc_intent(
-        "Maren",
+    maren.intent(
         "I'll wait until Theron sits back down, then offer my healing skills \u2014 "
         "and hint that his guide may not be trustworthy.",
     )
@@ -169,7 +161,7 @@ async def test_medieval_tavern(storage: Storage) -> None:
         "Aldric, brief and unreadable, before dropping back to the dried rosemary "
         "in her hand. She does not rise from her chair. Not yet."
     )
-    s.npc_extractor("Maren", amplify=["wariness of dangerous men"])
+    maren.extractor(amplify=["wariness of dangerous men"])
     s.lore()
 
     await s.run_turn()
@@ -191,8 +183,7 @@ async def test_medieval_tavern(storage: Storage) -> None:
     s.persona_extractor(amplify=["commitment", "forward planning"])
     s.lore()
 
-    s.npc_intent(
-        "Brunolf",
+    brunolf.intent(
         "I'll give him the room and stew, but drop a warning about Thornfield \u2014 "
         "just enough to keep his eyes open.",
     )
@@ -201,8 +192,7 @@ async def test_medieval_tavern(storage: Storage) -> None:
         "it across the bar with a hunk of dark bread. His voice drops a register \u2014 "
         "not a whisper, but pitched for the near side of the bar."
     )
-    s.npc_says(
-        "Brunolf",
+    brunolf.says(
         "Second door up the stairs. Two coppers for the bed, stew's included. "
         "And lad \u2014 the goat trail runs past Thornfield. Know what that means before "
         "you trust a man you met over ale.",
@@ -214,7 +204,7 @@ async def test_medieval_tavern(storage: Storage) -> None:
         "shoulders, the whole room in front of him. The stew is thick, peppery, "
         "better than it looks. Rain keeps hammering. The fire pops and spits."
     )
-    s.npc_extractor("Brunolf", amplify=["protectiveness of guests"])
+    brunolf.extractor(amplify=["protectiveness of guests"])
     s.lore(
         thornfield=(
             "Dead village abandoned after the blight, not truly empty. "
@@ -222,8 +212,7 @@ async def test_medieval_tavern(storage: Storage) -> None:
         ),
     )
 
-    s.npc_intent(
-        "Maren",
+    maren.intent(
         "I'll approach Aldric's table with my herb pouches and offer my skills "
         "as a second companion for the journey.",
     )
@@ -234,8 +223,7 @@ async def test_medieval_tavern(storage: Storage) -> None:
         "down \u2014 dried willowbark and something that smells of mint. A healer's "
         "calling card."
     )
-    s.npc_says(
-        "Maren",
+    maren.says(
         "Brunolf's right. Thornfield is a dead village \u2014 but not empty. "
         "Theron knows people there. Not the kind who live in monasteries.",
         mood="quiet",
@@ -246,15 +234,13 @@ async def test_medieval_tavern(storage: Storage) -> None:
         "away, would catch only murmur. Her scarred hand rests on the edge of the "
         "table \u2014 steady, unhurried."
     )
-    s.npc_says(
-        "Maren",
+    maren.says(
         "I'm heading north too. Field medicine, mountain herbs. A second companion "
         "who doesn't owe debts in Thornfield \u2014 for passage to Kael's Reach.",
         mood="earnest",
         context="Maren offers her skills as a second companion.",
     )
-    s.npc_extractor("Maren", amplify=["wariness of dangerous men",
-                                      "need for blackthorn root"])
+    maren.extractor(amplify=["wariness of dangerous men", "need for blackthorn root"])
     s.lore(
         maren_offer=(
             "Elven herbalist Maren offers healing skills in exchange "
