@@ -15,7 +15,6 @@ from pathlib import Path
 
 import pytest
 
-from rpg_tavern.models import Character, Persona
 from rpg_tavern.pipeline.orchestrator import run_turn
 from rpg_tavern.storage import Storage
 from tests.utils.stub_llm import StubLLM, EXTRACTOR_EMPTY, LORE_EMPTY
@@ -143,45 +142,7 @@ NARRATOR_T3_MAREN = json.dumps([
 # Fixtures
 # ---------------------------------------------------------------------------
 
-SLUG = "the-broken-compass"
-
-
-@pytest.fixture
-def storage(tmp_path) -> Storage:
-    s = Storage(tmp_path)
-    s.create_adventure(
-        slug=SLUG,
-        title="The Broken Compass",
-        setting=(
-            "The Broken Compass — a stone-walled tavern on the crossroads "
-            "of the King's Road. Rain hammers the shutters."
-        ),
-    )
-    # Order: Brunolf, Theron, Maren — controls NPC activation order
-    for char_data in [
-        STREAM["characters"][0],  # Brunolf
-        STREAM["characters"][2],  # Theron
-        STREAM["characters"][1],  # Maren
-    ]:
-        s.save_character(
-            SLUG,
-            Character(
-                id=char_data["name"],
-                name=char_data["name"],
-                description=char_data["description"],
-                chattiness=char_data["chattiness"],
-                baked=char_data.get("baked", False),
-            ),
-        )
-    s.save_persona(
-        SLUG,
-        Persona(
-            id=STREAM["active_persona"],
-            name=STREAM["player_name"],
-            description="A road-weary traveller carrying a letter to Kael's Reach.",
-        ),
-    )
-    return s
+SLUG = STREAM["adventure"]["slug"]
 
 
 def _rng_t1() -> random.Random:
