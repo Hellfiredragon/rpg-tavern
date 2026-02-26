@@ -24,7 +24,7 @@ from typing import Any
 
 from rpg_tavern.llm import LLM
 from rpg_tavern.mcp import InProcessMcpClient, McpClient
-from rpg_tavern.models import Character, ExtractorResult, Message
+from rpg_tavern.models import Character, ExtractorOutput, Message
 from rpg_tavern.storage import Storage
 
 logger = logging.getLogger(__name__)
@@ -114,15 +114,13 @@ async def run_turn(
     # 4. Persona extractor → apply state changes via MCP
     persona_ext_output = await llm("persona_extractor", _extractor_prompt(persona_id, intention))
     persona_result = _parse_extractor_output(persona_ext_output)
-    if persona_result.state_changes:
-        mcp.update_persona_state(adventure_slug, persona_id, persona_result.state_changes)
+    mcp.update_persona_state(adventure_slug, persona_id, persona_result)
 
     # 5. Character extractors — one per character that spoke this round
     for char_id in char_ids_spoken:
         char_ext_output = await llm("character_extractor", _extractor_prompt(char_id, ""))
         char_result = _parse_extractor_output(char_ext_output)
-        if char_result.state_changes:
-            mcp.update_character_state(adventure_slug, char_id, char_result.state_changes)
+        mcp.update_character_state(adventure_slug, char_id, char_result)
 
     # 6. Lore extractor (player round)
     round_msgs = [m for m in new_messages if m.type in ("narration", "dialog")]
@@ -176,11 +174,13 @@ async def run_turn(
                 logger.warning("NPC round: unknown beat type %r — skipped", beat_type)
 
         # c. Character extractors for this NPC round (via MCP)
-        for char_id in npc_char_ids_spoken:
+        # Always run for the NPC whose intention was resolved; also any other
+        # characters that spoke via cue beats in this round.
+        chars_to_extract = {npc.id} | npc_char_ids_spoken
+        for char_id in chars_to_extract:
             char_ext_output = await llm("character_extractor", _extractor_prompt(char_id, ""))
             char_result = _parse_extractor_output(char_ext_output)
-            if char_result.state_changes:
-                mcp.update_character_state(adventure_slug, char_id, char_result.state_changes)
+            mcp.update_character_state(adventure_slug, char_id, char_result)
 
         # d. Lore extractor for this NPC's sub-round (messages after NPC's intention)
         npc_intention_seq = next(
@@ -215,6 +215,20 @@ def activate_npcs(characters: list[Character], rng: random.Random) -> list[Chara
 
 
 # ---------------------------------------------------------------------------
+# State helpers
+# ---------------------------------------------------------------------------
+
+def _manifest_state_str(states: dict) -> str:
+    """Format manifest states (value >= 6) across all categories as a string."""
+    parts = []
+    for category in ("temporary", "persistent", "identity"):
+        for name, value in states.get(category, {}).items():
+            if value >= 6:
+                parts.append(f"{name}={value}")
+    return ", ".join(parts) if parts else "none"
+
+
+# ---------------------------------------------------------------------------
 # Beat-script parsing
 # ---------------------------------------------------------------------------
 
@@ -228,13 +242,13 @@ def _parse_beat_script(output: str) -> list[dict[str, Any]]:
     return beats
 
 
-def _parse_extractor_output(output: str) -> ExtractorResult:
+def _parse_extractor_output(output: str) -> ExtractorOutput:
     try:
         data = json.loads(output)
-        return ExtractorResult.model_validate(data)
+        return ExtractorOutput.model_validate(data)
     except (json.JSONDecodeError, Exception):
         logger.warning("Extractor returned invalid JSON: %r", output)
-        return ExtractorResult()
+        return ExtractorOutput()
 
 
 def _parse_lore_output(output: str) -> list[dict]:
@@ -266,21 +280,13 @@ def _narrator_prompt(
     # Manifest states: value >= 6
     char_context_lines = []
     for char in characters:
-        manifest = [s for s in char.states if s.get("value", 0) >= 6]
-        state_str = (
-            ", ".join(f"{s['label']}={s['value']}" for s in manifest)
-            if manifest else "none"
-        )
+        state_str = _manifest_state_str(char.states)
         char_context_lines.append(
             f"  {char.name} ({char.id}): {char.description} [states: {state_str}]"
         )
     persona_context_lines = []
     for persona in personas:
-        manifest = [s for s in persona.states if s.get("value", 0) >= 6]
-        state_str = (
-            ", ".join(f"{s['label']}={s['value']}" for s in manifest)
-            if manifest else "none"
-        )
+        state_str = _manifest_state_str(persona.states)
         persona_context_lines.append(
             f"  {persona.name} ({persona.id}): {persona.description} [states: {state_str}]"
         )
@@ -316,7 +322,7 @@ def _extractor_prompt(persona_id: str, intention: str) -> str:
     return (
         f"Persona: {persona_id}\n"
         f"Intention: {intention}\n\n"
-        'Return JSON: {"state_changes": []}'
+        'Return JSON: {"amplify": [], "suppress": [], "overflow": null, "evolution": null}'
     )
 
 
@@ -327,11 +333,7 @@ def _npc_intent_prompt(npc: Character, history: list[Message]) -> str:
         if m.type in ("narration", "dialog")
         or (m.type == "intention" and m.owner == npc.id)
     )
-    manifest = [s for s in npc.states if s.get("value", 0) >= 6]
-    state_str = (
-        ", ".join(f"{s['label']}={s['value']}" for s in manifest)
-        if manifest else "none"
-    )
+    state_str = _manifest_state_str(npc.states)
     return (
         f"Character: {npc.name} ({npc.id})\n"
         f"Description: {npc.description}\n"

@@ -16,20 +16,11 @@
       "initial_state": {
         "temporary": {},
         "persistent": {
-          "protectiveness of guests": {
-            "value": 12,
-            "label": "urge"
-          },
-          "distrust of Theron": {
-            "value": 13,
-            "label": "urge"
-          }
+          "protectiveness of guests": 12,
+          "distrust of Theron": 13
         },
         "identity": {
-          "The Honest Barkeep": {
-            "value": 22,
-            "label": "focus"
-          }
+          "The Honest Barkeep": 22
         }
       }
     },
@@ -40,26 +31,14 @@
       "baked": false,
       "initial_state": {
         "temporary": {
-          "boredom": {
-            "value": 8,
-            "label": "hunch"
-          }
+          "boredom": 8
         },
         "persistent": {
-          "debt to Harsk": {
-            "value": 16,
-            "label": "active"
-          },
-          "survival instinct": {
-            "value": 14,
-            "label": "urge"
-          }
+          "debt to Harsk": 16,
+          "survival instinct": 14
         },
         "identity": {
-          "Self-Serving Pragmatist": {
-            "value": 20,
-            "label": "active"
-          }
+          "Self-Serving Pragmatist": 20
         }
       }
     },
@@ -71,20 +50,11 @@
       "initial_state": {
         "temporary": {},
         "persistent": {
-          "need for blackthorn root": {
-            "value": 12,
-            "label": "urge"
-          },
-          "wariness of dangerous men": {
-            "value": 14,
-            "label": "urge"
-          }
+          "need for blackthorn root": 12,
+          "wariness of dangerous men": 14
         },
         "identity": {
-          "The Quiet Healer": {
-            "value": 22,
-            "label": "focus"
-          }
+          "The Quiet Healer": 22
         }
       }
     }

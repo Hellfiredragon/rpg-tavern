@@ -3,7 +3,7 @@
 import pytest
 from pathlib import Path
 
-from rpg_tavern.models import Adventure, Character, Message, Persona, StateChange
+from rpg_tavern.models import Adventure, Character, ExtractorOutput, Message, Persona
 from rpg_tavern.storage import Storage
 
 
@@ -91,11 +91,11 @@ class TestCharacters:
     ) -> None:
         char = Character(
             id="brunolf", name="Brunolf", description="d",
-            states=[{"label": "Cautious", "value": 3, "category": "temporal"}],
+            states={"temporary": {"caution": 5}, "persistent": {}, "identity": {}},
         )
         storage.save_character(adventure.slug, char)
         loaded = storage.get_characters(adventure.slug)[0]
-        assert loaded.states[0]["label"] == "Cautious"
+        assert loaded.states["temporary"]["caution"] == 5
 
 
 # ---------------------------------------------------------------------------
@@ -240,136 +240,123 @@ class TestLorebook:
 # State changes
 # ---------------------------------------------------------------------------
 
-class TestCharacterStateChanges:
+class TestCharacterExtraction:
     def _char(self, storage: Storage, adventure: Adventure) -> None:
         storage.save_character(
             adventure.slug,
             Character(id="brunolf", name="Brunolf", description="Innkeeper."),
         )
 
-    def test_apply_adds_new_entry(
+    def test_amplify_creates_new_temporary_state(
         self, storage: Storage, adventure: Adventure
     ) -> None:
         self._char(storage, adventure)
-        storage.apply_character_state_changes(
+        storage.apply_character_extraction(
             adventure.slug, "brunolf",
-            [StateChange(category="temporal", label="Cautious", value=3)],
+            ExtractorOutput(amplify=["caution"]),
         )
         char = storage.get_characters(adventure.slug)[0]
-        entry = next(s for s in char.states if s["label"] == "Cautious")
-        assert entry["value"] == 3
-        assert entry["category"] == "temporal"
+        assert char.states["temporary"]["caution"] == 3
 
-    def test_apply_upserts_existing_entry(
+    def test_amplify_increments_existing_state(
         self, storage: Storage, adventure: Adventure
     ) -> None:
         self._char(storage, adventure)
-        storage.apply_character_state_changes(
-            adventure.slug, "brunolf",
-            [StateChange(category="temporal", label="Cautious", value=3)],
+        storage.apply_character_extraction(
+            adventure.slug, "brunolf", ExtractorOutput(amplify=["caution"])
         )
-        storage.apply_character_state_changes(
-            adventure.slug, "brunolf",
-            [StateChange(category="temporal", label="Cautious", value=7)],
-        )
-        chars = storage.get_characters(adventure.slug)
-        cautious = [s for s in chars[0].states if s["label"] == "Cautious"]
-        assert len(cautious) == 1
-        assert cautious[0]["value"] == 7
-
-    def test_clamps_value_above_10(
-        self, storage: Storage, adventure: Adventure
-    ) -> None:
-        self._char(storage, adventure)
-        storage.apply_character_state_changes(
-            adventure.slug, "brunolf",
-            [StateChange(category="core", label="Strength", value=15)],
+        storage.apply_character_extraction(
+            adventure.slug, "brunolf", ExtractorOutput(amplify=["caution"])
         )
         char = storage.get_characters(adventure.slug)[0]
-        entry = next(s for s in char.states if s["label"] == "Strength")
-        assert entry["value"] == 10
+        assert char.states["temporary"]["caution"] == 6
 
-    def test_clamps_value_below_0(
+    def test_amplify_caps_at_20(
         self, storage: Storage, adventure: Adventure
     ) -> None:
         self._char(storage, adventure)
-        storage.apply_character_state_changes(
-            adventure.slug, "brunolf",
-            [StateChange(category="core", label="Strength", value=-5)],
+        # pre-load at 19
+        char = storage.get_characters(adventure.slug)[0]
+        char.states["temporary"]["caution"] = 19
+        storage.save_character(adventure.slug, char)
+        storage.apply_character_extraction(
+            adventure.slug, "brunolf", ExtractorOutput(amplify=["caution"])
         )
         char = storage.get_characters(adventure.slug)[0]
-        entry = next(s for s in char.states if s["label"] == "Strength")
-        assert entry["value"] == 0
+        assert char.states["temporary"]["caution"] == 20
 
-    def test_category_isolation(
+    def test_suppress_reduces_state(
         self, storage: Storage, adventure: Adventure
     ) -> None:
-        """Same label in different categories → two separate entries."""
         self._char(storage, adventure)
-        storage.apply_character_state_changes(
-            adventure.slug, "brunolf",
-            [
-                StateChange(category="temporal", label="Alert", value=4),
-                StateChange(category="persistent", label="Alert", value=8),
-            ],
+        char = storage.get_characters(adventure.slug)[0]
+        char.states["temporary"]["fear"] = 9
+        storage.save_character(adventure.slug, char)
+        storage.apply_character_extraction(
+            adventure.slug, "brunolf", ExtractorOutput(suppress=["fear"])
         )
         char = storage.get_characters(adventure.slug)[0]
-        temporal = next(s for s in char.states if s["category"] == "temporal")
-        persistent = next(s for s in char.states if s["category"] == "persistent")
-        assert temporal["value"] == 4
-        assert persistent["value"] == 8
+        assert char.states["temporary"]["fear"] == 6
+
+    def test_suppress_removes_temporary_at_zero(
+        self, storage: Storage, adventure: Adventure
+    ) -> None:
+        self._char(storage, adventure)
+        char = storage.get_characters(adventure.slug)[0]
+        char.states["temporary"]["boredom"] = 3
+        storage.save_character(adventure.slug, char)
+        storage.apply_character_extraction(
+            adventure.slug, "brunolf", ExtractorOutput(suppress=["boredom"])
+        )
+        char = storage.get_characters(adventure.slug)[0]
+        assert "boredom" not in char.states["temporary"]
 
     def test_raises_for_missing_character(
         self, storage: Storage, adventure: Adventure
     ) -> None:
         with pytest.raises(ValueError, match="no-one"):
-            storage.apply_character_state_changes(
+            storage.apply_character_extraction(
                 adventure.slug, "no-one",
-                [StateChange(category="temporal", label="X", value=1)],
+                ExtractorOutput(amplify=["x"]),
             )
 
 
-class TestPersonaStateChanges:
+class TestPersonaExtraction:
     def _persona(self, storage: Storage, adventure: Adventure) -> None:
         storage.save_persona(
             adventure.slug,
             Persona(id="aldric", name="Aldric", description="Sellsword."),
         )
 
-    def test_apply_adds_new_entry(
+    def test_amplify_creates_new_state(
         self, storage: Storage, adventure: Adventure
     ) -> None:
         self._persona(storage, adventure)
-        storage.apply_persona_state_changes(
+        storage.apply_persona_extraction(
             adventure.slug, "aldric",
-            [StateChange(category="persistent", label="Reputation", value=6)],
+            ExtractorOutput(amplify=["determination"]),
         )
         persona = storage.get_personas(adventure.slug)[0]
-        entry = next(s for s in persona.states if s["label"] == "Reputation")
-        assert entry["value"] == 6
+        assert persona.states["temporary"]["determination"] == 3
 
-    def test_apply_upserts_existing_entry(
+    def test_amplify_accumulates_across_turns(
         self, storage: Storage, adventure: Adventure
     ) -> None:
         self._persona(storage, adventure)
-        storage.apply_persona_state_changes(
-            adventure.slug, "aldric",
-            [StateChange(category="persistent", label="Reputation", value=4)],
+        storage.apply_persona_extraction(
+            adventure.slug, "aldric", ExtractorOutput(amplify=["determination"])
         )
-        storage.apply_persona_state_changes(
-            adventure.slug, "aldric",
-            [StateChange(category="persistent", label="Reputation", value=9)],
+        storage.apply_persona_extraction(
+            adventure.slug, "aldric", ExtractorOutput(amplify=["determination"])
         )
         persona = storage.get_personas(adventure.slug)[0]
-        entries = [s for s in persona.states if s["label"] == "Reputation"]
-        assert len(entries) == 1
-        assert entries[0]["value"] == 9
+        assert persona.states["temporary"]["determination"] == 6
 
     def test_raises_for_missing_persona(
         self, storage: Storage, adventure: Adventure
     ) -> None:
         with pytest.raises(ValueError, match="ghost"):
-            storage.apply_persona_state_changes(
+            storage.apply_persona_extraction(
                 adventure.slug, "ghost",
-                [StateChange(category="temporal", label="X", value=1)],
+                ExtractorOutput(amplify=["x"]),
             )

@@ -30,5 +30,5 @@ class StubLLM:
             raise AssertionError(f"StubLLM: unused responses remain: {stages}")
 
 
-EXTRACTOR_EMPTY = json.dumps({"state_changes": []})
+EXTRACTOR_EMPTY = json.dumps({"amplify": [], "suppress": [], "overflow": None, "evolution": None})
 LORE_EMPTY = json.dumps({"entries": []})

@@ -19,7 +19,8 @@ MessageType = Literal[
     "system",
 ]
 
-StateCategoryType = Literal["temporal", "persistent", "core"]
+# State categories as defined in character_state.md
+StateCategoryType = Literal["temporary", "persistent", "identity"]
 
 
 class Message(BaseModel):
@@ -33,18 +34,21 @@ class Message(BaseModel):
     mood: str | None = None  # present on dialog messages only
 
 
-class StateChange(BaseModel):
-    """A single state mutation produced by an extractor stage."""
+class ExtractorOutput(BaseModel):
+    """Structured output returned by persona and character extractor stages.
 
-    category: StateCategoryType
-    label: str
-    value: int  # clamped to 0–10 when written to storage
+    The state engine applies these symbolic operations to the actor's state map.
+    No raw numeric values are passed to or from the LLM.
+    """
+
+    amplify:   list[str] = Field(default_factory=list)
+    suppress:  list[str] = Field(default_factory=list)
+    overflow:  str | None = None   # persistent state to escalate; ignored if not persistent
+    evolution: str | None = None   # new name when overflow reaches 30; used only then
 
 
-class ExtractorResult(BaseModel):
-    """Structured output returned by persona and character extractor stages."""
-
-    state_changes: list[StateChange] = Field(default_factory=list)
+def _empty_states() -> dict:
+    return {"temporary": {}, "persistent": {}, "identity": {}}
 
 
 class Character(BaseModel):
@@ -55,7 +59,7 @@ class Character(BaseModel):
     description: str
     chattiness: int = 50  # 0–100; governs activation probability
     baked: bool = False   # baked NPCs always activate regardless of chattiness roll
-    states: list[dict] = Field(default_factory=list)
+    states: dict = Field(default_factory=_empty_states)
 
 
 class Persona(BaseModel):
@@ -64,7 +68,7 @@ class Persona(BaseModel):
     id: str
     name: str
     description: str
-    states: list[dict] = Field(default_factory=list)
+    states: dict = Field(default_factory=_empty_states)
 
 
 class Adventure(BaseModel):

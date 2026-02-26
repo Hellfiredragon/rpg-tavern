@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from rpg_tavern.models import StateChange
+from rpg_tavern.models import ExtractorOutput
 from rpg_tavern.storage import Storage
 
 
@@ -26,14 +26,14 @@ class McpClient(Protocol):
         self,
         adventure_slug: str,
         char_id: str,
-        changes: list[StateChange],
+        output: ExtractorOutput,
     ) -> None: ...
 
     def update_persona_state(
         self,
         adventure_slug: str,
         persona_id: str,
-        changes: list[StateChange],
+        output: ExtractorOutput,
     ) -> None: ...
 
     def store_lorebook_entry(
@@ -57,17 +57,17 @@ class InProcessMcpClient:
         self,
         adventure_slug: str,
         char_id: str,
-        changes: list[StateChange],
+        output: ExtractorOutput,
     ) -> None:
-        self._storage.apply_character_state_changes(adventure_slug, char_id, changes)
+        self._storage.apply_character_extraction(adventure_slug, char_id, output)
 
     def update_persona_state(
         self,
         adventure_slug: str,
         persona_id: str,
-        changes: list[StateChange],
+        output: ExtractorOutput,
     ) -> None:
-        self._storage.apply_persona_state_changes(adventure_slug, persona_id, changes)
+        self._storage.apply_persona_extraction(adventure_slug, persona_id, output)
 
     def store_lorebook_entry(
         self,

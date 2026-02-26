@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from rpg_tavern.models import Adventure, Character, ExtractorResult, Message, Persona, StateChange
+from rpg_tavern.models import Adventure, Character, ExtractorOutput, Message, Persona
 
 
 class TestMessage:
@@ -48,46 +48,28 @@ class TestMessage:
         assert "mood" not in dumped
 
 
-class TestStateChange:
-    def test_required_fields(self) -> None:
-        sc = StateChange(category="temporal", label="Cautious", value=3)
-        assert sc.category == "temporal"
-        assert sc.label == "Cautious"
-        assert sc.value == 3
-
-    def test_all_categories_accepted(self) -> None:
-        for cat in ("temporal", "persistent", "core"):
-            sc = StateChange(category=cat, label="X", value=0)
-            assert sc.category == cat
-
-    def test_invalid_category_rejected(self) -> None:
-        with pytest.raises(ValidationError):
-            StateChange(category="invalid", label="X", value=0)
-
-    def test_serialise_roundtrip(self) -> None:
-        sc = StateChange(category="persistent", label="Wounded", value=7)
-        restored = StateChange.model_validate(sc.model_dump())
-        assert restored == sc
-
-
-class TestExtractorResult:
+class TestExtractorOutput:
     def test_empty_by_default(self) -> None:
-        er = ExtractorResult()
-        assert er.state_changes == []
+        eo = ExtractorOutput()
+        assert eo.amplify == []
+        assert eo.suppress == []
+        assert eo.overflow is None
+        assert eo.evolution is None
 
-    def test_with_state_changes(self) -> None:
-        er = ExtractorResult(state_changes=[
-            StateChange(category="temporal", label="Alert", value=5),
-        ])
-        assert len(er.state_changes) == 1
-        assert er.state_changes[0].label == "Alert"
+    def test_with_amplify_and_suppress(self) -> None:
+        eo = ExtractorOutput(amplify=["determination", "focus"], suppress=["fear"])
+        assert eo.amplify == ["determination", "focus"]
+        assert eo.suppress == ["fear"]
+
+    def test_overflow_and_evolution(self) -> None:
+        eo = ExtractorOutput(overflow="grief", evolution="Haunted by loss")
+        assert eo.overflow == "grief"
+        assert eo.evolution == "Haunted by loss"
 
     def test_serialise_roundtrip(self) -> None:
-        er = ExtractorResult(state_changes=[
-            StateChange(category="core", label="Strength", value=8),
-        ])
-        restored = ExtractorResult.model_validate(er.model_dump())
-        assert restored == er
+        eo = ExtractorOutput(amplify=["courage"], overflow="loyalty", evolution="Bound by oath")
+        restored = ExtractorOutput.model_validate(eo.model_dump())
+        assert restored == eo
 
 
 class TestCharacter:
@@ -102,7 +84,7 @@ class TestCharacter:
 
     def test_states_defaults_to_empty(self) -> None:
         c = Character(id="x", name="X", description="desc")
-        assert c.states == []
+        assert c.states == {"temporary": {}, "persistent": {}, "identity": {}}
 
     def test_baked_defaults_to_false(self) -> None:
         c = Character(id="x", name="X", description="desc")
@@ -125,7 +107,7 @@ class TestPersona:
 
     def test_states_defaults_to_empty(self) -> None:
         p = Persona(id="x", name="X", description="desc")
-        assert p.states == []
+        assert p.states == {"temporary": {}, "persistent": {}, "identity": {}}
 
     def test_serialise_roundtrip(self) -> None:
         p = Persona(id="aldric", name="Aldric", description="Sellsword.")

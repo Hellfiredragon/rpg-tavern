@@ -63,9 +63,9 @@ NARRATOR_T1 = json.dumps([
 
 BRUNOLF_DIALOG_T1 = "Rough night to be on the road. You come far?"
 
-BRUNOLF_EXTRACTOR_T2 = json.dumps({"state_changes": [
-    {"category": "temporal", "label": "Cautious", "value": 3},
-]})
+BRUNOLF_EXTRACTOR_T2 = json.dumps({
+    "amplify": ["Cautious"], "suppress": [], "overflow": None, "evolution": None,
+})
 
 NARRATOR_T2 = json.dumps([
     {
@@ -158,10 +158,9 @@ NARRATOR_T3_ISOLDE = json.dumps([
 ISOLDE_DIALOG_A = "You look like someone who knows how to use that."
 ISOLDE_DIALOG_B = "I need to reach Estfeld by tomorrow night. I can pay well."
 
-ISOLDE_EXTRACTOR = json.dumps({"state_changes": [
-    {"category": "temporal", "label": "Frightened", "value": 6},
-    {"category": "temporal", "label": "Desperate",  "value": 5},
-]})
+ISOLDE_EXTRACTOR = json.dumps({
+    "amplify": ["Frightened", "Desperate"], "suppress": [], "overflow": None, "evolution": None,
+})
 
 
 # ---------------------------------------------------------------------------
@@ -561,9 +560,7 @@ class TestTurn2:
         )
         chars = storage_after_t1.get_characters("broken-compass")
         brunolf = next(c for c in chars if c.id == "brunolf")
-        cautious = next(s for s in brunolf.states if s["label"] == "Cautious")
-        assert cautious["value"] == 3
-        assert cautious["category"] == "temporal"
+        assert brunolf.states["temporary"]["Cautious"] == 3
 
     async def test_all_llm_responses_consumed(
         self, storage_after_t1: Storage, stub_t2: StubLLM
@@ -626,8 +623,8 @@ class TestTurn3:
         )
         chars = storage_after_t2.get_characters("broken-compass")
         isolde = next(c for c in chars if c.id == "isolde")
-        frightened = next(s for s in isolde.states if s["label"] == "Frightened")
-        assert frightened["value"] == 6
+        assert isolde.states["temporary"]["Frightened"] == 3
+        assert isolde.states["temporary"]["Desperate"] == 3
 
     async def test_brunolf_does_not_activate(
         self, storage_after_t2: Storage, stub_t3: StubLLM
