@@ -18,6 +18,7 @@ import pytest
 from rpg_tavern.models import Character, Persona
 from rpg_tavern.pipeline.orchestrator import run_turn
 from rpg_tavern.storage import Storage
+from tests.utils.stub_llm import StubLLM, EXTRACTOR_EMPTY, LORE_EMPTY
 
 # ---------------------------------------------------------------------------
 # Load fixture data
@@ -42,39 +43,6 @@ def _msg(turn_id: int, seq: int) -> dict:
 def _content(turn_id: int, seq: int) -> str:
     return _msg(turn_id, seq)["content"]
 
-
-# ---------------------------------------------------------------------------
-# StubLLM — deterministic LLM stand-in (same pattern as test_broken_compass)
-# ---------------------------------------------------------------------------
-
-class StubLLM:
-    def __init__(self, responses: dict[str, list[str]]) -> None:
-        self._queues: dict[str, list[str]] = {k: list(v) for k, v in responses.items()}
-        self.calls: list[tuple[str, str]] = []
-
-    async def __call__(self, stage: str, prompt: str) -> str:
-        self.calls.append((stage, prompt))
-        queue = self._queues.get(stage)
-        if not queue:
-            raise AssertionError(
-                f"StubLLM: unexpected call to stage={stage!r} "
-                f"(no responses queued). calls so far: {len(self.calls)}"
-            )
-        return queue.pop(0)
-
-    def assert_exhausted(self) -> None:
-        leftover = {k: v for k, v in self._queues.items() if v}
-        if leftover:
-            stages = ", ".join(f"{k}({len(v)})" for k, v in leftover.items())
-            raise AssertionError(f"StubLLM: unused responses remain: {stages}")
-
-
-# ---------------------------------------------------------------------------
-# Extractor helpers — current model uses {"state_changes": [...]}
-# ---------------------------------------------------------------------------
-
-EXTRACTOR_EMPTY = json.dumps({"state_changes": []})
-LORE_EMPTY = json.dumps({"entries": []})
 
 LORE_T2_THERON = json.dumps({"entries": [
     {"key": "greymount_pass", "content": "Eastern pass closed by rockslide. Goat trail exists via fog line."},

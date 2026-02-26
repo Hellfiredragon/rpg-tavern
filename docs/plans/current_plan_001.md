@@ -1,16 +1,16 @@
 # Plan 001 — Extend Broken Compass to Real Systems (LLM stays stubbed)
 
+
 ## Goal
 
 Make the pipeline integration test use real systems end-to-end — real state
 mutation, real NPC activation, real visibility filtering, real MCP writes —
 while keeping the LLM stubbed via `StubLLM`.
 
+
 ## Steps
 
 Steps must be done in order. Do not start a step until the previous one passes all tests.
-
----
 
 ### Step 1 — State change schema + storage methods
 
@@ -35,8 +35,6 @@ class ExtractorResult(BaseModel):
 
 **Tests:** colocated unit tests in `tests/test_models.py` and `tests/test_storage.py`
 covering upsert, clamping, and category isolation.
-
----
 
 ### Step 2 — Wire extractors to storage
 
@@ -72,8 +70,6 @@ cautious = next(s for s in brunolf.states if s["label"] == "Cautious")
 assert cautious["value"] == 3
 ```
 
----
-
 ### Step 3 — Message visibility matrix
 
 **What:** Build a `filter_messages(messages, stage, own_id, current_turn_id)`
@@ -93,8 +89,6 @@ only what it is allowed to see.
 **New module:** `rpg_tavern/pipeline/visibility.py`
 **Tests:** `tests/pipeline/test_visibility.py` — parametrised per stage, verifying
 excluded types are absent.
-
----
 
 ### Step 4 — NPC activation + intent stage
 
@@ -164,8 +158,6 @@ frightened = next(s for s in isolde.states if s["label"] == "Frightened")
 assert frightened["value"] == 6
 ```
 
----
-
 ### Step 5 — Context injection (states → narrator prompt)
 
 **What:** Pass character and persona states into the narrator prompt, gated by
@@ -180,8 +172,6 @@ the manifest threshold (value ≥ 6 → visible to narrator).
 After Step 4, Isolde's `Frightened=6` becomes manifest, so the narrator for
 turn 4 would receive it. No new test assertions needed here — this affects only
 prompt content, which the stub ignores.
-
----
 
 ### Step 6 — MCP layer for state writes
 
@@ -204,7 +194,6 @@ Three tools:
 **For tests:** MCP server runs in-process, backed by the same `Storage` instance.
 All existing state assertions continue to pass unchanged.
 
----
 
 ## Dependency Order
 
@@ -217,6 +206,7 @@ Step 3  (visibility matrix)
        └─ Step 5  (context injection)
             └─ Step 6  (MCP layer)
 ```
+
 
 ## Status
 

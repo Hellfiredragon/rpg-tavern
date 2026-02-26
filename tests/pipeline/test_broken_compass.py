@@ -28,6 +28,7 @@ import pytest
 from rpg_tavern.models import Character, Persona
 from rpg_tavern.storage import Storage
 from rpg_tavern.pipeline.orchestrator import run_turn
+from tests.utils.stub_llm import StubLLM, EXTRACTOR_EMPTY, LORE_EMPTY
 
 
 # ---------------------------------------------------------------------------
@@ -61,9 +62,6 @@ NARRATOR_T1 = json.dumps([
 ])
 
 BRUNOLF_DIALOG_T1 = "Rough night to be on the road. You come far?"
-
-EXTRACTOR_EMPTY = json.dumps({"state_changes": []})
-LORE_EMPTY = json.dumps({"entries": []})
 
 BRUNOLF_EXTRACTOR_T2 = json.dumps({"state_changes": [
     {"category": "temporal", "label": "Cautious", "value": 3},
@@ -164,40 +162,6 @@ ISOLDE_EXTRACTOR = json.dumps({"state_changes": [
     {"category": "temporal", "label": "Frightened", "value": 6},
     {"category": "temporal", "label": "Desperate",  "value": 5},
 ]})
-
-
-# ---------------------------------------------------------------------------
-# StubLLM — dispatches by stage name, independent queue per stage
-# ---------------------------------------------------------------------------
-
-class StubLLM:
-    """Deterministic LLM stand-in for tests.
-
-    Provide a dict mapping stage name → list of responses (in call order).
-    Raises if a stage is called more times than responses were provided.
-    """
-
-    def __init__(self, responses: dict[str, list[str]]) -> None:
-        self._queues: dict[str, list[str]] = {k: list(v) for k, v in responses.items()}
-        self.calls: list[tuple[str, str]] = []
-
-    async def __call__(self, stage: str, prompt: str) -> str:
-        self.calls.append((stage, prompt))
-        queue = self._queues.get(stage)
-        if not queue:
-            raise AssertionError(
-                f"StubLLM: unexpected call to stage={stage!r} "
-                f"(no responses queued). calls so far: {self.calls}"
-            )
-        return queue.pop(0)
-
-    def assert_exhausted(self) -> None:
-        """Assert every queued response was consumed — catches missing LLM calls."""
-        leftover = {k: v for k, v in self._queues.items() if v}
-        if leftover:
-            raise AssertionError(
-                f"StubLLM: unused responses remain: {leftover}"
-            )
 
 
 # ---------------------------------------------------------------------------

@@ -2,7 +2,6 @@
 
 > Load when: creating, modifying, or calling MCP tools; working on world state mutation of any kind.
 
----
 
 ## Core Principle
 
@@ -12,7 +11,6 @@ This includes: lorebook entries, character state, persona state, location, relat
 
 This constraint exists so that all state changes are structured, validated, auditable, and decoupled from prompt output.
 
----
 
 ## Before You Start
 
@@ -23,7 +21,6 @@ bash scripts/agent/list_mcp_tools.sh
 
 Do not create a new tool if an existing one covers the need.
 
----
 
 ## Designing a Tool
 
@@ -33,7 +30,6 @@ Do not create a new tool if an existing one covers the need.
 - Tool names are stable API surface. Rename only with deliberate intent and update `AGENT.md` if the contract scope changes.
 - Tools should be idempotent where possible. A re-run of the same tool call should not produce inconsistent state.
 
----
 
 ## Tool Categories (expected)
 
@@ -47,7 +43,6 @@ Do not create a new tool if an existing one covers the need.
 
 Check `list_mcp_tools.sh` for the live list. This table reflects intent, not implementation.
 
----
 
 ## Calling Tools from the Pipeline
 

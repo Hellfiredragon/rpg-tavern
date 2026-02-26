@@ -2,7 +2,6 @@
 
 > Load when: working on any LLM prompt stage, the orchestrator, context injection, NPC logic, or extraction logic.
 
----
 
 ## Core Principle
 
@@ -12,7 +11,6 @@ Every LLM call produces exactly one **output**. The stream is the shared record 
 
 The Narrator's output is a **beat script** — a structured list of narration segments and dialog cues. The orchestrator expands the script: narration beats are appended directly as `narration` messages; character cues trigger one **Character Dialog** LLM call each; persona cues trigger one **Persona Dialog** LLM call; persona verbatim beats are appended directly from the player's intention text without any LLM call. Every other stage produces a single message directly.
 
----
 
 ## Message Stream
 
@@ -45,7 +43,6 @@ mood         — (dialog only) emotional register of the speaker, e.g. "tensed",
 
 **`system`** — injected context (world state, lore, instructions). Never part of the narrative. Stripped from any player-facing view.
 
----
 
 ## Message Visibility Matrix
 
@@ -85,7 +82,6 @@ Character and persona states have a visibility level (integer). This level gates
 
 This allows internal state (e.g. a slowly building rage, a hidden curse) to influence extraction without leaking into narrative prompts prematurely.
 
----
 
 ## Turn Structure
 
@@ -151,7 +147,6 @@ TURN START
 TURN END — wait for player
 ```
 
----
 
 ## Stage Contracts
 
@@ -219,7 +214,6 @@ TURN END — wait for player
 - Writes: lorebook via MCP
 - Scoped strictly to the current round. Never re-processes past rounds. Extracts only facts that are new or changed.
 
----
 
 ## Prompt Design Rules
 
@@ -249,7 +243,6 @@ Use `{{#last msgs 20}}` to limit message history passed to a prompt.
 
 State arrays (`char.states`, `char.all_states`, `player.states`) are arrays of dicts with level flags: `is_subconscious`, `is_manifest`, etc. Subconscious states (level < 6) are injected into extractor prompts only — not into intent or narrator prompts.
 
----
 
 ## Scene Markers
 
@@ -267,7 +260,6 @@ On `location_change`:
 - The Narrator receives the marker and knows to establish the new setting in its next narration.
 - Location state is updated via MCP before the turn runs.
 
----
 
 ## Orchestrator Responsibilities
 
@@ -280,7 +272,6 @@ On `location_change`:
 - Execute MCP writes after the paired Narrator expansion completes — never before.
 - Log every stage input and output with `turn_id` + `seq` for debugging.
 
----
 
 ## Suggested Additions (not yet implemented — evaluate before building)
 
@@ -294,7 +285,6 @@ On `location_change`:
 
 **NPC silence as signal** — if all non-baked NPCs skip in a turn, the orchestrator could inject a scene marker or nudge the Narrator to acknowledge the quiet, rather than producing no NPC output at all.
 
----
 
 ## Failure Handling
 

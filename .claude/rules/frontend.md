@@ -2,7 +2,6 @@
 
 > Load when: working on React components, Vite config, routing, or frontend state.
 
----
 
 ## Stack
 
@@ -13,7 +12,6 @@
   bash scripts/agent/list_frontend.sh
   ```
 
----
 
 ## State Management
 
@@ -25,7 +23,6 @@ Escalate only when necessary:
 
 Do not reach for a state library speculatively.
 
----
 
 ## Components
 
@@ -34,7 +31,6 @@ Do not reach for a state library speculatively.
 - No business logic in components. Data fetching and transformation belong in hooks or service modules.
 - Do not inline complex conditional rendering — extract to a named variable or sub-component.
 
----
 
 ## Styling
 
@@ -44,7 +40,6 @@ bash scripts/agent/list_frontend.sh
 ```
 Do not introduce a new CSS strategy or UI library without updating `AGENT.md`.
 
----
 
 ## Frontend's Role in the Engine
 

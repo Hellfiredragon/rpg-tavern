@@ -1,10 +1,10 @@
 # Character State System
 
+
 ## Overview
 
 Each character maintains a private state map tracking emotional, relational, and identity states. States carry an internal numeric value managed by a state engine. A per-character extractor LLM reads contextual signals and outputs symbolic operations; the state engine applies the math. **No LLM ever sees raw numeric values** — only qualitative hint labels derived from value ranges.
 
----
 
 ## State Categories
 
@@ -14,7 +14,6 @@ Each character maintains a private state map tracking emotional, relational, and
 | persistent | 10                | value reaches 0, or pruned by consolidation | when overflow reaches 30, take evolution |
 | identity   | 3 (conflict-free) | identity-crisis only                        |                                          |
 
----
 
 ## State Values and Hint Labels
 
@@ -32,7 +31,6 @@ Internal values range from **0–30**. Identity states may reach 0 (dormant) but
 - The hidden only gets displayed to extractor to encourage taking same state twice
 - Hidden states don't get displayed for narration, intention or thoughts producing LLMs
 
----
 
 ## Per-Character Extractor
 
@@ -64,7 +62,6 @@ Each character has a dedicated extractor instance, called once per pipeline turn
 
 `overflow` and `evolution` are always treated as a pair. An `evolution` without a corresponding `overflow` is discarded.
 
----
 
 ## State Mutations
 
@@ -79,7 +76,6 @@ The state engine applies all mutations after extraction. Order: amplify/suppress
 | non-mentioned persistent | +1    | 20          |
 | non-mentioned identity   | +2    | 30          |
 
----
 
 ## State Lifecycle
 
@@ -105,7 +101,6 @@ When the state designated as `overflow` reaches **30**:
 
 **Overflow eligibility**: only `persistent` states may be designated as overflow. Designating a `temporary` or `identity` state as overflow is silently ignored.
 
----
 
 ## Limits and Resolution Steps
 
@@ -125,7 +120,6 @@ The character generates an introspection **thought** (a dedicated pipeline step)
 
 **Key rule**: `suppress` reduces an identity state's value (floor 0, dormant) but cannot remove it. A dormant identity state recovers naturally via drift (+2/turn). Only identity-crisis removes identity states permanently.
 
----
 
 ## Example State Map
 
@@ -166,7 +160,6 @@ identity:
   Haunted by the Siege [focus]
 ```
 
----
 
 ## Design Notes and Open Questions
 
@@ -187,8 +180,6 @@ Identity conflicts should be determined by the character's introspection thought
 
 **5. Consolidation and crisis trigger before committing**
 Both resolution steps are triggered *before* the new state entry is finalized, ensuring the state map is always within bounds at the end of each extraction cycle.
-
----
 
 ### Asymmetry by Design: Suppress vs Drift on Identity States
 

@@ -2,7 +2,6 @@
 
 > Load when: working on Python, FastAPI, data models, storage, or tests.
 
----
 
 ## Dependency Management
 
@@ -13,7 +12,6 @@
 - `pyproject.toml` is the single source of truth for dependencies and tooling config.
 - Python version is pinned in `.python-version`. Do not change it without a deliberate decision.
 
----
 
 ## Code Style
 
@@ -25,7 +23,6 @@
 - No docstrings on obvious functions. Inline comments only for non-obvious logic.
 - Tests are colocated with the module they test: `test_<module>.py` in the same directory.
 
----
 
 ## FastAPI Conventions
 
@@ -38,7 +35,6 @@
 - Route handlers are thin. Business logic lives in service modules, not in the handler itself.
 - Raise `HTTPException` with explicit status codes. Do not swallow errors silently.
 
----
 
 ## Storage
 
@@ -47,7 +43,6 @@
 - Read and write through simple helper functions that load and dump JSON. No ORM, no query layer.
 - File I/O is synchronous. This is intentional — see code style above.
 
----
 
 ## World State Mutation
 
@@ -58,4 +53,4 @@ Two actors may mutate world state, via different paths:
 | **User**   | FastAPI routes (direct writes to JSON) | Explicit user intent, no indirection needed |
 | **LLMs**   | MCP tools only                         | Structured, validated, auditable writes  |
 
-Pipeline stages must never write state through API routes. API routes must never call MCP tools on behalf of a user — that would obscure intent. See `docs/agent/mcp.md` for MCP tool rules.
+Pipeline stages must never write state through API routes. API routes must never call MCP tools on behalf of a user — that would obscure intent. See `.claude/rules/mcp.md` for MCP tool rules.
